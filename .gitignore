@@ -20,4 +20,5 @@ market_analysis_results.csv
 
 # Others
 .DS_Store
-data_template
+data_template/
+old_trials/
