@@ -167,7 +167,7 @@ def analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
         print("分析に失敗しました。")
         return None, stock_data
 
-def validate_fit_quality(times, prices, popt, plot=True):
+def validate_fit_quality(times, prices, popt, plot=True, symbol=None):
     """
     フィッティングの品質を評価
     """
@@ -245,10 +245,15 @@ def validate_fit_quality(times, prices, popt, plot=True):
         
         plt.tight_layout()
         
-        # グラフを保存
+        
+        # ファイルを保存
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'fit_quality_{symbol}_{timestamp}.png' if symbol else f'fit_quality_{timestamp}.png'
+        
         output_dir = ensure_output_dir(dir_name="analysis_results/plots")
-        plt.savefig(os.path.join(output_dir, 'fit_quality_analysis.png'))
+        plt.savefig(os.path.join(output_dir, filename))
         plt.close()
+
     
     # 最大自己相関の計算（自己相関が存在する場合のみ）
     max_autocorr = np.max(np.abs(autocorr[1:])) if len(autocorr) > 1 else 0
@@ -260,7 +265,7 @@ def validate_fit_quality(times, prices, popt, plot=True):
         'Max_autocorr': max_autocorr
     }
 
-def check_stability(times, prices, window_size=30, step=5, data=None):
+def check_stability(times, prices, window_size=30, step=5, data=None, symbol=None):
     """
     パラメータの安定性をチェック
     
@@ -303,9 +308,12 @@ def check_stability(times, prices, window_size=30, step=5, data=None):
         plt.grid(True)
         
         # グラフを保存
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'stability_{symbol}_{timestamp}.png' if symbol else f'stability_{timestamp}.png'
+        
         output_dir = ensure_output_dir(dir_name="analysis_results/plots")
-        plt.savefig(os.path.join(output_dir, 'stability_analysis.png'))
-        plt.close()  # プロットを閉じる
+        plt.savefig(os.path.join(output_dir, filename))
+        plt.close() # プロットを閉じる
         
         # 安定性の指標を計算
         tc_std = np.std(tc_estimates)
@@ -338,23 +346,24 @@ def check_stability(times, prices, window_size=30, step=5, data=None):
 def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
     """拡張された株価分析関数"""
     logger = AnalysisLogger()
-    
+   
     # 基本分析の実行
     results, data = analyze_stock(symbol, start_date, end_date, tc_guess_days)
-    
+   
     if results is not None:
         times, prices = prepare_data(data)
         
-        # 各分析の実行
-        quality_metrics = validate_fit_quality(times, prices, results)
-        tc_mean, tc_std, tc_cv = check_stability(times, prices, data=data)
+        # 各分析の実行にsymbolを渡す
+        quality_metrics = validate_fit_quality(times, prices, results, symbol=symbol)
+        tc_mean, tc_std, tc_cv = check_stability(times, prices, data=data, symbol=symbol)
         warning_level = evaluate_prediction(symbol, results, data)
         
-        # プロット情報の記録
+        # プロット情報の記録を更新
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         plots_info = {
             'main_analysis': f'{symbol}_analysis.png',
-            'fit_quality': 'fit_quality_analysis.png',
-            'stability': 'stability_analysis.png'
+            'fit_quality': f'fit_quality_{symbol}_{timestamp}.png',
+            'stability': f'stability_{symbol}_{timestamp}.png'
         }
         
         # 結果の保存
