@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+
+# Analysis results
+analysis_results/
+analysis_progress.json
+market_symbols.json
+market_analysis_results.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Others
+.DS_Store
+data_template
