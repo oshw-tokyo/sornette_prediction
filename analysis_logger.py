@@ -20,7 +20,7 @@ class AnalysisLogger:
         return f"{symbol}_{timestamp}"
         
     def save_analysis_results(self, symbol, results, data, quality_metrics, stability_metrics, 
-                            warning_level, start_date, end_date, plots_info):
+                         warning_level, start_date, end_date, plots_info):
         analysis_id = self.generate_analysis_id(symbol)
         
         tc, m, omega, phi, A, B, C = results
@@ -82,25 +82,45 @@ class AnalysisLogger:
         summary_path = os.path.join(self.base_dir, 'summaries', f'{analysis_id}_summary.json')
         with open(summary_path, 'w', encoding='utf-8') as f:
             json.dump(analysis_summary, f, indent=2, ensure_ascii=False)
+
+        # CSVフォーマットの設定
+        column_order = [
+            'analysis_id',
+            'symbol',
+            'analysis_date',
+            'days_to_tc',
+            'predicted_date',
+            'warning_level',
+            'R2',
+            'tc_cv',
+            'm',
+            'omega'
+        ]            
         
         # CSVとしても保存（検索・フィルタリング用）
         df_summary = pd.DataFrame([{
             'analysis_id': analysis_id,
             'symbol': symbol,
             'analysis_date': analysis_summary['analysis_date'],
-            'days_to_tc': analysis_summary['critical_point']['days_to_tc'],
+            'days_to_tc': round(analysis_summary['critical_point']['days_to_tc'], 2),  # 小数点2桁に制限
             'predicted_date': analysis_summary['critical_point']['predicted_date'],
             'warning_level': warning_level,
-            'R2': quality_metrics['R2'],
-            'tc_cv': stability_metrics[2] if stability_metrics[2] is not None else None
+            'R2': round(quality_metrics['R2'], 3),  # 小数点3桁に制限
+            'tc_cv': round(stability_metrics[2], 3) if stability_metrics[2] is not None else None,  # 小数点3桁に制限
+            'm': round(results[1], 3),  # べき指数を追加
+            'omega': round(results[2], 3)  # 角振動数を追加
         }])
+
+        # 列の順序を指定
+        df_summary = df_summary[column_order]
         
+        # CSVファイルに保存
         csv_path = os.path.join(self.base_dir, 'metrics', 'analysis_records.csv')
         if os.path.exists(csv_path):
             df_summary.to_csv(csv_path, mode='a', header=False, index=False)
         else:
             df_summary.to_csv(csv_path, index=False)
-            
+                
         return analysis_id
     
     def generate_report(self, analysis_id):
