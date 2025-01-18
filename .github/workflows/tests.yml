@@ -1,0 +1,58 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10']  # 現在の開発環境に合わせる
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Create required directories
+      run: |
+        mkdir -p analysis_results/plots
+        mkdir -p analysis_results/summaries
+        mkdir -p analysis_results/metrics
+        mkdir -p analysis_results/raw_data
+
+    - name: Set PYTHONPATH
+      run: |
+        echo "PYTHONPATH=$PYTHONPATH:${{ github.workspace }}/src" >> $GITHUB_ENV
+
+    - name: Run tests
+      run: |
+        python -m unittest discover -s tests -p "test_*.py" -v
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-results
+        path: |
+          analysis_results/
+          tests/test_data/
+
+    - name: Upload test coverage
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: coverage-report
+        path: htmlcov/
