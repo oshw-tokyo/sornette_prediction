@@ -22,8 +22,15 @@ def download_stock_data(symbol, start_date, end_date):
     """
     Yahoo Financeから株価データをダウンロード
     """
-    stock = yf.download(symbol, start=start_date, end=end_date)
-    return stock
+    try:
+        stock = yf.download(symbol, start=start_date, end=end_date)
+        if stock.empty:
+            print(f"警告: {symbol}のデータが空です。")
+            return None
+        return stock
+    except Exception as e:
+        print(f"警告: {symbol}のダウンロードに失敗しました: {str(e)}")
+        return None
 
 def prepare_data(stock_data):
     """
@@ -269,6 +276,12 @@ def check_stability(times, prices, window_size=30, step=5, data=None, symbol=Non
     """
     パラメータの安定性をチェック
     
+
+    Returns:
+    --------
+    tuple:
+        (tc_mean, tc_std, tc_cv, window_consistency)
+
     Parameters:
     -----------
     times : array-like
@@ -319,11 +332,15 @@ def check_stability(times, prices, window_size=30, step=5, data=None, symbol=Non
         tc_std = np.std(tc_estimates)
         tc_mean = np.mean(tc_estimates)
         tc_cv = tc_std / tc_mean  # 変動係数
+
+        # 時間窓での一貫性を計算
+        window_consistency = max(0, 1 - 2 * tc_cv) if tc_cv is not None else 0
         
         print(f"\n安定性分析結果:")
         print(f"臨界時点の平均: {tc_mean:.2f}")
         print(f"臨界時点の標準偏差: {tc_std:.2f}")
         print(f"変動係数: {tc_cv:.3f}")
+        print(f"予測一貫性: {window_consistency:.3f}") 
         
         # 日付での表示を追加
         if data is not None:
@@ -336,10 +353,10 @@ def check_stability(times, prices, window_size=30, step=5, data=None, symbol=Non
             latest_date = predicted_mean_date + timedelta(days=int(tc_std))
             print(f"予測範囲: {earliest_date.strftime('%Y年%m月%d日')} ～ {latest_date.strftime('%Y年%m月%d日')}")
         
-        return tc_mean, tc_std, tc_cv
+        return tc_mean, tc_std, tc_cv, window_consistency
     else:
         print("安定性分析に失敗しました。")
-        return None, None, None
+        return None, None, None, None
 
 
 
@@ -353,10 +370,9 @@ def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
     if results is not None:
         times, prices = prepare_data(data)
         
-        # 各分析の実行にsymbolを渡す
+        # 各分析の実行
         quality_metrics = validate_fit_quality(times, prices, results, symbol=symbol)
-        tc_mean, tc_std, tc_cv = check_stability(times, prices, data=data, symbol=symbol)
-        warning_level = evaluate_prediction(symbol, results, data)
+        tc_mean, tc_std, tc_cv, window_consistency = check_stability(times, prices, data=data, symbol=symbol)
         
         # プロット情報の記録を更新
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -369,186 +385,107 @@ def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
         # 結果の保存
         analysis_id = logger.save_analysis_results(
             symbol, results, data, quality_metrics,
-            (tc_mean, tc_std, tc_cv), warning_level,
+            (tc_mean, tc_std, tc_cv, window_consistency),
             start_date, end_date, plots_info
         )
         
         # レポートの生成と表示
         print(logger.generate_report(analysis_id))
         
-        return results, data, quality_metrics, (tc_mean, tc_std, tc_cv), warning_level
+        return results, data, quality_metrics, (tc_mean, tc_std, tc_cv, window_consistency)
     
-    return None, None, None, None, None
-
-def evaluate_prediction(symbol, results, data, tc_threshold_days=30):
-    """
-    予測の評価と警告の生成
-    """
-    if results is None:
-        print("予測の評価ができません：フィッティング結果がありません。")
-        return
-    
-    tc, m, omega, phi, A, B, C = results
-    current_time = len(data)
-    days_to_tc = tc - current_time
-    
-    # 日付の計算
-    last_date = data.index[-1]  # データの最終日
-    predicted_date = last_date + timedelta(days=int(days_to_tc))
-    
-    print("\n予測評価:")
-    print(f"予測された臨界時点までの日数: {days_to_tc:.1f}日")
-    print(f"予測された臨界時点の日付: {predicted_date.strftime('%Y年%m月%d日')}")
-    
-    # 警告レベルの設定
-    warning_level = "低"
-    if days_to_tc < tc_threshold_days:
-        if m > 0.5:
-            warning_level = "高"
-        else:
-            warning_level = "中"
-    
-    print(f"警告レベル: {warning_level}")
-    
-    # パラメータの妥当性チェック
-    print("\nパラメータ妥当性チェック:")
-    if 0 < m < 1:
-        print(f"✓ べき指数(m)は正常範囲内です: {m:.3f}")
-    else:
-        print(f"⚠️ べき指数(m)が通常範囲外です: {m:.3f}")
-        
-    if 2 < omega < 20:
-        print(f"✓ 角振動数(omega)は正常範囲内です: {omega:.3f}")
-    else:
-        print(f"⚠️ 角振動数(omega)が通常範囲外です: {omega:.3f}")
-    
-    return warning_level
-
+    return None, None, None, None
 
 def analyze_markets_from_json(json_file='market_symbols.json', time_windows=[180, 365, 730]):
-   """保存された銘柄リストを使用して市場分析を実行"""
-   
-   progress_file = 'analysis_progress.json'
-   
-   # 進捗状況の読み込み
-   try:
-       with open(progress_file, 'r') as f:
-           progress = json.load(f)
-   except FileNotFoundError:
-       progress = {'completed': [], 'failed': [], 'start_time': None}
-       
-   # 開始時刻の記録
-   if not progress.get('start_time'):
-       progress['start_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-   
-   with open(json_file, 'r') as f:
-       markets = json.load(f)
-   
-   # 全銘柄数の計算
-   total_symbols = len(markets['japan']) + len(markets['us']) + \
-                  sum(len(symbols) for symbols in markets['indices'].values())
-   
-   results_df = pd.DataFrame()
-   processed_count = len(progress['completed']) + len(progress['failed'])
-   
-   def show_progress():
-       current_time = datetime.now()
-       start_time = datetime.strptime(progress['start_time'], '%Y-%m-%d %H:%M:%S')
-       elapsed_time = current_time - start_time
-       
-       if processed_count > 0:
-           avg_time_per_symbol = elapsed_time / processed_count
-           remaining_symbols = total_symbols - processed_count
-           estimated_remaining_time = avg_time_per_symbol * remaining_symbols
-           
-           print(f"\n進捗状況:")
-           print(f"完了: {len(progress['completed'])} 失敗: {len(progress['failed'])}")
-           print(f"進捗率: {processed_count/total_symbols*100:.1f}% ({processed_count}/{total_symbols})")
-           print(f"経過時間: {str(elapsed_time).split('.')[0]}")
-           print(f"予想残り時間: {str(estimated_remaining_time).split('.')[0]}")
-   
-   for category in ['japan', 'us', 'indices']:
-       if category == 'indices':
-           symbols = [s for region in markets[category].values() for s in region]
-       else:
-           symbols = markets[category]
-       
-       print(f"\n=== {category}市場の分析 ===")
-       for symbol in symbols:
-           if symbol in progress['completed']:
-               processed_count += 1
-               continue
-               
-           try:
-               temp_df = analyze_single_market(symbol, time_windows, pd.DataFrame())
-               if not temp_df.empty:
-                   results_df = pd.concat([results_df, temp_df], ignore_index=True)
-                   progress['completed'].append(symbol)
-               else:
-                   progress['failed'].append(symbol)
-               
-               processed_count += 1
-               show_progress()
-               
-               with open(progress_file, 'w') as f:
-                   json.dump(progress, f)
-               results_df.to_csv('all_market_analysis_results.csv', index=False)
-               
-           except Exception as e:
-               print(f"エラー ({symbol}): {str(e)}")
-               progress['failed'].append(symbol)
-               processed_count += 1
-               show_progress()
-               
-               with open(progress_file, 'w') as f:
-                   json.dump(progress, f)
-               continue
-   
-   return results_df
+    """保存された銘柄リストを使用して市場分析を実行"""
+    progress_file = 'analysis_progress.json'
+    
+    # 進捗状況の読み込み
+    try:
+        with open(progress_file, 'r') as f:
+            progress = json.load(f)
+    except FileNotFoundError:
+        progress = {'completed': [], 'failed': [], 'start_time': None}
+    
+    # 開始時刻の記録
+    if not progress.get('start_time'):
+        progress['start_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    with open(json_file, 'r') as f:
+        markets = json.load(f)
+    
+    # 全銘柄数の計算
+    total_symbols = len(markets['japan']) + len(markets['us']) + \
+                   sum(len(symbols) for symbols in markets['indices'].values())
+    
+    def show_progress(processed_count):
+        """進捗状況を表示
+        
+        Parameters:
+        -----------
+        processed_count : int
+            処理済みの銘柄数
+        """
+        current_time = datetime.now()
+        start_time = datetime.strptime(progress['start_time'], '%Y-%m-%d %H:%M:%S')
+        elapsed_time = current_time - start_time
+        
+        if processed_count > 0:
+            avg_time_per_symbol = elapsed_time / processed_count
+            remaining_symbols = total_symbols - processed_count
+            estimated_remaining_time = avg_time_per_symbol * remaining_symbols
+            
+            print(f"\n進捗状況:")
+            print(f"完了: {len(progress['completed'])} 失敗: {len(progress['failed'])}")
+            print(f"進捗率: {processed_count/total_symbols*100:.1f}% ({processed_count}/{total_symbols})")
+            print(f"経過時間: {str(elapsed_time).split('.')[0]}")
+            print(f"予想残り時間: {str(estimated_remaining_time).split('.')[0]}")
 
-def analyze_single_market(symbol, time_windows, results_df):
+    for category in ['japan', 'us', 'indices']:
+        if category == 'indices':
+            symbols = [s for region in markets[category].values() for s in region]
+        else:
+            symbols = markets[category]
+        
+        print(f"\n=== {category}市場の分析 ===")
+        for symbol in symbols:
+            if symbol in progress['completed']:
+                processed_count += 1
+                continue
+            
+            try:
+                analyze_single_market(symbol, time_windows)
+                progress['completed'].append(symbol)
+            except Exception as e:
+                print(f"エラー ({symbol}): {str(e)}")
+                progress['failed'].append(symbol)
+                
+            processed_count += 1
+            show_progress(processed_count)
+            
+            # 進捗の保存
+            with open(progress_file, 'w') as f:
+                json.dump(progress, f)
+
+def analyze_single_market(symbol, time_windows):
     """単一銘柄の分析"""
     for window in time_windows:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=window)
         
         try:
-            results, data, quality_metrics, stability_metrics, warning_level = \
+            print(f"\n分析開始: {symbol} (期間: {window}日)")
+            results, data, quality_metrics, stability_metrics = \
                 enhanced_analyze_stock(symbol, start_date, end_date)
             
-            if results is not None and quality_metrics is not None:
-                tc, m, omega, phi, A, B, C = results
-                
-                temp_df = pd.DataFrame({
-                    'symbol': [symbol],
-                    'window_days': [window],
-                    'analysis_date': [end_date.strftime('%Y-%m-%d')],
-                    'warning_level': [warning_level],
-                    'days_to_tc': [tc - len(data)],
-                    'R2': [quality_metrics['R2']],
-                    'tc_cv': [stability_metrics[2] if stability_metrics[2] is not None else None],
-                    'm': [m],
-                    'omega': [omega],
-                    'predicted_date': [(end_date + timedelta(days=int(tc - len(data)))).strftime('%Y-%m-%d')]
-                })
-                
-                results_df = pd.concat([results_df, temp_df], ignore_index=True)
+            if results is not None and quality_metrics is not None and data is not None:
+                print(f"分析完了: {symbol} (期間: {window}日)")
                 
         except Exception as e:
             print(f"エラー ({symbol}, {window}日): {str(e)}")
-    
-    return results_df
+            continue
 
 if __name__ == "__main__":
-    results = analyze_markets_from_json()
+    analyze_markets_from_json(json_file='market_symbols_for_test.json')
     
-    # 重要な銘柄のピックアップ
-    critical_events = results[
-        (results['warning_level'] == '高') & 
-        (results['R2'] >= 0.8) &
-        (results['tc_cv'] <= 0.1)
-    ]
     
-    if not critical_events.empty:
-        print("\n=== 注目すべき市場変動の可能性 ===")
-        print(critical_events[['symbol', 'window_days', 'predicted_date', 'R2']].to_string())
