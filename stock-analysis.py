@@ -10,7 +10,7 @@ import pandas as pd
 import json
 
 #
-from analysis_logger import AnalysisLogger, get_latest_analyses
+from analysis_logger import AnalysisLogger
 
 def ensure_output_dir(dir_name='analysis_results/temp'):
     """出力ディレクトリが存在しない場合は作成"""
@@ -418,14 +418,11 @@ def analyze_markets_from_json(json_file='market_symbols.json', time_windows=[180
     total_symbols = len(markets['japan']) + len(markets['us']) + \
                    sum(len(symbols) for symbols in markets['indices'].values())
     
+    # processed_countを初期化
+    processed_count = len(progress['completed']) + len(progress['failed'])
+    
     def show_progress(processed_count):
-        """進捗状況を表示
-        
-        Parameters:
-        -----------
-        processed_count : int
-            処理済みの銘柄数
-        """
+        """進捗状況を表示"""
         current_time = datetime.now()
         start_time = datetime.strptime(progress['start_time'], '%Y-%m-%d %H:%M:%S')
         elapsed_time = current_time - start_time
