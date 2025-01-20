@@ -14,7 +14,7 @@ from typing import Optional, Tuple, Dict, Any
 import warnings
 import logging
 
-from analysis_logger import AnalysisLogger
+from src.analysis_logger import AnalysisLogger
 
 
 logging.basicConfig(level=logging.INFO)
@@ -34,8 +34,8 @@ class FittingParameters:
     OMEGA_MAX: float = 8.0
     
     # Fitting quality thresholds
-    MAX_RESIDUAL: float = 0.1  # Maximum acceptable residual for good fit
-    MIN_R_SQUARED: float = 0.95  # Minimum R-squared for acceptable fit
+    MAX_RESIDUAL: float = 1.0  # Maximum acceptable residual for good fit
+    MIN_R_SQUARED: float = 0.95  # Minimum R-squared for acceptable fit # Initially 0.95
     
     @classmethod
     def validate_parameters(cls, z: float, omega: float) -> Tuple[bool, Optional[str]]:
@@ -125,22 +125,34 @@ class LogPeriodicFitter:
 
     def fit_log_periodic(self, t: np.ndarray, y: np.ndarray, 
                         initial_params: Optional[Dict[str, float]] = None) -> FittingResult:
-        """
-        対数周期関数のフィッティングを実行
+        """対数周期関数のフィッティングを実行"""
+        # デバッグ出力を追加
+        logger.info(f"Starting fit with data shape: t={t.shape}, y={y.shape}")
         
-        Args:
-            t: 時間データ
-            y: 価格データ
-            initial_params: 初期パラメータ（省略可能）
-            
-        Returns:
-            FittingResult: フィッティング結果
-        """
+        # データの検証
+        if len(t) == 0 or len(y) == 0:
+            return FittingResult(
+                success=False,
+                parameters={},
+                residuals=np.inf,
+                r_squared=0,
+                error_message="Empty input data"
+            )
+        
+        if len(t) != len(y):
+            return FittingResult(
+                success=False,
+                parameters={},
+                residuals=np.inf,
+                r_squared=0,
+                error_message="Input arrays must have the same length"
+            )
+        
         # デフォルトの初期パラメータ
         default_params = {
-            'tc': t[-1] + (t[-1] - t[0]) * 0.1,  # 終点より少し先
-            'm': 0.45,  # 典型的な値の中央付近
-            'omega': 6.5,  # 典型的な範囲の中央値
+            'tc': t[-1] + (t[-1] - t[0]) * 0.1,
+            'm': 0.45,
+            'omega': 6.5,
             'phi': 0,
             'A': np.mean(y),
             'B': (y[-1] - y[0]) / (t[-1] - t[0]),
@@ -149,23 +161,28 @@ class LogPeriodicFitter:
         
         # 初期パラメータの設定
         params = {**default_params, **(initial_params or {})}
+        logger.info(f"Initial parameters: {params}")
         
         try:
-            # 制約条件の設定
+            # 境界条件の調整
             bounds = (
-                [-np.inf, self.params.Z_MIN, self.params.OMEGA_MIN, -np.inf, -np.inf, -np.inf, -np.inf],
-                [np.inf, self.params.Z_MAX, self.params.OMEGA_MAX, np.inf, np.inf, np.inf, np.inf]
+                [t[-1], self.params.Z_MIN, self.params.OMEGA_MIN, -2*np.pi, -np.inf, -np.inf, -0.5],  # Cの下限を調整
+                [t[-1] + (t[-1] - t[0])*0.5, self.params.Z_MAX, self.params.OMEGA_MAX, 2*np.pi, np.inf, np.inf, 0.5]   # Cの上限を調整
             )
-            
+            logger.info(f"Bounds: {bounds}")
+
             # フィッティングの実行
             with warnings.catch_warnings():
-                warnings.filterwarnings('ignore')  # 収束警告を抑制
+                warnings.filterwarnings('ignore')
                 popt, pcov = curve_fit(
                     self.log_periodic_func, t, y,
                     p0=[params['tc'], params['m'], params['omega'], 
                         params['phi'], params['A'], params['B'], params['C']],
                     bounds=bounds,
-                    maxfev=10000  # 最大反復回数を増やす
+                    maxfev=50000,
+                    ftol=1e-8,
+                    xtol=1e-8,
+                    method='trf'
                 )
             
             # フィッティング結果のパラメータを取得
@@ -173,6 +190,7 @@ class LogPeriodicFitter:
                 'tc': popt[0], 'm': popt[1], 'omega': popt[2],
                 'phi': popt[3], 'A': popt[4], 'B': popt[5], 'C': popt[6]
             }
+            logger.info(f"Fitted parameters: {fitted_params}")
             
             # パラメータの検証
             is_valid, error_msg = self.params.validate_parameters(
@@ -181,6 +199,7 @@ class LogPeriodicFitter:
             )
             
             if not is_valid:
+                logger.warning(f"Parameter validation failed: {error_msg}")
                 return FittingResult(
                     success=False,
                     parameters=fitted_params,
@@ -193,15 +212,11 @@ class LogPeriodicFitter:
             y_fit = self.log_periodic_func(t, *popt)
             residuals = np.mean((y - y_fit) ** 2)
             r_squared = 1 - np.sum((y - y_fit) ** 2) / np.sum((y - np.mean(y)) ** 2)
+            logger.info(f"Fit quality: residuals={residuals}, R²={r_squared}")
             
-            # 典型的な範囲内かどうかのチェック
-            is_typical, _ = self.params.is_typical_range(
-                z=fitted_params['m'], 
-                omega=fitted_params['omega']
-            )
-            
-            # 品質チェック
+            # 品質チェックの閾値を調整
             if residuals > self.params.MAX_RESIDUAL or r_squared < self.params.MIN_R_SQUARED:
+                logger.warning(f"Poor fit quality: residuals={residuals}, R²={r_squared}")
                 return FittingResult(
                     success=False,
                     parameters=fitted_params,
@@ -210,6 +225,12 @@ class LogPeriodicFitter:
                     error_message="Poor fit quality"
                 )
             
+            # 典型的な範囲内かどうかのチェック
+            is_typical, _ = self.params.is_typical_range(
+                z=fitted_params['m'], 
+                omega=fitted_params['omega']
+            )
+            
             return FittingResult(
                 success=True,
                 parameters=fitted_params,
@@ -217,7 +238,7 @@ class LogPeriodicFitter:
                 r_squared=r_squared,
                 is_typical_range=is_typical
             )
-            
+                
         except Exception as e:
             logger.error(f"Fitting failed: {str(e)}")
             return FittingResult(

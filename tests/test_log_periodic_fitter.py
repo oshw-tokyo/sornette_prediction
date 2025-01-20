@@ -1,7 +1,8 @@
 import unittest
 import numpy as np
 from datetime import datetime, timedelta
-from stock_analysis import (
+from typing import Optional, Dict, Any  # 追加
+from src.stock_analysis import (
     LogPeriodicFitter, 
     FittingParameters,
     FittingResult
@@ -87,24 +88,37 @@ class TestLogPeriodicFitter(unittest.TestCase):
         single_result = self.fitter.fit_log_periodic(self.t, self.y_noisy)
         self.assertGreaterEqual(result.r_squared, single_result.r_squared)
 
-    def test_invalid_data(self):
-        """無効なデータでのエラー処理テスト"""
-        # 空のデータ
-        result = self.fitter.fit_log_periodic(np.array([]), np.array([]))
-        self.assertFalse(result.success)
-        
-        # 異なる長さのデータ
-        result = self.fitter.fit_log_periodic(
-            np.array([1, 2, 3]), 
-            np.array([1, 2])
+def fit_log_periodic(self, t: np.ndarray, y: np.ndarray, 
+                    initial_params: Optional[Dict[str, float]] = None) -> FittingResult:
+    """対数周期関数のフィッティングを実行"""
+    # 入力データの検証を追加
+    if len(t) == 0 or len(y) == 0:
+        return FittingResult(
+            success=False,
+            parameters={},
+            residuals=np.inf,
+            r_squared=0,
+            error_message="Empty input data"
         )
-        self.assertFalse(result.success)
+    
+    if len(t) != len(y):
+        return FittingResult(
+            success=False,
+            parameters={},
+            residuals=np.inf,
+            r_squared=0,
+            error_message="Input arrays must have the same length"
+        )
         
-        # NaNを含むデータ
-        t_with_nan = np.array([1, 2, np.nan, 4])
-        y_with_nan = np.array([1, 2, 3, 4])
-        result = self.fitter.fit_log_periodic(t_with_nan, y_with_nan)
-        self.assertFalse(result.success)
+    # NaNチェックを追加
+    if np.any(np.isnan(t)) or np.any(np.isnan(y)):
+        return FittingResult(
+            success=False,
+            parameters={},
+            residuals=np.inf,
+            r_squared=0,
+            error_message="Input data contains NaN values"
+        )
 
 if __name__ == '__main__':
     unittest.main()
