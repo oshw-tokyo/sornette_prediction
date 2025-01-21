@@ -1,20 +1,101 @@
-import json
+import numpy as np
 import pandas as pd
-import os
-from datetime import datetime, timedelta 
 
+import os
+import json
+import logging
+from datetime import datetime
+
+from .custom_handlers import AnalysisFileHandler, RotatingAnalysisFileHandler
+from .formatters import AnalysisFormatter, DetailedAnalysisFormatter
+
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class AnalysisLogger:
     def __init__(self, base_dir='analysis_results'):
         self.base_dir = base_dir
         self.ensure_directories()
+        self._setup_logger()
         
     def ensure_directories(self):
         """必要なディレクトリを作成"""
         directories = ['summaries', 'plots', 'metrics', 'raw_data']
         for dir_name in [os.path.join(self.base_dir, d) for d in directories]:
             os.makedirs(dir_name, exist_ok=True)
+
+    def _setup_logger(self):
+        """ロガーの初期設定"""
+        self.logger = logging.getLogger('analysis_logger')
+        self.logger.setLevel(logging.INFO)
+        
+        # 複数のハンドラーを設定
+        
+        # 1. 基本的な分析ログ用ハンドラー
+        basic_handler = AnalysisFileHandler(
+            base_dir=self.base_dir,
+            filename='analysis.log'
+        )
+        basic_handler.setFormatter(AnalysisFormatter())
+        basic_handler.setLevel(logging.INFO)
+        
+        # 2. 詳細なデバッグ情報用の回転ハンドラー
+        debug_handler = RotatingAnalysisFileHandler(
+            base_dir=self.base_dir,
+            filename='debug.log',
+            maxBytes=1024*1024,  # 1MB
+            backupCount=5
+        )
+        debug_handler.setFormatter(DetailedAnalysisFormatter())
+        debug_handler.setLevel(logging.DEBUG)
+        
+        # 既存のハンドラーをクリア（重複を防ぐ）
+        self.logger.handlers.clear()
+        
+        # 新しいハンドラーを追加
+        self.logger.addHandler(basic_handler)
+        self.logger.addHandler(debug_handler)
+
+    def log_stability_analysis(self, symbol: str, window_index: int, 
+                             error: Exception = None, success: bool = True,
+                             metrics: dict = None):
+        """安定性分析のログを記録"""
+        if error:
+            self.logger.error(
+                f"Stability analysis failed for {symbol} at window {window_index}: {str(error)}"
+            )
+            return
+
+        if success and metrics:
+            self.logger.info(
+                f"Stability analysis for {symbol} window {window_index}: "
+                f"tc_mean={metrics.get('tc_mean', 'N/A'):.2f}, "
+                f"tc_std={metrics.get('tc_std', 'N/A'):.2f}, "
+                f"tc_cv={metrics.get('tc_cv', 'N/A'):.3f}"
+            )
+
+    def log_stability_results(self, symbol: str, tc_mean: float, tc_std: float, 
+                            tc_cv: float, window_consistency: float,
+                            date_range: tuple = None):
+        """安定性分析の結果をログに記録"""
+        self.logger.info(
+            f"\nStability Analysis Results for {symbol}:\n"
+            f"Critical Point Mean: {tc_mean:.2f}\n"
+            f"Standard Deviation: {tc_std:.2f}\n"
+            f"Coefficient of Variation: {tc_cv:.3f}\n"
+            f"Window Consistency: {window_consistency:.3f}"
+        )
+        
+        if date_range:
+            predicted_date, earliest_date, latest_date = date_range
+            self.logger.info(
+                f"Predicted Critical Point: {predicted_date.strftime('%Y年%m月%d日')}\n"
+                f"Date Range: {earliest_date.strftime('%Y年%m月%d日')} ～ "
+                f"{latest_date.strftime('%Y年%m月%d日')}"
+            )
 
     def generate_analysis_id(self, symbol):
         """分析IDを生成"""
@@ -287,6 +368,40 @@ class AnalysisLogger:
         
         return consistency
 
+    #
+    # 下記は fitter.py の LogPeriodicFiltter クラス用のロギングのメソッドです。
+    #
 
+    def log_fitting_start(self, t_shape: tuple, y_shape: tuple):
+        """フィッティング開始時のログを記録"""
+        self.logger.info(f"Starting fit with data shape: t={t_shape}, y={y_shape}")
+
+    def log_fitting_params(self, params: dict, phase: str = "initial"):
+        """フィッティングパラメータのログを記録"""
+        self.logger.info(f"{phase.capitalize()} parameters: {params}")
+
+    def log_fitting_bounds(self, bounds: tuple):
+        """フィッティングの境界条件をログに記録"""
+        self.logger.info(f"Bounds: {bounds}")
+
+    def log_fitting_results(self, fitted_params: dict, quality_metrics: dict):
+        """フィッティング結果のログを記録"""
+        self.logger.info(f"Fitted parameters: {fitted_params}")
+        self.logger.info(
+            f"Fit quality: residuals={quality_metrics['residuals']}, "
+            f"R²={quality_metrics['r_squared']}"
+        )
+
+    def log_validation_failure(self, error_msg: str):
+        """パラメータ検証失敗のログを記録"""
+        self.logger.warning(f"Parameter validation failed: {error_msg}")
+
+    def log_poor_fit_quality(self, residuals: float, r_squared: float):
+        """低品質フィットのログを記録"""
+        self.logger.warning(f"Poor fit quality: residuals={residuals}, R²={r_squared}")
+
+    def log_fitting_error(self, error: Exception):
+        """フィッティングエラーのログを記録"""
+        self.logger.error(f"Fitting failed: {str(error)}")
 
 
