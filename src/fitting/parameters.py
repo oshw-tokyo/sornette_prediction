@@ -21,6 +21,8 @@ class ParameterSet:
     description: str
     source: str  # 論文の参照など
 
+
+
 class FittingParameterManager:
     """フィッティングパラメータの管理クラス"""
     def __init__(self):

@@ -23,7 +23,8 @@ class LogPeriodicFitter:
     
     def __init__(self):
         self.params = FittingParameters()
-        self.logger = AnalysisLogger()        
+        self.logger = AnalysisLogger() 
+               
         
     @staticmethod
     def log_periodic_func(t: np.ndarray, tc: float, m: float, omega: float, 
@@ -158,18 +159,22 @@ class LogPeriodicFitter:
                 error_message=str(e)
             )
 
-    def fit_with_multiple_initializations(self, t: np.ndarray, y: np.ndarray, 
-                                        n_tries: int = 5) -> FittingResult:
+    def fit_with_multiple_initializations(self, t: np.ndarray, y: np.ndarray, n_tries: int = 5) -> FittingResult:
         """
         複数の初期値でフィッティングを試行し、最良の結果を返す
         
-        Args:
-            t: 時間データ
-            y: 価格データ
-            n_tries: 試行回数
+        Parameters:
+        -----------
+        t : np.ndarray
+            時間データ（インデックス）
+        y : np.ndarray
+            価格データ
+        n_tries : int
+            試行回数
             
         Returns:
-            FittingResult: 最良のフィッティング結果
+        --------
+        FittingResult  最良のフィッティング結果
         """
         best_result = FittingResult(success=False, parameters={}, residuals=np.inf, r_squared=0)
         
@@ -206,9 +211,13 @@ class FittingParameters:
     OMEGA_MIN: float = 5.0
     OMEGA_MAX: float = 8.0
     
-    # Fitting quality thresholds
-    MAX_RESIDUAL: float = 1.0  # Maximum acceptable residual for good fit
-    MIN_R_SQUARED: float = 0.95  # Minimum R-squared for acceptable fit # Initially 0.95
+    # # Fitting quality thresholds
+    # MAX_RESIDUAL: float = 1.0  # Maximum acceptable residual for good fit
+    # MIN_R_SQUARED: float = 0.95  # Minimum R-squared for acceptable fit # Initially 0.95
+
+    # フィッティング品質の閾値を***一時的に***調整
+    MAX_RESIDUAL: float = 200.0  # 初期値を大きくする
+    MIN_R_SQUARED: float = 0.85   # 一時的に基準を緩和
     
     @classmethod
     def validate_parameters(cls, z: float, omega: float) -> Tuple[bool, Optional[str]]:

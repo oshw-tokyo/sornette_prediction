@@ -1,107 +1,72 @@
 import numpy as np
 import pandas as pd
-
+import logging
 import os
 import json
-import logging
 from datetime import datetime
 
 from .custom_handlers import AnalysisFileHandler, RotatingAnalysisFileHandler
 from .formatters import AnalysisFormatter, DetailedAnalysisFormatter
 
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
 class AnalysisLogger:
     def __init__(self, base_dir='analysis_results'):
         self.base_dir = base_dir
         self.ensure_directories()
-        self._setup_logger()
         
-    def ensure_directories(self):
-        """必要なディレクトリを作成"""
-        directories = ['summaries', 'plots', 'metrics', 'raw_data']
-        for dir_name in [os.path.join(self.base_dir, d) for d in directories]:
-            os.makedirs(dir_name, exist_ok=True)
-
-    def _setup_logger(self):
-        """ロガーの初期設定"""
-        self.logger = logging.getLogger('analysis_logger')
-        self.logger.setLevel(logging.INFO)
+        # Pythonの標準ロガーを設定
+        self._logger = logging.getLogger('analysis_logger')
+        self._logger.setLevel(logging.INFO)
         
-        # 複数のハンドラーを設定
+        # 既存のハンドラーをクリア
+        self._logger.handlers.clear()
         
-        # 1. 基本的な分析ログ用ハンドラー
-        basic_handler = AnalysisFileHandler(
+        # ファイルハンドラーを追加
+        file_handler = AnalysisFileHandler(
             base_dir=self.base_dir,
             filename='analysis.log'
         )
-        basic_handler.setFormatter(AnalysisFormatter())
-        basic_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(AnalysisFormatter())
+        self._logger.addHandler(file_handler)
         
-        # 2. 詳細なデバッグ情報用の回転ハンドラー
-        debug_handler = RotatingAnalysisFileHandler(
-            base_dir=self.base_dir,
-            filename='debug.log',
-            maxBytes=1024*1024,  # 1MB
-            backupCount=5
-        )
-        debug_handler.setFormatter(DetailedAnalysisFormatter())
-        debug_handler.setLevel(logging.DEBUG)
-        
-        # 既存のハンドラーをクリア（重複を防ぐ）
-        self.logger.handlers.clear()
-        
-        # 新しいハンドラーを追加
-        self.logger.addHandler(basic_handler)
-        self.logger.addHandler(debug_handler)
+        # コンソール出力用のハンドラーを追加
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(AnalysisFormatter())
+        self._logger.addHandler(console_handler)
 
-    def log_stability_analysis(self, symbol: str, window_index: int, 
-                             error: Exception = None, success: bool = True,
-                             metrics: dict = None):
-        """安定性分析のログを記録"""
-        if error:
-            self.logger.error(
-                f"Stability analysis failed for {symbol} at window {window_index}: {str(error)}"
-            )
-            return
+    def ensure_directories(self):
+        """必要なディレクトリを作成"""
+        directories = ['logs', 'summaries', 'plots', 'metrics', 'raw_data']
+        for dir_name in [os.path.join(self.base_dir, d) for d in directories]:
+            os.makedirs(dir_name, exist_ok=True)
 
-        if success and metrics:
-            self.logger.info(
-                f"Stability analysis for {symbol} window {window_index}: "
-                f"tc_mean={metrics.get('tc_mean', 'N/A'):.2f}, "
-                f"tc_std={metrics.get('tc_std', 'N/A'):.2f}, "
-                f"tc_cv={metrics.get('tc_cv', 'N/A'):.3f}"
-            )
+    # 基本的なロギングメソッド
+    def debug(self, message):
+        """デバッグメッセージを記録"""
+        self._logger.debug(message)
 
-    def log_stability_results(self, symbol: str, tc_mean: float, tc_std: float, 
-                            tc_cv: float, window_consistency: float,
-                            date_range: tuple = None):
-        """安定性分析の結果をログに記録"""
-        self.logger.info(
-            f"\nStability Analysis Results for {symbol}:\n"
-            f"Critical Point Mean: {tc_mean:.2f}\n"
-            f"Standard Deviation: {tc_std:.2f}\n"
-            f"Coefficient of Variation: {tc_cv:.3f}\n"
-            f"Window Consistency: {window_consistency:.3f}"
-        )
-        
-        if date_range:
-            predicted_date, earliest_date, latest_date = date_range
-            self.logger.info(
-                f"Predicted Critical Point: {predicted_date.strftime('%Y年%m月%d日')}\n"
-                f"Date Range: {earliest_date.strftime('%Y年%m月%d日')} ～ "
-                f"{latest_date.strftime('%Y年%m月%d日')}"
-            )
+    def info(self, message):
+        """情報メッセージを記録"""
+        self._logger.info(message)
 
-    def generate_analysis_id(self, symbol):
-        """分析IDを生成"""
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        return f"{symbol}_{timestamp}"
-    
+    def warning(self, message):
+        """警告メッセージを記録"""
+        self._logger.warning(message)
+
+    def error(self, message):
+        """エラーメッセージを記録"""
+        self._logger.error(message)
+
+    def critical(self, message):
+        """重大なエラーメッセージを記録"""
+        self._logger.critical(message)
+
+    @staticmethod
+    def ensure_output_dir(dir_name='analysis_results/temp'):
+        """出力ディレクトリの存在を確認し、必要に応じて作成"""
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+        return dir_name
+
     def save_analysis_results(self, symbol, results, data, quality_metrics, stability_metrics, 
                             start_date, end_date, plots_info):
         analysis_id = self.generate_analysis_id(symbol)

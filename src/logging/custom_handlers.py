@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler 
 import os
 from datetime import datetime
 
@@ -13,7 +14,7 @@ class AnalysisFileHandler(logging.FileHandler):
         os.makedirs(log_dir, exist_ok=True)
         super().__init__(os.path.join(log_dir, filename))
 
-class RotatingAnalysisFileHandler(logging.handlers.RotatingFileHandler):
+class RotatingAnalysisFileHandler(RotatingFileHandler):  # logging.handlers.RotatingFileHandler から変更
     """ローテーションありの分析ログハンドラー"""
     def __init__(self, base_dir='analysis_results', filename='analysis.log',
                  maxBytes=1024*1024, backupCount=5):
