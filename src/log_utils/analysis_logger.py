@@ -32,6 +32,13 @@ class AnalysisLogger:
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(AnalysisFormatter())
         self._logger.addHandler(console_handler)
+        
+    def __del__(self):
+        """デストラクタでファイルハンドラをクローズ"""
+        if hasattr(self, '_logger'):
+            for handler in self._logger.handlers[:]:
+                handler.close()
+                self._logger.removeHandler(handler)
 
     def ensure_directories(self):
         """必要なディレクトリを作成"""

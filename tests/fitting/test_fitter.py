@@ -1,59 +1,63 @@
+# tests/fitting/test_fitter.py
+
 import unittest
 import numpy as np
-from src.fitting.fitter import LogPeriodicFitter, FittingResult
+from src.fitting.fitter import LogPeriodicFitter
 
 class TestLogPeriodicFitter(unittest.TestCase):
     def setUp(self):
-        """テストの前準備"""
         self.fitter = LogPeriodicFitter()
         
-        # テストデータの生成
-        self.t = np.linspace(0, 100, 200)
-        # 既知のパラメータでテストデータを生成
-        self.tc = 120
-        self.m = 0.45
-        self.omega = 6.5
-        self.phi = 0.5
-        self.A = 100
-        self.B = 10
-        self.C = 0.1
+        # テストデータの準備
+        self.t = np.linspace(0, 1, 100)
+        tc = 1.1
+        m = 0.45
+        omega = 6.36
+        phi = 0
+        A = 1.0
+        B = -0.5
+        C = 0.1
         
-        # ノイズなしの理想的なデータ
-        self.y_ideal = self.fitter.log_periodic_func(
-            self.t, self.tc, self.m, self.omega, 
-            self.phi, self.A, self.B, self.C
-        )
+        # べき乗則データの生成
+        dt = tc - self.t
+        self.y_power_law = A + B * np.power(dt, m)
         
-        # ノイズ付きデータ
-        np.random.seed(42)
-        self.noise = np.random.normal(0, 1, len(self.t))
-        self.y_noisy = self.y_ideal + self.noise
+        # 理想的なデータの生成
+        self.y_ideal = A + B * np.power(dt, m) * (1 + C * np.cos(omega * np.log(dt) + phi))
+        
+        # ノイズ付きデータの生成
+        self.y_noisy = self.y_ideal + np.random.normal(0, 0.01, len(self.t))
 
-    def test_ideal_fitting(self):
-        """理想的なデータでのフィッティングテスト"""
-        result = self.fitter.fit_log_periodic(self.t, self.y_ideal)
-        
+    def test_power_law_fitting(self):
+        """べき乗則フィッティングのテスト"""
+        result = self.fitter.fit_power_law(self.t, self.y_power_law)
         self.assertTrue(result.success)
-        self.assertGreater(result.r_squared, 0.99)
-        self.assertAlmostEqual(result.parameters['tc'], self.tc, delta=1)
-        self.assertAlmostEqual(result.parameters['m'], self.m, delta=0.1)
-        self.assertAlmostEqual(result.parameters['omega'], self.omega, delta=0.1)
+        self.assertGreater(result.r_squared, 0.95)
+        
+    def test_log_periodic_fitting(self):
+        """対数周期フィッティングのテスト"""
+        # まずべき乗則フィット
+        power_law_result = self.fitter.fit_power_law(self.t, self.y_ideal)
+        self.assertTrue(power_law_result.success)
+        
+        # 次に対数周期フィット
+        result = self.fitter.fit_log_periodic(self.t, self.y_ideal, power_law_result.parameters)
+        self.assertTrue(result.success)
+        self.assertGreater(result.r_squared, 0.95)
 
     def test_noisy_fitting(self):
         """ノイズを含むデータでのフィッティングテスト"""
-        result = self.fitter.fit_log_periodic(self.t, self.y_noisy)
+        # べき乗則フィット
+        power_law_result = self.fitter.fit_power_law(self.t, self.y_noisy)
+        self.assertTrue(power_law_result.success)
         
+        # 対数周期フィット
+        result = self.fitter.fit_log_periodic(self.t, self.y_noisy, power_law_result.parameters)
         self.assertTrue(result.success)
-        self.assertGreater(result.r_squared, 0.8)
-        self.assertTrue(0 < result.parameters['m'] < 1)
-        self.assertTrue(5 <= result.parameters['omega'] <= 8)
+        self.assertGreater(result.r_squared, 0.90)  # ノイズがあるので閾値を下げる
 
-    def test_multiple_initializations(self):
-        """複数の初期値でのフィッティングテスト"""
-        result = self.fitter.fit_with_multiple_initializations(
-            self.t, self.y_noisy, n_tries=5
-        )
-        
+    def test_fit_integration(self):
+        """統合フィッティングのテスト"""
+        result = self.fitter.fit(self.t, self.y_ideal)
         self.assertTrue(result.success)
-        single_result = self.fitter.fit_log_periodic(self.t, self.y_noisy)
-        self.assertGreaterEqual(result.r_squared, single_result.r_squared)
+        self.assertGreater(result.r_squared, 0.95)

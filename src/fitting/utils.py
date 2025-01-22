@@ -1,5 +1,3 @@
-from ..logging.analysis_logger import AnalysisLogger
-
 import numpy as np
 from scipy import stats  
 from scipy.optimize import curve_fit
@@ -10,6 +8,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import os
 
+from ..log_utils.analysis_logger import AnalysisLogger
 
 def fit_log_periodic(time, price, tc_guess):
     """

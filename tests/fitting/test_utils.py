@@ -1,8 +1,9 @@
 import unittest
 import numpy as np
+from src.log_utils.analysis_logger import AnalysisLogger  # パスを更新
 from src.fitting.utils import calculate_residuals, calculate_r_squared
 
-class TestFittingUtils(unittest.TestCase):
+class TestUtils(unittest.TestCase):
     def setUp(self):
         """テストデータの準備"""
         self.y_true = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
