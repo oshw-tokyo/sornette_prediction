@@ -22,6 +22,13 @@ class ValidationResult:
 
 class CrashValidator:
     def __init__(self):
+        super().__init__()
+        self.default_tolerances = {
+            'tc': 5,  # 日数での許容誤差
+            'm': 0.05,
+            'omega': 0.5,
+            'phi': 0.5
+        }
         self.logger = AnalysisLogger()
         self.fitter = LogPeriodicFitter()
         
@@ -34,12 +41,14 @@ class CrashValidator:
             # クラッシュケース固有の設定を取得
             case_settings = get_validation_settings(crash_case.id)
             
-            # データ取得時の制限を適用
             data = self._get_market_data(
                 crash_case.symbol,
                 crash_case.period.start_date,
-                crash_case.period.validation_end_date
+                crash_case.period.end_date  # 自動計算された end_date を使用
             )
+
+            if data is None:
+                raise ValueError("Failed to retrieve market data")
 
             # データ点数のチェック
             if len(data) < case_settings['minimum_data_points']:

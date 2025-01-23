@@ -3,10 +3,14 @@ from scipy.optimize import curve_fit
 from scipy import stats
 from typing import Optional, Dict, Tuple
 from dataclasses import dataclass
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import os
 
 from ..log_utils.analysis_logger import AnalysisLogger
+from .utils import power_law_func, log_periodic_func
 
-# fitter.py の先頭に追加
+
 @dataclass
 class FittingResult:
     """フィッティング結果を格納するデータクラス"""
@@ -113,7 +117,7 @@ class LogPeriodicFitter:
             )
 
             popt, pcov = curve_fit(
-                self.power_law_func, t, y,
+                power_law_func, t, y,
                 p0=p0,
                 bounds=bounds,
                 maxfev=10000,
@@ -121,7 +125,7 @@ class LogPeriodicFitter:
             )
 
             # フィッティング結果の評価
-            y_fit = self.power_law_func(t, *popt)
+            y_fit = power_law_func(t, *popt)
             residuals = np.mean((y - y_fit) ** 2)
             r_squared = 1 - np.sum((y - y_fit) ** 2) / np.sum((y - np.mean(y)) ** 2)
 
@@ -150,43 +154,45 @@ class LogPeriodicFitter:
             )
         
     def fit_log_periodic(self, t: np.ndarray, y: np.ndarray, 
-                        power_law_params: Dict[str, float]) -> FittingResult:
-        """対数周期補正を含むフィッティング"""
+                    power_law_params: Dict[str, float]) -> FittingResult:
+        """対数周期フィッティング"""
         try:
-            # べき乗則フィットのパラメータを初期値として使用
+            # データの1次元化
+            t = np.asarray(t).ravel()
+            y = np.asarray(y).ravel()
+            
+            # 初期パラメータ
             p0 = [
-                power_law_params['tc'],
-                power_law_params['m'],
-                6.36,  # omega（論文での典型的な値）
-                0,     # phi
-                power_law_params['A'],
-                power_law_params['B'],
-                0.1    # C
+                power_law_params['tc'],  # tc
+                power_law_params['m'],   # m
+                6.36,                    # omega
+                0.0,                     # phi
+                power_law_params['A'],   # A
+                power_law_params['B'],   # B
+                0.05                     # C
             ]
-
-            # 境界条件（論文に基づく）
+            
+            # 境界条件
             bounds = (
                 [t[-1], 0.1, 5.0, -2*np.pi, -np.inf, -np.inf, -0.5],
-                [t[-1] + (t[-1] - t[0])*0.5, 0.9, 8.0, 2*np.pi, np.inf, np.inf, 0.5]
+                [t[-1] + (t[-1] - t[0])*0.2, 0.9, 8.0, 2*np.pi, np.inf, np.inf, 0.5]
             )
-
-            popt, pcov = curve_fit(
-                self.log_periodic_func, t, y,
+            
+            # フィッティング実行
+            popt, _ = curve_fit(
+                log_periodic_func,
+                t, y,
                 p0=p0,
                 bounds=bounds,
-                maxfev=10000
+                maxfev=10000,
+                method='trf'
             )
-
-            y_fit = self.log_periodic_func(t, *popt)
+            
+            # 結果評価
+            y_fit = log_periodic_func(t, *popt)
             residuals = np.mean((y - y_fit) ** 2)
             r_squared = 1 - np.sum((y - y_fit) ** 2) / np.sum((y - np.mean(y)) ** 2)
-
-            # 統計的有意性の評価
-            significance = self._assess_statistical_significance(y, y_fit)
-
-            # パラメータが典型的な範囲内かチェック
-            is_typical = (0.33 <= popt[1] <= 0.68) and (5.0 <= popt[2] <= 8.0)
-
+            
             return FittingResult(
                 success=True,
                 parameters={
@@ -200,10 +206,9 @@ class LogPeriodicFitter:
                 },
                 residuals=residuals,
                 r_squared=r_squared,
-                statistical_significance=significance,
-                is_typical_range=is_typical
+                statistical_significance=self._assess_statistical_significance(y, y_fit)
             )
-
+            
         except Exception as e:
             self.logger.error(f"Log-periodic fitting failed: {str(e)}")
             return FittingResult(
@@ -214,61 +219,7 @@ class LogPeriodicFitter:
                 statistical_significance={},
                 error_message=str(e)
             )
-
-    @staticmethod
-    def power_law_func(t: np.ndarray, tc: float, m: float, A: float, B: float) -> np.ndarray:
-        """べき乗則のモデル関数"""
-        dt = tc - t
-        mask = dt > 0
-        result = np.zeros_like(t)
-        result[mask] = A + B * np.power(dt[mask], m)
-        return result
-
-    @staticmethod
-    def log_periodic_func(t: np.ndarray, tc: float, m: float, omega: float,
-                        phi: float, A: float, B: float, C: float) -> np.ndarray:
-        """
-        対数周期関数のモデル
-        
-        Parameters:
-        -----------
-        t : np.ndarray
-            時間データ（1次元配列）
-        tc : float
-            臨界時点
-        m : float
-            べき指数（0.33-0.68の範囲）
-        omega : float
-            対数周期の角振動数（5-8の範囲）
-        phi : float
-            位相（-2π から 2π の範囲）
-        A, B, C : float
-            振幅パラメータ
-        
-        Returns:
-        --------
-        np.ndarray
-            対数周期関数の値（1次元配列）
-        """
-        # データを1次元配列に変換
-        t = np.asarray(t).ravel()
-        
-        # dtの計算とマスク生成
-        dt = tc - t
-        mask = dt > 0
-        
-        # 結果配列の初期化
-        result = np.zeros_like(t, dtype=float)
-        
-        # マスクされた領域での計算
-        valid_dt = dt[mask]
-        if len(valid_dt) > 0:
-            # ここで重要なのは、各要素に対して一度に計算を行うこと
-            log_term = omega * np.log(valid_dt) + phi
-            power_term = np.power(valid_dt, m)
-            result[mask] = A + B * power_term * (1 + C * np.cos(log_term))
-        
-        return result
+   
 
     def _assess_statistical_significance(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
         """フィッティング結果の統計的有意性を評価"""
@@ -299,3 +250,115 @@ class LogPeriodicFitter:
             },
             'durbin_watson': dw_stat
         }
+    
+    def fit(self, t: np.ndarray, y: np.ndarray) -> FittingResult:
+        """統合的なフィッティングメソッド"""
+        try:
+            # 1. べき乗則フィッティング
+            power_result = self.fit_power_law(t, y)
+            if not power_result.success:
+                raise ValueError("Power law fitting failed")
+            
+            # 2. 対数周期フィッティング
+            log_result = self.fit_log_periodic(t, y, power_result.parameters)
+            if not log_result.success:
+                raise ValueError("Log-periodic fitting failed")
+            
+            return log_result
+        except Exception as e:
+            self.logger.error(f"Fit process failed: {str(e)}")
+            return FittingResult(
+                success=False,
+                parameters={},
+                residuals=np.inf,
+                r_squared=0,
+                statistical_significance={},
+                error_message=str(e)
+            )
+    
+
+def check_stability(times, prices, window_size=30, step=5, data=None, symbol=None):
+    """
+    パラメータの安定性をチェック
+    
+
+    Returns:
+    --------
+    tuple:
+        (tc_mean, tc_std, tc_cv, window_consistency)
+
+    Parameters:
+    -----------
+    times : array-like
+        時間データ
+    prices : array-like
+        価格データ
+    window_size : int
+        分析ウィンドウのサイズ（日数）
+    step : int
+        ウィンドウのスライド幅（日数）
+    data : pandas.DataFrame
+        元の株価データ（日付情報を取得するため）
+    """
+    tc_estimates = []
+    windows = []
+    
+    for i in range(0, len(times) - window_size, step):
+        window_times = times[i:i+window_size]
+        window_prices = prices[i:i+window_size]
+        
+        tc_guess = window_times[-1] + 30
+        
+        try:
+            popt, _ = LogPeriodicFitter.fit_log_periodic(window_times, window_prices, tc_guess)
+            if popt is not None:
+                tc_estimates.append(popt[0])
+                windows.append(window_times[-1])
+        except:
+            continue
+    
+    if tc_estimates:
+        plt.figure(figsize=(12, 6))
+        plt.plot(windows, tc_estimates, 'bo-')
+        plt.xlabel('ウィンドウ終了時点')
+        plt.ylabel('予測された臨界時点')
+        plt.title('臨界時点予測の安定性分析')
+        plt.grid(True)
+        
+        # グラフを保存
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'stability_{symbol}_{timestamp}.png' if symbol else f'stability_{timestamp}.png'
+        
+        output_dir = AnalysisLogger.ensure_output_dir(dir_name="analysis_results/plots")
+        plt.savefig(os.path.join(output_dir, filename))
+        plt.close() # プロットを閉じる
+        
+        # 安定性の指標を計算
+        tc_std = np.std(tc_estimates)
+        tc_mean = np.mean(tc_estimates)
+        tc_cv = tc_std / tc_mean  # 変動係数
+
+        # 時間窓での一貫性を計算
+        window_consistency = max(0, 1 - 2 * tc_cv) if tc_cv is not None else 0
+        
+        print(f"\n安定性分析結果:")
+        print(f"臨界時点の平均: {tc_mean:.2f}")
+        print(f"臨界時点の標準偏差: {tc_std:.2f}")
+        print(f"変動係数: {tc_cv:.3f}")
+        print(f"予測一貫性: {window_consistency:.3f}") 
+        
+        # 日付での表示を追加
+        if data is not None:
+            mean_days_from_end = tc_mean - len(times)
+            predicted_mean_date = data.index[-1] + timedelta(days=int(mean_days_from_end))
+            print(f"予測される平均的な臨界時点の日付: {predicted_mean_date.strftime('%Y年%m月%d日')}")
+            
+            # 標準偏差を考慮した予測範囲
+            earliest_date = predicted_mean_date - timedelta(days=int(tc_std))
+            latest_date = predicted_mean_date + timedelta(days=int(tc_std))
+            print(f"予測範囲: {earliest_date.strftime('%Y年%m月%d日')} ～ {latest_date.strftime('%Y年%m月%d日')}")
+        
+        return tc_mean, tc_std, tc_cv, window_consistency
+    else:
+        print("安定性分析に失敗しました。")
+        return None, None, None, None

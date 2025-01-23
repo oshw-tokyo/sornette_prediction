@@ -5,26 +5,24 @@ from datetime import timedelta
 
 from ..config.validation_settings import get_validation_settings
 
-# historical_crashes.py の CrashPeriod クラスを修正
 @dataclass
 class CrashPeriod:
     """クラッシュ期間を定義するデータクラス"""
     start_date: datetime
-    end_date: datetime
     crash_date: datetime
+    validation_cutoff_days: int = 30
     pre_crash_peak_date: Optional[datetime] = None
-    validation_cutoff_days: int = 30  # クラッシュ前の何日前までのデータを使用するか
     description: str = ""
     
     @property
-    def validation_end_date(self) -> datetime:
-        """検証用の終了日を計算"""
+    def end_date(self) -> datetime:
+        """クラッシュの検証cutoff日前の日付を返す"""
         return self.crash_date - timedelta(days=self.validation_cutoff_days)
 
     def get_validation_period(self) -> Tuple[datetime, datetime]:
         """検証用の期間を取得"""
-        return self.start_date, self.validation_end_date
-
+        return self.start_date, self.end_date
+    
 @dataclass
 class CrashParameters:
     """クラッシュのパラメータを定義するデータクラス"""
@@ -78,7 +76,6 @@ CRASH_1987_10 = CrashCase(
     
     period=CrashPeriod(
         start_date=datetime(1985, 7, 1),
-        end_date=datetime(1987, 9, 19),    # クラッシュ30日前
         crash_date=datetime(1987, 10, 19),
         pre_crash_peak_date=datetime(1987, 8, 25),
         validation_cutoff_days=30,

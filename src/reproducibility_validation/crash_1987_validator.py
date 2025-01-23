@@ -19,29 +19,13 @@ class Crash1987Validator(CrashValidator):
             'tc': 3         # より厳密な許容誤差（日数）
         }
 
-    def validate(self, start_date: datetime = datetime(1985, 7, 1),
-                end_date: datetime = datetime(1987, 10, 19)) -> ValidationResult:
-        """
-        1987年のクラッシュの再現性を検証
-        
-        Parameters:
-        -----------
-        start_date : datetime, optional
-            分析開始日（デフォルト：1985年7月1日）
-        end_date : datetime, optional
-            分析終了日（デフォルト：1987年10月19日）
-            
-        Returns:
-        --------
-        ValidationResult
-            検証結果
-        """
+    def validate(self, start_date: datetime = datetime(1985, 7, 1)) -> ValidationResult:
+        """1987年のクラッシュの再現性を検証"""
         # 1987年のクラッシュケースを取得
         crash_case = get_crash_case('1987-10')
         
-        # カスタム期間で上書き
+        # カスタム期間で上書き（end_dateの設定は削除）
         crash_case.period.start_date = start_date
-        crash_case.period.end_date = end_date
         
         # 1987年特有の許容誤差を設定
         crash_case.tolerances = self.specific_tolerances

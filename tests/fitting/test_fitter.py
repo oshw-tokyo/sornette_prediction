@@ -4,11 +4,10 @@ import unittest
 import numpy as np
 from src.fitting.fitter import LogPeriodicFitter
 
+# tests/fitting/test_fitter.py
 class TestLogPeriodicFitter(unittest.TestCase):
     def setUp(self):
         self.fitter = LogPeriodicFitter()
-        
-        # テストデータの準備
         self.t = np.linspace(0, 1, 100)
         tc = 1.1
         m = 0.45
@@ -18,15 +17,15 @@ class TestLogPeriodicFitter(unittest.TestCase):
         B = -0.5
         C = 0.1
         
-        # べき乗則データの生成
         dt = tc - self.t
         self.y_power_law = A + B * np.power(dt, m)
-        
-        # 理想的なデータの生成
         self.y_ideal = A + B * np.power(dt, m) * (1 + C * np.cos(omega * np.log(dt) + phi))
-        
-        # ノイズ付きデータの生成
         self.y_noisy = self.y_ideal + np.random.normal(0, 0.01, len(self.t))
+    
+    def test_fit_integration(self):
+        result = self.fitter.fit(self.t, self.y_ideal)
+        self.assertTrue(result.success)
+        self.assertGreater(result.r_squared, 0.95)
 
     def test_power_law_fitting(self):
         """べき乗則フィッティングのテスト"""

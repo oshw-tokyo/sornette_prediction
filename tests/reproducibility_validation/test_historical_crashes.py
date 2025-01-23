@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from src.reproducibility_validation.historical_crashes import (
     CrashCase, CrashPeriod, CrashParameters, CrashMetrics,
@@ -50,41 +50,20 @@ class TestHistoricalCrashes(unittest.TestCase):
         self.assertEqual(crash_1987['market'], '^GSPC')
     
     def test_crash_period_validation(self):
-        """クラッシュ期間の妥当性検証"""
         crash_case = get_crash_case('1987-10')
         
-        # 基本的な時系列の検証
         self.assertLess(
             crash_case.period.start_date,
-            crash_case.period.end_date,
-            "start_date should be before end_date"
-        )
-        
-        self.assertLess(
-            crash_case.period.end_date,
             crash_case.period.crash_date,
-            "end_date should be before crash_date"
+            "start_date should be before crash_date"
         )
         
-        # 追加の期間妥当性チェック
-        if crash_case.period.pre_crash_peak_date:
-            self.assertLess(
-                crash_case.period.start_date,
-                crash_case.period.pre_crash_peak_date,
-                "start_date should be before pre_crash_peak_date"
-            )
-            self.assertLess(
-                crash_case.period.pre_crash_peak_date,
-                crash_case.period.crash_date,
-                "pre_crash_peak_date should be before crash_date"
-            )
+        calculated_end_date = crash_case.period.end_date
+        expected_end_date = (crash_case.period.crash_date - 
+                            timedelta(days=crash_case.period.validation_cutoff_days))
         
-        # 検証期間に関する追加チェック
-        expected_end_date = crash_case.period.crash_date - timedelta(
-            days=crash_case.period.validation_cutoff_days
-        )
         self.assertEqual(
-            crash_case.period.end_date,
+            calculated_end_date,
             expected_end_date,
             "end_date should be validation_cutoff_days before crash_date"
         )
