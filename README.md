@@ -37,7 +37,6 @@ python stock-analysis.py
 ファイル構造
 
     stock-analysis.py: メイン分析スクリプト
-    analysis_logger.py: ロギング機能
     market_symbols.json: 分析対象銘柄リスト
 
 必要条件

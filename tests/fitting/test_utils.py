@@ -1,6 +1,5 @@
 import unittest
 import numpy as np
-from src.log_utils.analysis_logger import AnalysisLogger  # パスを更新
 from src.fitting.utils import calculate_residuals, calculate_r_squared
 
 class TestUtils(unittest.TestCase):

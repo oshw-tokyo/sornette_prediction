@@ -7,8 +7,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import os
 
-from ..log_utils.analysis_logger import AnalysisLogger
-from .utils import power_law_func, log_periodic_func
+from .utils import power_law_func, logarithm_periodic_func
 
 
 @dataclass
@@ -22,12 +21,9 @@ class FittingResult:
     error_message: Optional[str] = None
     is_typical_range: bool = False
 
-class LogPeriodicFitter:
+class LogarithmPeriodicFitter:
     """Sornette et al. (1996)に基づく対数周期性フィッティング"""
     
-    def __init__(self):
-        self.logger = AnalysisLogger()
-
     def prepare_data(self, prices: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Sornette et al. (1996)に従ってデータを前処理
@@ -39,21 +35,21 @@ class LogPeriodicFitter:
             normalized_prices = prices / prices[0]
             
             # 2. 対数変換
-            log_prices = np.log(normalized_prices)
+            logarithm_prices = np.log(normalized_prices)
             
             # 時間軸の生成（0から1の範囲）
             t = np.linspace(0, 1, len(prices))
             
             # データの品質チェック
-            if not np.all(np.isfinite(log_prices)):
-                self.logger.error("Invalid values detected after log transformation")
+            if not np.all(np.isfinite(logarithm_prices)):
+                print("ERROR: ", "Invalid values detected after logarithm transformation")
                 return None, None
             
-            self.logger.info(f"Data preparation completed. Shape: {t.shape}")
-            return t, log_prices
+            print("INFO: ", f"Data preparation completed. Shape: {t.shape}")
+            return t, logarithm_prices
             
         except Exception as e:
-            self.logger.error(f"Data preparation failed: {str(e)}")
+            print("ERROR: ", f"Data preparation failed: {str(e)}")
             return None, None
 
     def fit_with_multiple_initializations(self, t: np.ndarray, prices: np.ndarray, 
@@ -70,7 +66,7 @@ class LogPeriodicFitter:
                     continue
                 
                 # 2. 対数周期フィット
-                result = self.fit_log_periodic(t, prices, power_result.parameters)
+                result = self.fit_logarithm_periodic(t, prices, power_result.parameters)
                 if not result.success:
                     continue
                 
@@ -79,7 +75,7 @@ class LogPeriodicFitter:
                     best_residuals = result.residuals
                 
             except Exception as e:
-                self.logger.warning(f"Fitting attempt {i+1} failed: {str(e)}")
+                print("WARNING: ", f"Fitting attempt {i+1} failed: {str(e)}")
                 continue
         
         if best_result is None:
@@ -102,7 +98,7 @@ class LogPeriodicFitter:
             y = np.asarray(y).ravel()
             
             # 初期パラメータ設定
-            tc_init = t[-1] + (t[-1] - t[0]) * 0.1
+            tc_init = t[-1] + (t[-1] - t[0]) * 0.2
             m_init = 0.45  # 論文での典型的な値
             A_init = np.mean(y)
             B_init = (y[-1] - y[0]) / (t[-1] - t[0])
@@ -112,8 +108,8 @@ class LogPeriodicFitter:
 
             # パラメータの境界設定
             bounds = (
-                [t[-1], 0.33, -np.inf, -np.inf],  # 下限
-                [t[-1] + (t[-1] - t[0]) * 0.2, 0.68, np.inf, np.inf]  # 上限
+                [t[-1], 0.1, -np.inf, -np.inf],  # 下限
+                [t[-1] + (t[-1] - t[0]) * 0.3, 0.7, np.inf, np.inf]  # 上限
             )
 
             popt, pcov = curve_fit(
@@ -143,7 +139,7 @@ class LogPeriodicFitter:
             )
 
         except Exception as e:
-            self.logger.error(f"Power law fitting failed: {str(e)}")
+            print("ERROR: ", f"Power law fitting failed: {str(e)}")
             return FittingResult(
                 success=False,
                 parameters={},
@@ -153,7 +149,7 @@ class LogPeriodicFitter:
                 error_message=str(e)
             )
         
-    def fit_log_periodic(self, t: np.ndarray, y: np.ndarray, 
+    def fit_logarithm_periodic(self, t: np.ndarray, y: np.ndarray, 
                     power_law_params: Dict[str, float]) -> FittingResult:
         """対数周期フィッティング"""
         try:
@@ -161,26 +157,28 @@ class LogPeriodicFitter:
             t = np.asarray(t).ravel()
             y = np.asarray(y).ravel()
             
-            # 初期パラメータ
             p0 = [
-                power_law_params['tc'],  # tc
-                power_law_params['m'],   # m
-                6.36,                    # omega
-                0.0,                     # phi
-                power_law_params['A'],   # A
-                power_law_params['B'],   # B
-                0.05                     # C
+                max(t[-1], min(t[-1] + (t[-1] - t[0]) * 0.1, power_law_params['tc'])),  # tc の制限
+                max(0.1, min(0.9, power_law_params['m'])),  # m の制限
+                6.36,  # omega
+                0.0,  # phi
+                max(-10, min(10, power_law_params['A'])),  # A の制限
+                max(-10, min(10, power_law_params['B'])),  # B の制限
+                0.05  # C
             ]
-            
-            # 境界条件
+
             bounds = (
-                [t[-1], 0.1, 5.0, -2*np.pi, -np.inf, -np.inf, -0.5],
-                [t[-1] + (t[-1] - t[0])*0.2, 0.9, 8.0, 2*np.pi, np.inf, np.inf, 0.5]
+                [t[-1], 0.1, 5.0, -2 * np.pi, -10, -10, -0.5],  # 下限
+                [t[-1] + (t[-1] - t[0]) * 0.2, 0.9, 8.0, 2 * np.pi, 10, 10, 0.5]  # 上限
             )
+
+            print("DEBUG: ", f"Initial parameters (p0): {p0}")
+
+            print("DEBUG: ", f"Bounds: {bounds}")            
             
             # フィッティング実行
             popt, _ = curve_fit(
-                log_periodic_func,
+                logarithm_periodic_func,
                 t, y,
                 p0=p0,
                 bounds=bounds,
@@ -189,7 +187,7 @@ class LogPeriodicFitter:
             )
             
             # 結果評価
-            y_fit = log_periodic_func(t, *popt)
+            y_fit = logarithm_periodic_func(t, *popt)
             residuals = np.mean((y - y_fit) ** 2)
             r_squared = 1 - np.sum((y - y_fit) ** 2) / np.sum((y - np.mean(y)) ** 2)
             
@@ -210,7 +208,7 @@ class LogPeriodicFitter:
             )
             
         except Exception as e:
-            self.logger.error(f"Log-periodic fitting failed: {str(e)}")
+            print("ERROR: ", f"Logarithm-periodic fitting failed: {str(e)}")
             return FittingResult(
                 success=False,
                 parameters={},
@@ -260,13 +258,13 @@ class LogPeriodicFitter:
                 raise ValueError("Power law fitting failed")
             
             # 2. 対数周期フィッティング
-            log_result = self.fit_log_periodic(t, y, power_result.parameters)
-            if not log_result.success:
-                raise ValueError("Log-periodic fitting failed")
+            logarithm_result = self.fit_logarithm_periodic(t, y, power_result.parameters)
+            if not logarithm_result.success:
+                raise ValueError("Logarithm-periodic fitting failed")
             
-            return log_result
+            return logarithm_result
         except Exception as e:
-            self.logger.error(f"Fit process failed: {str(e)}")
+            print("ERROR: ", f"Fit process failed: {str(e)}")
             return FittingResult(
                 success=False,
                 parameters={},
@@ -310,7 +308,7 @@ def check_stability(times, prices, window_size=30, step=5, data=None, symbol=Non
         tc_guess = window_times[-1] + 30
         
         try:
-            popt, _ = LogPeriodicFitter.fit_log_periodic(window_times, window_prices, tc_guess)
+            popt, _ = LogarithmPeriodicFitter.fit_logarithm_periodic(window_times, window_prices, tc_guess)
             if popt is not None:
                 tc_estimates.append(popt[0])
                 windows.append(window_times[-1])
@@ -329,7 +327,7 @@ def check_stability(times, prices, window_size=30, step=5, data=None, symbol=Non
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'stability_{symbol}_{timestamp}.png' if symbol else f'stability_{timestamp}.png'
         
-        output_dir = AnalysisLogger.ensure_output_dir(dir_name="analysis_results/plots")
+        output_dir = "analysis_results/plots"
         plt.savefig(os.path.join(output_dir, filename))
         plt.close() # プロットを閉じる
         

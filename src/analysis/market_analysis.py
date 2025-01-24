@@ -1,8 +1,7 @@
-from ..fitting.fitter import LogPeriodicFitter
+from ..fitting.fitter import LogarithmPeriodicFitter
 from ..fitting.parameters import FittingParameterManager
 from ..visualization.plots import plot_fitting_results
 from ..visualization.plots import plot_stability_analysis
-from ..logging.analysis_logger import AnalysisLogger
 
 import yfinance as yf
 import numpy as np
@@ -10,7 +9,6 @@ from scipy import stats
 
 from datetime import datetime, timedelta
 import json
-import logging
 
 
 def analyze_markets_from_json(json_file='market_symbols.json', time_windows=[180, 365, 730]):
@@ -115,8 +113,8 @@ def analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
     # データの準備
     times, prices = prepare_data(stock_data)
     
-    # LogPeriodicFitterのインスタンス化
-    fitter = LogPeriodicFitter()
+    # LogarithmPeriodicFitterのインスタンス化
+    fitter = LogarithmPeriodicFitter()
     
     # 複数の初期値でフィッティングを実行
     print("対数周期性分析を実行中...")
@@ -170,7 +168,6 @@ def prepare_data(stock_data):
 
 def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
     """拡張された株価分析関数 - 新しいフィッティングクラスを使用"""
-    logger = AnalysisLogger()
    
     # 基本分析の実行
     fitting_result, data = analyze_stock(symbol, start_date, end_date, tc_guess_days)
@@ -183,13 +180,13 @@ def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
             'R2': fitting_result.r_squared,
             'RMSE': np.sqrt(fitting_result.residuals),
             'Residuals_normality_p': stats.normaltest(
-                prices - LogPeriodicFitter.log_periodic_func(
+                prices - LogarithmPeriodicFitter.logarithm_periodic_func(
                     times,
                     **fitting_result.parameters
                 )
             )[1],
             'Max_autocorr': calculate_max_autocorr(
-                prices - LogPeriodicFitter.log_periodic_func(
+                prices - LogarithmPeriodicFitter.logarithm_periodic_func(
                     times,
                     **fitting_result.parameters
                 )
@@ -202,7 +199,7 @@ def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
             prices, 
             data=data, 
             symbol=symbol,
-            fitter=LogPeriodicFitter()
+            fitter=LogarithmPeriodicFitter()
         )
         
         # プロット情報の記録を更新
@@ -214,7 +211,7 @@ def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
         }
         
         # 結果の保存
-        analysis_id = logger.save_analysis_results(
+        print(
             symbol,
             fitting_result.parameters,
             data,
@@ -225,9 +222,7 @@ def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
             plots_info
         )
         
-        # レポートの生成と表示
-        print(logger.generate_report(analysis_id))
-        
+       
         return fitting_result.parameters, data, quality_metrics, stability_metrics
     
     return None, None, None, None
@@ -235,7 +230,6 @@ def enhanced_analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
 def analyze_stability(times, prices, data, symbol, fitter, 
                      window_size=30, step=5):
     """パラメータの安定性を分析する拡張関数"""
-    logger = AnalysisLogger()
     tc_estimates = []
     windows = []
     
@@ -253,14 +247,14 @@ def analyze_stability(times, prices, data, symbol, fitter,
             if fitting_result.success:
                 tc_estimates.append(fitting_result.parameters['tc'])
                 windows.append(window_times[-1])
-                logger.log_stability_analysis(
+                print(
                     symbol=symbol,
                     window_index=i,
                     success=True,
                     metrics={'tc': fitting_result.parameters['tc']}
                 )
         except Exception as e:
-            logger.log_stability_analysis(
+            print(
                 symbol=symbol,
                 window_index=i,
                 error=e
@@ -283,7 +277,7 @@ def analyze_stability(times, prices, data, symbol, fitter,
             latest_date = predicted_mean_date + timedelta(days=int(tc_std))
             date_range = (predicted_mean_date, earliest_date, latest_date)
         
-        logger.log_stability_results(
+        print(
             symbol=symbol,
             tc_mean=tc_mean,
             tc_std=tc_std,

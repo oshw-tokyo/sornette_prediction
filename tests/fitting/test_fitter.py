@@ -2,12 +2,12 @@
 
 import unittest
 import numpy as np
-from src.fitting.fitter import LogPeriodicFitter
+from src.fitting.fitter import LogarithmPeriodicFitter
 
 # tests/fitting/test_fitter.py
-class TestLogPeriodicFitter(unittest.TestCase):
+class TestLogarithmPeriodicFitter(unittest.TestCase):
     def setUp(self):
-        self.fitter = LogPeriodicFitter()
+        self.fitter = LogarithmPeriodicFitter()
         self.t = np.linspace(0, 1, 100)
         tc = 1.1
         m = 0.45
@@ -33,14 +33,14 @@ class TestLogPeriodicFitter(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertGreater(result.r_squared, 0.95)
         
-    def test_log_periodic_fitting(self):
+    def test_logarithm_periodic_fitting(self):
         """対数周期フィッティングのテスト"""
         # まずべき乗則フィット
         power_law_result = self.fitter.fit_power_law(self.t, self.y_ideal)
         self.assertTrue(power_law_result.success)
         
         # 次に対数周期フィット
-        result = self.fitter.fit_log_periodic(self.t, self.y_ideal, power_law_result.parameters)
+        result = self.fitter.fit_logarithm_periodic(self.t, self.y_ideal, power_law_result.parameters)
         self.assertTrue(result.success)
         self.assertGreater(result.r_squared, 0.95)
 
@@ -51,7 +51,7 @@ class TestLogPeriodicFitter(unittest.TestCase):
         self.assertTrue(power_law_result.success)
         
         # 対数周期フィット
-        result = self.fitter.fit_log_periodic(self.t, self.y_noisy, power_law_result.parameters)
+        result = self.fitter.fit_logarithm_periodic(self.t, self.y_noisy, power_law_result.parameters)
         self.assertTrue(result.success)
         self.assertGreater(result.r_squared, 0.90)  # ノイズがあるので閾値を下げる
 

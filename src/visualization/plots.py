@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime, timedelta
 import os
-from ..fitting.fitter import LogPeriodicFitter
+from ..fitting.fitter import LogarithmPeriodicFitter
 
 def plot_fitting_results(times, prices, fitting_result, symbol, stock_data):
     """フィッティング結果をプロット"""
@@ -10,7 +10,7 @@ def plot_fitting_results(times, prices, fitting_result, symbol, stock_data):
     
     # フィッティング曲線の生成
     t_fit = np.linspace(min(times), tc-1, 1000)
-    price_fit = LogPeriodicFitter.log_periodic_func(
+    price_fit = LogarithmPeriodicFitter.logarithm_periodic_func(
         t_fit, 
         tc=fitting_result.parameters['tc'],
         m=fitting_result.parameters['m'],

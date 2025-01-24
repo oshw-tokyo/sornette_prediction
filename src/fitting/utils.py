@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import os
 
-from ..log_utils.analysis_logger import AnalysisLogger
 
 
 def power_law_func(t: np.ndarray, tc: float, m: float, A: float, B: float) -> np.ndarray:
@@ -20,7 +19,7 @@ def power_law_func(t: np.ndarray, tc: float, m: float, A: float, B: float) -> np
     result[mask] = A + B * np.power(dt[mask], m)
     return result
 
-def log_periodic_func(t: np.ndarray, tc: float, m: float, omega: float,
+def logarithm_periodic_func(t: np.ndarray, tc: float, m: float, omega: float,
                     phi: float, A: float, B: float, C: float) -> np.ndarray:
     """対数周期関数のモデル関数"""
     # 入力配列の次元チェックと変換
@@ -35,9 +34,9 @@ def log_periodic_func(t: np.ndarray, tc: float, m: float, omega: float,
     valid_dt = dt[mask]
     
     if len(valid_dt) > 0:
-        log_term = omega * np.log(valid_dt) + phi
+        logarithm_term = omega * np.log(valid_dt) + phi
         power_term = np.power(valid_dt, m)
-        result[mask] = A + B * power_term * (1 + C * np.cos(log_term))
+        result[mask] = A + B * power_term * (1 + C * np.cos(logarithm_term))
     
     return result.reshape(original_shape) if len(original_shape) > 1 else result
 
@@ -52,7 +51,7 @@ def validate_fit_quality(times, prices, popt, plot=True, symbol=None):
     prices = np.asarray(prices).ravel()
     
     # モデルによる予測値の計算
-    predicted_prices = log_periodic_func(times, *popt)
+    predicted_prices = logarithm_periodic_func(times, *popt)
     
     # 評価指標の計算
     r2 = r2_score(prices, predicted_prices)
@@ -126,7 +125,7 @@ def validate_fit_quality(times, prices, popt, plot=True, symbol=None):
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'fit_quality_{symbol}_{timestamp}.png' if symbol else f'fit_quality_{timestamp}.png'
         
-        output_dir = AnalysisLogger.ensure_output_dir(dir_name="analysis_results/plots")
+        output_dir = "analysis_results/plots"
         plt.savefig(os.path.join(output_dir, filename))
         plt.close()
 
