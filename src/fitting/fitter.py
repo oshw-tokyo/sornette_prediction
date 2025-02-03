@@ -91,124 +91,103 @@ class LogarithmPeriodicFitter:
         return best_result
 
     def fit_power_law(self, t: np.ndarray, y: np.ndarray) -> FittingResult:
-        """べき乗則による基本フィッティング"""
         try:
-            # データを1次元配列に確実に変換
             t = np.asarray(t).ravel()
             y = np.asarray(y).ravel()
             
-            # 初期パラメータ設定
-            tc_init = t[-1] + (t[-1] - t[0]) * 0.2
-            m_init = 0.45  # 論文での典型的な値
-            A_init = np.mean(y)
-            B_init = (y[-1] - y[0]) / (t[-1] - t[0])
-
-            # パラメータをフラット化して1次元配列として渡す
-            p0 = np.array([tc_init, m_init, A_init, B_init])
-
-            # パラメータの境界設定
-            bounds = (
-                [t[-1], 0.1, -np.inf, -np.inf],  # 下限
-                [t[-1] + (t[-1] - t[0]) * 0.3, 0.7, np.inf, np.inf]  # 上限
-            )
-
-            popt, pcov = curve_fit(
-                power_law_func, t, y,
-                p0=p0,
-                bounds=bounds,
-                maxfev=10000,
-                method='trf'
-            )
-
-            # フィッティング結果の評価
+            # 正規化された時間
+            t_norm = (t - t[0]) / (t[-1] - t[0])
+            dt = 1 - t_norm + 1e-10
+            
+            # デバッグ情報追加
+            print(f"dt range: {dt.min():.2e} to {dt.max():.2e}")
+            print(f"y range: {y.min():.2e} to {y.max():.2e}")
+            
+            # 線形近似
+            A = np.vstack([np.ones_like(dt), np.log(dt)]).T
+            try:
+                c = np.linalg.solve(A.T @ A + 1e-6 * np.eye(2), A.T @ y)
+                print(f"Linear fit coefficients: {c}")
+            except Exception as e:
+                print(f"Linear fit failed: {e}")
+                raise
+            
+            # 非線形フィット
+            p0 = [1.1, 0.33, np.mean(y), (y[-1]-y[0])/(t[-1]-t[0])]
+            bounds = ([1.01, 0.1, -np.inf, -np.inf],  
+                    [1.5, 0.5, np.inf, np.inf])     
+            
+            print(f"Initial params: {p0}")
+            print(f"Bounds: {bounds}")
+            
+            popt, pcov = curve_fit(power_law_func, t_norm, y, p0=p0, bounds=bounds)
+            
             y_fit = power_law_func(t, *popt)
             residuals = np.mean((y - y_fit) ** 2)
-            r_squared = 1 - np.sum((y - y_fit) ** 2) / np.sum((y - np.mean(y)) ** 2)
+            r_squared = 1 - np.sum((y - y_fit)**2) / np.sum((y - np.mean(y))**2)
 
             return FittingResult(
                 success=True,
-                parameters={
-                    'tc': popt[0],
-                    'm': popt[1],
-                    'A': popt[2],
-                    'B': popt[3]
-                },
+                parameters={'tc': popt[0], 'm': popt[1], 
+                        'A': popt[2], 'B': popt[3]},
                 residuals=residuals,
                 r_squared=r_squared,
                 statistical_significance=self._assess_statistical_significance(y, y_fit)
             )
-
+            
         except Exception as e:
-            print("ERROR: ", f"Power law fitting failed: {str(e)}")
             return FittingResult(
                 success=False,
-                parameters={},
+                parameters={'tc': 0, 'm': 0, 'A': 0, 'B': 0},
                 residuals=np.inf,
                 r_squared=0,
                 statistical_significance={},
                 error_message=str(e)
             )
-        
-    def fit_logarithm_periodic(self, t: np.ndarray, y: np.ndarray, 
-                    power_law_params: Dict[str, float]) -> FittingResult:
-        """対数周期フィッティング"""
+
+    def fit_logarithm_periodic(self, t: np.ndarray, y: np.ndarray, power_law_params: Dict[str, float]) -> FittingResult:
         try:
-            # データの1次元化
             t = np.asarray(t).ravel()
             y = np.asarray(y).ravel()
-            
-            p0 = [
-                max(t[-1], min(t[-1] + (t[-1] - t[0]) * 0.1, power_law_params['tc'])),  # tc の制限
-                max(0.1, min(0.9, power_law_params['m'])),  # m の制限
-                6.36,  # omega
-                0.0,  # phi
-                max(-10, min(10, power_law_params['A'])),  # A の制限
-                max(-10, min(10, power_law_params['B'])),  # B の制限
-                0.05  # C
-            ]
+            t_norm = (t - t[0]) / (t[-1] - t[0])
 
-            bounds = (
-                [t[-1], 0.1, 5.0, -2 * np.pi, -10, -10, -0.5],  # 下限
-                [t[-1] + (t[-1] - t[0]) * 0.2, 0.9, 8.0, 2 * np.pi, 10, 10, 0.5]  # 上限
-            )
-
-            print("DEBUG: ", f"Initial parameters (p0): {p0}")
-
-            print("DEBUG: ", f"Bounds: {bounds}")            
+            # 固定パラメータ
+            tc_fixed = power_law_params['tc']
+            m_fixed = power_law_params['m']
+            A_fixed = power_law_params['A']
+            B_fixed = power_law_params['B']
             
-            # フィッティング実行
-            popt, _ = curve_fit(
-                logarithm_periodic_func,
-                t, y,
-                p0=p0,
-                bounds=bounds,
-                maxfev=10000,
-                method='trf'
-            )
+            def constrained_log_periodic(t, omega, phi, C):
+                return logarithm_periodic_func(t, tc_fixed, m_fixed, omega, phi, A_fixed, B_fixed, C)            
+
+            p0 = [6.36, 0.0, 0.1]
+            bounds = ([4.0, -4*np.pi, -2],
+                    [10.0, 4*np.pi, 2])
+
+            popt, _ = curve_fit(constrained_log_periodic, t_norm, y, p0=p0, bounds=bounds)
             
-            # 結果評価
-            y_fit = logarithm_periodic_func(t, *popt)
+            y_fit = constrained_log_periodic(t_norm, *popt)
             residuals = np.mean((y - y_fit) ** 2)
-            r_squared = 1 - np.sum((y - y_fit) ** 2) / np.sum((y - np.mean(y)) ** 2)
-            
+            r_squared = 1 - np.sum((y - y_fit)**2) / np.sum((y - np.mean(y))**2)
+
             return FittingResult(
                 success=True,
                 parameters={
-                    'tc': popt[0],
-                    'm': popt[1],
-                    'omega': popt[2],
-                    'phi': popt[3],
-                    'A': popt[4],
-                    'B': popt[5],
-                    'C': popt[6]
+                    'tc': tc_fixed,
+                    'm': m_fixed,
+                    'omega': popt[0],
+                    'phi': popt[1],
+                    'A': A_fixed,
+                    'B': B_fixed,
+                    'C': popt[2]
                 },
                 residuals=residuals,
                 r_squared=r_squared,
                 statistical_significance=self._assess_statistical_significance(y, y_fit)
             )
-            
+
         except Exception as e:
-            print("ERROR: ", f"Logarithm-periodic fitting failed: {str(e)}")
+            print(f"Logarithm-periodic fitting failed: {str(e)}")
             return FittingResult(
                 success=False,
                 parameters={},
