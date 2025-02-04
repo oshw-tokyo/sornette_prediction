@@ -8,10 +8,10 @@ from src.fitting.fitter import LogarithmPeriodicFitter
 class TestLogarithmPeriodicFitter(unittest.TestCase):
     def setUp(self):
         self.fitter = LogarithmPeriodicFitter()
-        self.t = np.linspace(0, 1, 100)
-        tc = 1.1
-        m = 0.45
-        omega = 6.36
+        self.t = np.linspace(0, 0.8, 200)  # tcまでの範囲を確保
+        tc = 1.0  # 論文の標準化に合わせる
+        m = 0.33  # 論文値 # 要修正
+        omega = 7.4  # 論文値 # 要修正
         phi = 0
         A = 1.0
         B = -0.5

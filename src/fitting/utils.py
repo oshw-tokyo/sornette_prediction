@@ -10,37 +10,53 @@ import os
 
 
 
-def power_law_func(t: np.ndarray, tc: float, m: float, A: float, B: float) -> np.ndarray:
+def power_law_func(t: np.ndarray, tc: float, beta: float, A: float, B: float) -> np.ndarray:
     """べき乗則のモデル関数"""
-    t = np.asarray(t).ravel()
     dt = tc - t
     mask = dt > 0
     result = np.zeros_like(t)
-    result[mask] = A + B * np.power(dt[mask], m)
+    result[mask] = A + B * np.power(dt[mask], beta)
     return result
 
-def logarithm_periodic_func(t: np.ndarray, tc: float, m: float, omega: float,
-                    phi: float, A: float, B: float, C: float) -> np.ndarray:
-    """対数周期関数のモデル関数"""
-    # 入力配列の次元チェックと変換
-    t = np.asarray(t)
-    original_shape = t.shape
-    t = t.ravel()
-    
-    # 計算
+
+def logarithm_periodic_func(t: np.ndarray, tc: float, beta: float, omega: float,
+                     phi: float, A: float, B: float, C: float) -> np.ndarray:
+    """式(54)の対数周期関数"""
     dt = tc - t
     mask = dt > 0
-    result = np.zeros_like(t, dtype=float)
+    result = np.zeros_like(t)
     valid_dt = dt[mask]
     
     if len(valid_dt) > 0:
-        logarithm_term = omega * np.log(valid_dt) + phi
-        power_term = np.power(valid_dt, m)
-        result[mask] = A + B * power_term * (1 + C * np.cos(logarithm_term))
+        power_term = np.power(valid_dt, beta)
+        result[mask] = A + B * power_term + C * power_term * np.cos(omega * np.log(valid_dt) + phi)
     
-    return result.reshape(original_shape) if len(original_shape) > 1 else result
+    return result
 
+def assess_statistical_significance(y_true: np.ndarray, y_pred: np.ndarray, num_params: int = 7) -> dict:
+    """統計的有意性の評価"""
+    residuals = y_true - y_pred
+    n = len(y_true)
+    
+    ss_res = np.sum(residuals ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    f_stat = ((ss_tot - ss_res) / (num_params - 1)) / (ss_res / (n - num_params))
+    f_pvalue = 1 - stats.f.cdf(f_stat, num_params-1, n-num_params)
+    
+    normality_stat, normality_pvalue = stats.normaltest(residuals)
+    dw_stat = np.sum(np.diff(residuals) ** 2) / np.sum(residuals ** 2)
+    
+    return {
+        'f_test': {'statistic': f_stat, 'p_value': f_pvalue},
+        'normality_test': {'statistic': normality_stat, 'p_value': normality_pvalue},
+        'durbin_watson': dw_stat
+    }
 
+def calculate_fit_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> tuple:
+    """フィッティングの評価指標を計算"""
+    residuals = np.mean((y_true - y_pred) ** 2)
+    r_squared = 1 - np.sum((y_true - y_pred)**2) / np.sum((y_true - np.mean(y_true))**2)
+    return residuals, r_squared
 
 def validate_fit_quality(times, prices, popt, plot=True, symbol=None):
     """

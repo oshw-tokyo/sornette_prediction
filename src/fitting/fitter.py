@@ -1,14 +1,10 @@
 import numpy as np
 from scipy.optimize import curve_fit
-from scipy import stats
 from typing import Optional, Dict, Tuple
 from dataclasses import dataclass
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-import os
 
-from .utils import power_law_func, logarithm_periodic_func
-
+from .utils import (power_law_func, logarithm_periodic_func, 
+                   assess_statistical_significance, calculate_fit_metrics)
 
 @dataclass
 class FittingResult:
@@ -22,172 +18,120 @@ class FittingResult:
     is_typical_range: bool = False
 
 class LogarithmPeriodicFitter:
-    """Sornette et al. (1996)に基づく対数周期性フィッティング"""
+    """Critical Market Crashes の式(54)に基づく対数周期性フィッティング"""
     
     def prepare_data(self, prices: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Sornette et al. (1996)に従ってデータを前処理
-        1. 価格を最初の価格で正規化
-        2. 正規化された価格を対数変換
-        """
+        """データの前処理"""
         try:
-            # 1. 価格の正規化
-            normalized_prices = prices / prices[0]
-            
-            # 2. 対数変換
-            logarithm_prices = np.log(normalized_prices)
-            
-            # 時間軸の生成（0から1の範囲）
+            log_prices = np.log(prices)
+            normalized_log_prices = log_prices - log_prices[0]
             t = np.linspace(0, 1, len(prices))
             
-            # データの品質チェック
-            if not np.all(np.isfinite(logarithm_prices)):
-                print("ERROR: ", "Invalid values detected after logarithm transformation")
-                return None, None
-            
-            print("INFO: ", f"Data preparation completed. Shape: {t.shape}")
-            return t, logarithm_prices
+            return t, normalized_log_prices
             
         except Exception as e:
-            print("ERROR: ", f"Data preparation failed: {str(e)}")
+            print(f"ERROR: Data preparation failed: {str(e)}")
             return None, None
 
-    def fit_with_multiple_initializations(self, t: np.ndarray, prices: np.ndarray, 
-                                        n_tries: int = 5) -> FittingResult:
-        """複数の初期値でフィッティングを試行"""
-        best_result = None
-        best_residuals = np.inf
-        
-        for i in range(n_tries):
-            try:
-                # 1. べき乗則フィット
-                power_result = self.fit_power_law(t, prices)
-                if not power_result.success:
-                    continue
-                
-                # 2. 対数周期フィット
-                result = self.fit_logarithm_periodic(t, prices, power_result.parameters)
-                if not result.success:
-                    continue
-                
-                if result.residuals < best_residuals:
-                    best_result = result
-                    best_residuals = result.residuals
-                
-            except Exception as e:
-                print("WARNING: ", f"Fitting attempt {i+1} failed: {str(e)}")
-                continue
-        
-        if best_result is None:
+    def fit_power_law(self, t: np.ndarray, y: np.ndarray) -> FittingResult:
+        """第1段階: べき乗則フィッティング"""
+        try:
+
+            # データのシェイプを統一
+            t = np.asarray(t).ravel()
+            y = np.asarray(y).ravel()
+            # デバッグ情報
+            print(f"Input check:")
+            print(f"t shape: {t.shape}, y shape: {y.shape}")
+            print(f"t range: [{t.min()}, {t.max()}]")
+            print(f"y range: [{y.min()}, {y.max()}]")
+
+            # データの有効性チェック
+            if np.any(np.isnan(y)) or np.any(np.isinf(y)):
+                raise ValueError("Invalid values in data")
+
+                   # 初期値の設定 - Aについては対数空間で設定
+            p0 = [1.1, 0.45, np.log(np.mean(y)), (y[-1]-y[0])/(t[-1]-t[0])]
+            bounds = ([1.01, 0.2, -np.inf, -np.inf],
+                     [1.2, 0.5, np.inf, np.inf])
+            
+            popt, _ = curve_fit(power_law_func, t, y, p0=p0, bounds=bounds, maxfev=10000, method='trf')
+            
+            y_fit = power_law_func(t, *popt)
+            residuals, r_squared = calculate_fit_metrics(y, y_fit)
+
+            print(f"Fitted parameters: tc={popt[0]}, beta={popt[1]}")
+
+            return FittingResult(
+                success=True,
+                parameters={'tc': popt[0], 'beta': popt[1], 
+                            'A': np.exp(popt[2]), 'B': popt[3]},
+                residuals=residuals,
+                r_squared=r_squared,
+                statistical_significance=assess_statistical_significance(y, y_fit)
+            )
+            
+        except Exception as e:
             return FittingResult(
                 success=False,
                 parameters={},
                 residuals=np.inf,
                 r_squared=0,
                 statistical_significance={},
-                error_message="All fitting attempts failed"
-            )
-        
-        return best_result
-
-    def fit_power_law(self, t: np.ndarray, y: np.ndarray) -> FittingResult:
-        try:
-            t = np.asarray(t).ravel()
-            y = np.asarray(y).ravel()
-            
-            # 正規化された時間
-            t_norm = (t - t[0]) / (t[-1] - t[0])
-            dt = 1 - t_norm + 1e-10
-            
-            # デバッグ情報追加
-            print(f"dt range: {dt.min():.2e} to {dt.max():.2e}")
-            print(f"y range: {y.min():.2e} to {y.max():.2e}")
-            
-            # 線形近似
-            A = np.vstack([np.ones_like(dt), np.log(dt)]).T
-            try:
-                c = np.linalg.solve(A.T @ A + 1e-6 * np.eye(2), A.T @ y)
-                print(f"Linear fit coefficients: {c}")
-            except Exception as e:
-                print(f"Linear fit failed: {e}")
-                raise
-            
-            # 非線形フィット
-            p0 = [1.1, 0.33, np.mean(y), (y[-1]-y[0])/(t[-1]-t[0])]
-            bounds = ([1.01, 0.1, -np.inf, -np.inf],  
-                    [1.5, 0.5, np.inf, np.inf])     
-            
-            print(f"Initial params: {p0}")
-            print(f"Bounds: {bounds}")
-            
-            popt, pcov = curve_fit(power_law_func, t_norm, y, p0=p0, bounds=bounds)
-            
-            y_fit = power_law_func(t, *popt)
-            residuals = np.mean((y - y_fit) ** 2)
-            r_squared = 1 - np.sum((y - y_fit)**2) / np.sum((y - np.mean(y))**2)
-
-            return FittingResult(
-                success=True,
-                parameters={'tc': popt[0], 'm': popt[1], 
-                        'A': popt[2], 'B': popt[3]},
-                residuals=residuals,
-                r_squared=r_squared,
-                statistical_significance=self._assess_statistical_significance(y, y_fit)
-            )
-            
-        except Exception as e:
-            return FittingResult(
-                success=False,
-                parameters={'tc': 0, 'm': 0, 'A': 0, 'B': 0},
-                residuals=np.inf,
-                r_squared=0,
-                statistical_significance={},
                 error_message=str(e)
             )
 
-    def fit_logarithm_periodic(self, t: np.ndarray, y: np.ndarray, power_law_params: Dict[str, float]) -> FittingResult:
+    def fit_logarithm_periodic(self, t: np.ndarray, y: np.ndarray, 
+                             power_law_params: Dict[str, float]) -> FittingResult:
+        """第2段階: 対数周期項を含む完全なフィッティング"""
         try:
-            t = np.asarray(t).ravel()
-            y = np.asarray(y).ravel()
-            t_norm = (t - t[0]) / (t[-1] - t[0])
-
-            # 固定パラメータ
-            tc_fixed = power_law_params['tc']
-            m_fixed = power_law_params['m']
-            A_fixed = power_law_params['A']
-            B_fixed = power_law_params['B']
+            # べき乗則フィットの残差を計算
+            y_power = power_law_func(t, **power_law_params)
+            residuals = y - y_power
             
-            def constrained_log_periodic(t, omega, phi, C):
-                return logarithm_periodic_func(t, tc_fixed, m_fixed, omega, phi, A_fixed, B_fixed, C)            
+            # デバッグ情報
+            print(f"Power law residuals range: [{residuals.min():.3e}, {residuals.max():.3e}]")
 
-            p0 = [6.36, 0.0, 0.1]
-            bounds = ([4.0, -4*np.pi, -2],
-                    [10.0, 4*np.pi, 2])
-
-            popt, _ = curve_fit(constrained_log_periodic, t_norm, y, p0=p0, bounds=bounds)
+            p0 = [
+                power_law_params['tc'],
+                power_law_params['beta'],
+                6.36,  # omega
+                0.0,   # phi
+                np.log(power_law_params['A']),  # 対数空間に変換
+                power_law_params['B'],
+                0.1    # C
+            ]
             
-            y_fit = constrained_log_periodic(t_norm, *popt)
-            residuals = np.mean((y - y_fit) ** 2)
-            r_squared = 1 - np.sum((y - y_fit)**2) / np.sum((y - np.mean(y))**2)
+            bounds = ([
+                p0[0]*0.9, p0[1]*0.8,  # より広い範囲
+                2.0, -8*np.pi, -np.inf, -np.inf, -2.0
+            ], [
+                p0[0]*1.1, p0[1]*1.2,
+                15.0, 8*np.pi, np.inf, np.inf, 2.0
+            ])
+
+            popt, _ = curve_fit(logarithm_periodic_func, t, y, p0=p0, bounds=bounds, maxfev=10000)     
+            
+            y_fit = logarithm_periodic_func(t, *popt)
+            residuals, r_squared = calculate_fit_metrics(y, y_fit)
 
             return FittingResult(
                 success=True,
                 parameters={
-                    'tc': tc_fixed,
-                    'm': m_fixed,
-                    'omega': popt[0],
-                    'phi': popt[1],
-                    'A': A_fixed,
-                    'B': B_fixed,
-                    'C': popt[2]
+                    'tc': popt[0],
+                    'beta': popt[1],
+                    'omega': popt[2],
+                    'phi': popt[3],
+                    'A': np.exp(popt[4]),  # 元の空間に戻す
+                    'B': popt[5],
+                    'C': popt[6]
                 },
                 residuals=residuals,
                 r_squared=r_squared,
-                statistical_significance=self._assess_statistical_significance(y, y_fit)
+                statistical_significance=assess_statistical_significance(y, y_fit)
             )
 
         except Exception as e:
-            print(f"Logarithm-periodic fitting failed: {str(e)}")
             return FittingResult(
                 success=False,
                 parameters={},
@@ -196,54 +140,21 @@ class LogarithmPeriodicFitter:
                 statistical_significance={},
                 error_message=str(e)
             )
-   
 
-    def _assess_statistical_significance(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
-        """フィッティング結果の統計的有意性を評価"""
-        residuals = y_true - y_pred
-        n = len(y_true)
-        p = 4  # パラメータ数
-
-        # F検定
-        ss_res = np.sum(residuals ** 2)
-        ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
-        f_stat = ((ss_tot - ss_res) / (p - 1)) / (ss_res / (n - p))
-        f_pvalue = 1 - stats.f.cdf(f_stat, p-1, n-p)
-
-        # 残差の正規性検定
-        normality_stat, normality_pvalue = stats.normaltest(residuals)
-
-        # Durbin-Watson検定
-        dw_stat = np.sum(np.diff(residuals) ** 2) / np.sum(residuals ** 2)
-
-        return {
-            'f_test': {
-                'statistic': f_stat,
-                'p_value': f_pvalue
-            },
-            'normality_test': {
-                'statistic': normality_stat,
-                'p_value': normality_pvalue
-            },
-            'durbin_watson': dw_stat
-        }
-    
     def fit(self, t: np.ndarray, y: np.ndarray) -> FittingResult:
-        """統合的なフィッティングメソッド"""
+        """2段階フィッティングの実行"""
         try:
-            # 1. べき乗則フィッティング
             power_result = self.fit_power_law(t, y)
             if not power_result.success:
                 raise ValueError("Power law fitting failed")
             
-            # 2. 対数周期フィッティング
-            logarithm_result = self.fit_logarithm_periodic(t, y, power_result.parameters)
-            if not logarithm_result.success:
-                raise ValueError("Logarithm-periodic fitting failed")
+            full_result = self.fit_logarithm_periodic(t, y, power_result.parameters)
+            if not full_result.success:
+                raise ValueError("Logarithm periodic fitting failed")
             
-            return logarithm_result
+            return full_result
+
         except Exception as e:
-            print("ERROR: ", f"Fit process failed: {str(e)}")
             return FittingResult(
                 success=False,
                 parameters={},
@@ -252,90 +163,32 @@ class LogarithmPeriodicFitter:
                 statistical_significance={},
                 error_message=str(e)
             )
-    
 
-def check_stability(times, prices, window_size=30, step=5, data=None, symbol=None):
-    """
-    パラメータの安定性をチェック
-    
-
-    Returns:
-    --------
-    tuple:
-        (tc_mean, tc_std, tc_cv, window_consistency)
-
-    Parameters:
-    -----------
-    times : array-like
-        時間データ
-    prices : array-like
-        価格データ
-    window_size : int
-        分析ウィンドウのサイズ（日数）
-    step : int
-        ウィンドウのスライド幅（日数）
-    data : pandas.DataFrame
-        元の株価データ（日付情報を取得するため）
-    """
-    tc_estimates = []
-    windows = []
-    
-    for i in range(0, len(times) - window_size, step):
-        window_times = times[i:i+window_size]
-        window_prices = prices[i:i+window_size]
+    def check_stability(self, times, prices, window_size=30, step=5, data=None, symbol=None):
+        """パラメータの安定性分析"""
+        tc_estimates = []
+        windows = []
         
-        tc_guess = window_times[-1] + 30
-        
-        try:
-            popt, _ = LogarithmPeriodicFitter.fit_logarithm_periodic(window_times, window_prices, tc_guess)
-            if popt is not None:
-                tc_estimates.append(popt[0])
-                windows.append(window_times[-1])
-        except:
-            continue
-    
-    if tc_estimates:
-        plt.figure(figsize=(12, 6))
-        plt.plot(windows, tc_estimates, 'bo-')
-        plt.xlabel('ウィンドウ終了時点')
-        plt.ylabel('予測された臨界時点')
-        plt.title('臨界時点予測の安定性分析')
-        plt.grid(True)
-        
-        # グラフを保存
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'stability_{symbol}_{timestamp}.png' if symbol else f'stability_{timestamp}.png'
-        
-        output_dir = "analysis_results/plots"
-        plt.savefig(os.path.join(output_dir, filename))
-        plt.close() # プロットを閉じる
-        
-        # 安定性の指標を計算
-        tc_std = np.std(tc_estimates)
-        tc_mean = np.mean(tc_estimates)
-        tc_cv = tc_std / tc_mean  # 変動係数
-
-        # 時間窓での一貫性を計算
-        window_consistency = max(0, 1 - 2 * tc_cv) if tc_cv is not None else 0
-        
-        print(f"\n安定性分析結果:")
-        print(f"臨界時点の平均: {tc_mean:.2f}")
-        print(f"臨界時点の標準偏差: {tc_std:.2f}")
-        print(f"変動係数: {tc_cv:.3f}")
-        print(f"予測一貫性: {window_consistency:.3f}") 
-        
-        # 日付での表示を追加
-        if data is not None:
-            mean_days_from_end = tc_mean - len(times)
-            predicted_mean_date = data.index[-1] + timedelta(days=int(mean_days_from_end))
-            print(f"予測される平均的な臨界時点の日付: {predicted_mean_date.strftime('%Y年%m月%d日')}")
+        for i in range(0, len(times) - window_size, step):
+            window_times = times[i:i+window_size]
+            window_prices = prices[i:i+window_size]
             
-            # 標準偏差を考慮した予測範囲
-            earliest_date = predicted_mean_date - timedelta(days=int(tc_std))
-            latest_date = predicted_mean_date + timedelta(days=int(tc_std))
-            print(f"予測範囲: {earliest_date.strftime('%Y年%m月%d日')} ～ {latest_date.strftime('%Y年%m月%d日')}")
+            try:
+                result = self.fit(window_times, window_prices)
+                if result.success:
+                    tc_estimates.append(result.parameters['tc'])
+                    windows.append(window_times[-1])
+            except Exception as e:
+                print(f"Window {i} fitting failed: {str(e)}")
+                continue
+        
+        if not tc_estimates:
+            print("No successful fits in stability analysis")
+            return None, None, None, None
+            
+        tc_mean = np.mean(tc_estimates)
+        tc_std = np.std(tc_estimates)
+        tc_cv = tc_std / tc_mean
+        window_consistency = max(0, 1 - 2 * tc_cv)
         
         return tc_mean, tc_std, tc_cv, window_consistency
-    else:
-        print("安定性分析に失敗しました。")
-        return None, None, None, None
