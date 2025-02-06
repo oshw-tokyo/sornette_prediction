@@ -78,7 +78,7 @@ CRASH_1987_10 = CrashCase(
         start_date=datetime(1985, 7, 1),
         crash_date=datetime(1987, 10, 19),
         pre_crash_peak_date=datetime(1987, 8, 25),
-        validation_cutoff_days=30,
+        validation_cutoff_days=180, # クラッシュに近すぎると(tc-t が 0 に近づくと)、フィッティングが発散する。
         description="The crash culminated in Black Monday on October 19, 1987"
     ),
     

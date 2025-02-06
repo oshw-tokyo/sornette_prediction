@@ -127,7 +127,7 @@ def analyze_stock(symbol, start_date, end_date, tc_guess_days=30):
         # 結果の表示
         print("\n分析結果:")
         print(f"予測される臨界時点: データ終了から約{fitting_result.parameters['tc'] - len(times):.1f}日後")
-        print(f"べき指数 (m): {fitting_result.parameters['m']:.3f}")
+        print(f"べき指数 (m): {fitting_result.parameters['beta']:.3f}")
         print(f"角振動数 (omega): {fitting_result.parameters['omega']:.3f}")
         print(f"位相 (phi): {fitting_result.parameters['phi']:.3f}")
         print(f"R-squared: {fitting_result.r_squared:.3f}")

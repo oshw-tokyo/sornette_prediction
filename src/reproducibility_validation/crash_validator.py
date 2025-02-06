@@ -25,7 +25,7 @@ class CrashValidator:
         super().__init__()
         self.default_tolerances = {
             'tc': 5,  # 日数での許容誤差
-            'm': 0.05,
+            'beta': 0.05,
             'omega': 0.5,
             'phi': 0.5
         }
@@ -51,7 +51,7 @@ class CrashValidator:
             
             # 取得データの概要をログ出力
             print("INFO: ", f"Retrieved data for {crash_case.symbol} from {crash_case.period.start_date} to {crash_case.period.end_date}")
-            print("ERROR ", f"Data preview:\n{data.head()}")            
+            print("INFO: ", f"Data preview:\n{data.head()}")            
 
             # データ点数のチェック
             if len(data) < case_settings['minimum_data_points']:
@@ -118,12 +118,12 @@ class CrashValidator:
 
             # ダウンロード結果のログ出力
             print("INFO: ", f"Market data downloaded: {len(df)} rows")
-            print("ERROR ", f"Data columns: {list(df.columns)}")
-            print("ERROR ", f"First 5 rows of data:\n{df.head().to_string()}")  # 詳細なデータ内容を表示
+            print("INFO: ", f"Data columns: {list(df.columns)}")
+            print("INFO: ", f"First 5 rows of data:\n{df.head().to_string()}")  # 詳細なデータ内容を表示
             
             return df
         except Exception as e:
-            print("ERROR ", f"Failed to download data: {str(e)}")
+            print("INFO", f"Failed to download data: {str(e)}")
             return None
 
 
@@ -131,7 +131,7 @@ class CrashValidator:
         """フィッティング結果の検証"""
         # パラメータの相対誤差を計算
         errors = {
-            'm': abs(result.parameters['m'] - crash_case.parameters.m),
+            'beta': abs(result.parameters['beta'] - crash_case.parameters.m),
             'omega': abs(result.parameters['omega'] - crash_case.parameters.omega),
         }
 
@@ -151,7 +151,7 @@ class CrashValidator:
 
         # 許容範囲の緩和
         tolerances = {
-            'm': 0.1,      # より緩い許容誤差
+            'beta': 0.1,      # より緩い許容誤差
             'omega': 1.0,  # より緩い許容誤差
             'tc': 10       # より緩い許容誤差（日数）
         }

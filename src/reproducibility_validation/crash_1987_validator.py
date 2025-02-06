@@ -13,7 +13,7 @@ class Crash1987Validator(CrashValidator):
         
         # 1987年のクラッシュに特有の設定
         self.specific_tolerances = {
-            'm': 0.03,      # より厳密な許容誤差
+            'beta': 0.03,      # より厳密な許容誤差
             'omega': 0.2,   # より厳密な許容誤差
             'phi': 0.3,     # より厳密な許容誤差
             'tc': 3         # より厳密な許容誤差（日数）

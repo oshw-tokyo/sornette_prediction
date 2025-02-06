@@ -40,27 +40,89 @@ class LogarithmPeriodicFitter:
             # データのシェイプを統一
             t = np.asarray(t).ravel()
             y = np.asarray(y).ravel()
-            # デバッグ情報
+
+            # 入力データの情報を出力
+            print("\nPower Law Fitting Analysis:")
+            print("---------------------------")
             print(f"Input check:")
             print(f"t shape: {t.shape}, y shape: {y.shape}")
-            print(f"t range: [{t.min()}, {t.max()}]")
-            print(f"y range: [{y.min()}, {y.max()}]")
+            print(f"t range: [{t.min():.3f}, {t.max():.3f}]")
+            print(f"y range: [{y.min():.3f}, {y.max():.3f}]")
 
             # データの有効性チェック
             if np.any(np.isnan(y)) or np.any(np.isinf(y)):
                 raise ValueError("Invalid values in data")
 
-                   # 初期値の設定 - Aについては対数空間で設定
-            p0 = [1.1, 0.45, np.log(np.mean(y)), (y[-1]-y[0])/(t[-1]-t[0])]
-            bounds = ([1.01, 0.2, -np.inf, -np.inf],
-                     [1.2, 0.5, np.inf, np.inf])
+            # 初期値の設定 - Aについては対数空間で設定（補足：価格に対数を取るケース想定）
+            p0 = [
+            1.5,    # tc (critical time): クリティカル時刻。観測期間(t∈[0,1])の直後を初期値に
+            0.45,   # β (beta): べき指数。論文で報告される典型値0.3-0.7の中央値を初期値に
+            np.log(np.mean(y)),  # log(A): オフセットパラメータ。データの平均値の対数を初期値に 
+            (y[-1]-y[0])/(t[-1]-t[0])  # B: スケールパラメータ。データの全体的な傾きを初期値に
+           ]
             
-            popt, _ = curve_fit(power_law_func, t, y, p0=p0, bounds=bounds, maxfev=10000, method='trf')
+            print("\nInitial parameter values:")
+            print(f"tc (critical time): {p0[0]:.3f}")
+            print(f"beta (power law exponent): {p0[1]:.3f}")
+            print(f"log(A) (log offset): {p0[2]:.3f}")
+            print(f"B (scale parameter): {p0[3]:.3f}")            
+
+            ## 境界の設定
+            ## 補足：価格に対数を取るケース想定（対数を取らない場合も適用可）
+            #
+            # tc: 変更なし（時間に関するパラメータのため）
+            #
+            # β:
+            #     通常価格: 通常0.3-0.7程度
+            #     対数価格: より広い範囲（0.1-1.0）を許容可能
+            #
+            # A,B:
+            #     通常価格: 価格スケールに依存
+            #     対数価格: スケールフリー
+
+            bounds = (
+            [
+                1.01,   # tc_min: クリティカル時刻は観測期間(t∈[0,1])より後
+                0.1,    # β_min: べき指数は正（対数価格の場合は0.1程度まで許容）
+                -np.inf, # A_min: オフセットパラメータに制限なし
+                -np.inf  # B_min: スケールパラメータに制限なし
+            ],
+            [
+                2.0,    # tc_max: 観測期間の2倍程度まで
+                0.9,    # β_max: べき指数は1以下（対数価格では発散を防ぐ）
+                np.inf,  # A_max: オフセットパラメータに制限なし
+                np.inf   # B_max: スケールパラメータに制限なし
+            ]
+            )
+
+            print("\nParameter bounds:")
+            print(f"tc: [{bounds[0][0]:.3f}, {bounds[1][0]:.3f}]")
+            print(f"beta: [{bounds[0][1]:.3f}, {bounds[1][1]:.3f}]")
+            print("log(A): [-inf, inf]")
+            print("B: [-inf, inf]")            
+
+            # フィッティングの実行
+            popt, pcov = curve_fit(power_law_func, t, y, p0=p0, bounds=bounds, maxfev=10000, method='trf')
+
+            # パラメータの不確かさを計算
+            perr = np.sqrt(np.diag(pcov))
+
+            # フィッティング結果の詳細な出力
+            print("\nFitted parameters:")
+            print(f"tc (critical time) = {popt[0]:.6f} ± {perr[0]:.6f}")
+            print(f"beta (power law exponent) = {popt[1]:.6f} ± {perr[1]:.6f}")
+            print(f"log(A)  = {popt[2]:.6f} ± {perr[2]:.6f}")
+            print(f"A (offset) = {np.exp(popt[2]):.6f} ± {np.exp(popt[2])*perr[2]:.6f}")            
+            print(f"B (scale) = {popt[3]:.6f} ± {perr[3]:.6f}")
             
+            # フィッティング品質の評価
             y_fit = power_law_func(t, *popt)
             residuals, r_squared = calculate_fit_metrics(y, y_fit)
 
-            print(f"Fitted parameters: tc={popt[0]}, beta={popt[1]}")
+            print("\nFitting quality metrics:")
+            print(f"R-squared: {r_squared:.6f}")
+            print(f"Residuals (MSE): {residuals:.6e}")
+            print("---------------------------\n")
 
             return FittingResult(
                 success=True,
@@ -85,6 +147,9 @@ class LogarithmPeriodicFitter:
                              power_law_params: Dict[str, float]) -> FittingResult:
         """第2段階: 対数周期項を含む完全なフィッティング"""
         try:
+            t = np.asarray(t).ravel()
+            y = np.asarray(y).ravel()
+            
             # べき乗則フィットの残差を計算
             y_power = power_law_func(t, **power_law_params)
             residuals = y - y_power
@@ -92,28 +157,97 @@ class LogarithmPeriodicFitter:
             # デバッグ情報
             print(f"Power law residuals range: [{residuals.min():.3e}, {residuals.max():.3e}]")
 
+            # 補足：価格に対数を取るケースを想定
+            tc_init = min(max(power_law_params['tc'], 1.05), 1.5)  # 下限を1.05(tc-t -> 0 でフィッティングが不安定化)
             p0 = [
-                power_law_params['tc'],
-                power_law_params['beta'],
-                6.36,  # omega
-                0.0,   # phi
-                np.log(power_law_params['A']),  # 対数空間に変換
-                power_law_params['B'],
-                0.1    # C
+                tc_init,  # tc: べき乗則フィットで得られたクリティカル時刻を初期値に
+                power_law_params['beta'], # β: べき乗則フィットで得られたべき指数を初期値に
+                6.36,   # ω (omega): 対数周期の角振動数。論文で報告される典型値5-8の中央値を初期値に
+                0.0,    # φ (phi): 位相。特に事前情報がないため0を初期値に
+                np.log(power_law_params['A']),  # log(A): べき乗則フィットで得られたオフセットの対数値
+                power_law_params['B'],  # B: べき乗則フィットで得られたスケールパラメータ
+                0.1     # C: 対数周期項の振幅。べき乗項に対して10%程度の変調を仮定
             ]
             
+            # 補足：価格に対数を取るケース想定            
             bounds = ([
-                p0[0]*0.9, p0[1]*0.8,  # より広い範囲
+                1.01, p0[1]*0.5,  # より広い範囲
                 2.0, -8*np.pi, -np.inf, -np.inf, -2.0
             ], [
-                p0[0]*1.1, p0[1]*1.2,
+                p0[0]*1.4, p0[1]*1.5,
                 15.0, 8*np.pi, np.inf, np.inf, 2.0
             ])
 
-            popt, _ = curve_fit(logarithm_periodic_func, t, y, p0=p0, bounds=bounds, maxfev=10000)     
-            
-            y_fit = logarithm_periodic_func(t, *popt)
-            residuals, r_squared = calculate_fit_metrics(y, y_fit)
+            # 初期パラメータの出力
+            print("\nLogarithm Periodic Fitting Analysis:")
+            print("---------------------------")
+            print("Initial parameter values:")
+            print(f"tc (critical time): {p0[0]:.3f}")
+            print(f"beta (power law exponent): {p0[1]:.3f}")
+            print(f"omega (angular frequency): {p0[2]:.3f}")
+            print(f"phi (phase): {p0[3]:.3f}")
+            print(f"log(A) (log offset): {p0[4]:.3f}")
+            print(f"B (scale parameter): {p0[5]:.3f}")
+            print(f"C (oscillation amplitude): {p0[6]:.3f}")
+
+            print("\nParameter bounds:")
+            print(f"tc: [{bounds[0][0]:.3f}, {bounds[1][0]:.3f}]")
+            print(f"beta: [{bounds[0][1]:.3f}, {bounds[1][1]:.3f}]")
+            print(f"omega: [{bounds[0][2]:.3f}, {bounds[1][2]:.3f}]")
+            print(f"phi: [{bounds[0][3]:.3f}, {bounds[1][3]:.3f}]")
+            print("log(A): [-inf, inf]")
+            print("B: [-inf, inf]")
+            print(f"C: [{bounds[0][6]:.3f}, {bounds[1][6]:.3f}]")     
+
+
+            # フィッティングの実行
+            try:
+                popt, pcov = curve_fit(
+                    logarithm_periodic_func, t, y, 
+                    p0=p0, bounds=bounds, 
+                    maxfev=10000,
+                    method='trf',
+                    ftol=1e-8,     # 収束条件
+                    xtol=1e-8,     # 収束条件
+                    loss='soft_l1'  # 頑健な損失関数
+                )
+                perr = np.sqrt(np.diag(pcov))   
+
+                print("\nFitted parameters:")
+                print(f"tc (critical time) = {popt[0]:.6f} ± {perr[0]:.6f}")
+                print(f"beta (power law exponent) = {popt[1]:.6f} ± {perr[1]:.6f}")
+                print(f"omega (angular frequency) = {popt[2]:.6f} ± {perr[2]:.6f}")
+                print(f"phi (phase) = {popt[3]:.6f} ± {perr[3]:.6f}")
+                print(f"log(A) = {popt[4]:.6f} ± {perr[4]:.6f}")
+                print(f"A (offset) = {np.exp(popt[4]):.6f} ± {np.exp(popt[4])*perr[4]:.6f}")
+                print(f"B (scale) = {popt[5]:.6f} ± {perr[5]:.6f}")
+                print(f"C (oscillation amplitude) = {popt[6]:.6f} ± {perr[6]:.6f}")
+                
+                y_fit = logarithm_periodic_func(t, *popt)
+                residuals, r_squared = calculate_fit_metrics(y, y_fit)
+
+                # フィッティング品質の出力
+                print("\nFitting quality metrics:")
+                print(f"R-squared: {r_squared:.6f}")
+                print(f"Residuals (MSE): {residuals:.6e}")
+                print("---------------------------\n")            
+
+
+            except (RuntimeError, ValueError) as e:
+                print("\nCurve fitting error:")
+                print(f"Error type: {type(e).__name__}")
+                print(f"Error message: {str(e)}")
+                print("\nFitting state at failure:")
+                print("Initial parameters:")
+                for i, param in enumerate(['tc', 'beta', 'omega', 'phi', 'log(A)', 'B', 'C']):
+                    print(f"{param}: {p0[i]:.6f}")
+                print("\nParameter bounds:")
+                print("Lower:", bounds[0])
+                print("Upper:", bounds[1])
+                print("\nInput data statistics:")  # データの状態も出力
+                print(f"t range: [{t.min():.3f}, {t.max():.3f}]")
+                print(f"y range: [{y.min():.3f}, {y.max():.3f}]")
+                raise
 
             return FittingResult(
                 success=True,

@@ -22,16 +22,43 @@ def power_law_func(t: np.ndarray, tc: float, beta: float, A: float, B: float) ->
 def logarithm_periodic_func(t: np.ndarray, tc: float, beta: float, omega: float,
                      phi: float, A: float, B: float, C: float) -> np.ndarray:
     """式(54)の対数周期関数"""
-    dt = tc - t
+    # 入力の形状を確認
+    print(f"\nFunction call info:")
+    print(f"Input t type: {type(t)}")
+    print(f"Input t dtype: {t.dtype}")
+    print(f"Input parameters: tc={tc}, beta={beta}, omega={omega}")
+    
+    t = np.asarray(t).ravel()
+    dt = (tc - t).ravel()
     mask = dt > 0
-    result = np.zeros_like(t)
+    result = np.zeros_like(t, dtype=float)
+    
     valid_dt = dt[mask]
-    
     if len(valid_dt) > 0:
-        power_term = np.power(valid_dt, beta)
-        result[mask] = A + B * power_term + C * power_term * np.cos(omega * np.log(valid_dt) + phi)
+        # 中間計算結果も確認
+        power_term = np.power(valid_dt, beta).ravel()
+        log_term = np.log(valid_dt).ravel()
+        cos_term = np.cos(omega * log_term + phi).ravel()
+        oscillation = (C * power_term * cos_term).ravel()
+        
+        print(f"Intermediate values:")
+        print(f"power_term: min={power_term.min():.3e}, max={power_term.max():.3e}")
+        print(f"cos_term: min={cos_term.min():.3e}, max={cos_term.max():.3e}")
+        
+        # 各ステップの結果を個別に計算
+        base = (A + B * power_term).ravel()
+        print(f"Before assignment: base shape: {base.shape}, oscillation shape: {oscillation.shape}")
+        print(f"Result shape before: {result.shape}")
+        result[mask] = (base + oscillation).ravel()
+        print(f"Result shape after assignment: {result.shape}")
     
-    return result
+    # 戻り値の形状を確認
+    final_result = result.ravel()
+    print(f"Output shape: {final_result.shape}")
+    print(f"Output type: {type(final_result)}")
+    print(f"Output range: [{final_result.min():.3e}, {final_result.max():.3e}]")
+    
+    return final_result.ravel()
 
 def assess_statistical_significance(y_true: np.ndarray, y_pred: np.ndarray, num_params: int = 7) -> dict:
     """統計的有意性の評価"""
