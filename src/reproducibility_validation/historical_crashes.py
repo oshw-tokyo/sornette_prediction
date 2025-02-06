@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from datetime import timedelta
 
-from ..config.validation_settings import get_validation_settings
+from ..config.validation_settings import get_validation_settings, VALIDATION_SETTINGS
 
 @dataclass
 class CrashPeriod:
@@ -27,12 +27,12 @@ class CrashPeriod:
 class CrashParameters:
     """クラッシュのパラメータを定義するデータクラス"""
     # 基本パラメータ（論文から）
-    m: float           # べき指数
+    beta: float           # べき指数
     omega: float       # 対数周期の角振動数
     phi: Optional[float] = None  # 位相（論文によって報告されない場合もある）
     
     # 許容誤差
-    tolerance_m: float = 0.05    # べき指数の許容誤差
+    tolerance_beta: float = 0.05    # べき指数の許容誤差
     tolerance_omega: float = 0.3  # 角振動数の許容誤差
     tolerance_phi: float = 0.5    # 位相の許容誤差
     
@@ -63,9 +63,6 @@ class CrashCase:
         self.reference = reference
         self.notes = notes
         
-        # 検証設定の適用
-        settings = get_validation_settings(self.id)
-        self.period.validation_cutoff_days = settings['validation_cutoff_days']
 
 # 1987年10月のクラッシュ定義
 # historical_crashes.py の CRASH_1987_10 の定義を修正
@@ -73,24 +70,21 @@ CRASH_1987_10 = CrashCase(
     id='1987-10',
     name='Black Monday Crash',
     symbol='^GSPC',  # S&P500
-    
     period=CrashPeriod(
         start_date=datetime(1985, 7, 1),
         crash_date=datetime(1987, 10, 19),
         pre_crash_peak_date=datetime(1987, 8, 25),
-        validation_cutoff_days=180, # クラッシュに近すぎると(tc-t が 0 に近づくと)、フィッティングが発散する。
+        validation_cutoff_days=VALIDATION_SETTINGS["1987-10"]['validation_cutoff_days'],  # 設定から値を取得
         description="The crash culminated in Black Monday on October 19, 1987"
     ),
-    
     parameters=CrashParameters(
-        m=0.33,
-        omega=7.4,
+        beta=VALIDATION_SETTINGS["1987-10"]['beta_expected'],  # 設定から値を取得
+        omega=VALIDATION_SETTINGS["1987-10"]['omega_expected'],
         phi=2.0,
-        tolerance_m=0.03,
-        tolerance_omega=0.2,
-        tolerance_phi=0.3
+        tolerance_beta=VALIDATION_SETTINGS["1987-10"]['beta_tolerance'],  # 設定から値を取得
+        tolerance_omega=VALIDATION_SETTINGS["1987-10"]['omega_tolerance']
     ),
-    
+
     metrics=CrashMetrics(
         price_drop_percentage=22.6,
         duration_days=1,

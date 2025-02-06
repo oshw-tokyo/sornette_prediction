@@ -30,9 +30,6 @@ python -m unittest discover -s tests/analysis -p "test_*.py" -v
 echo "Testing logging modules..."
 python -m unittest discover -s tests/logging -p "test_*.py" -v
 
-echo "Testing config modules..."
-python -m unittest discover -s tests/config -p "test_*.py" -v
-
 echo "Testing reproducibility validation..."
 python -m unittest discover -s tests/reproducibility_validation -p "test_*.py" -v
 

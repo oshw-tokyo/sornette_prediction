@@ -167,7 +167,7 @@ class Test1987CrashValidator(unittest.TestCase):
         if result.success:
             self.assertAlmostEqual(
                 result.parameters.get('beta', 0),
-                crash_case.parameters.m,
+                crash_case.parameters.beta,
                 delta=self.validator.specific_tolerances['beta']
             )
             self.assertAlmostEqual(

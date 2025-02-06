@@ -21,7 +21,7 @@ class TestHistoricalCrashes(unittest.TestCase):
                         datetime(1987, 10, 19))
         
         # パラメータの検証
-        self.assertAlmostEqual(crash_case.parameters.m, 0.33, places=2)
+        self.assertAlmostEqual(crash_case.parameters.beta, 0.33, places=2)
         self.assertAlmostEqual(crash_case.parameters.omega, 7.4, places=1)
         
         # メトリクスの検証
@@ -77,7 +77,7 @@ class TestHistoricalCrashes(unittest.TestCase):
     #     self.assertTrue(5 <= crash_case.parameters.omega <= 8)
         
     #     # 許容誤差の妥当性を検証
-    #     self.assertTrue(0 < crash_case.parameters.tolerance_m < 0.1)
+    #     self.assertTrue(0 < crash_case.parameters.tolerance_beta < 0.1)
     #     self.assertTrue(0 < crash_case.parameters.tolerance_omega < 0.5)
     
     # def test_crash_metrics_validation(self):

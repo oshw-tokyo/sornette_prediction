@@ -39,6 +39,12 @@ class CrashValidator:
         try:
             # クラッシュケース固有の設定を取得
             case_settings = get_validation_settings(crash_case.id)
+            case_settings = get_validation_settings(crash_case.id)
+            print("DEBUG: validation_cutoff_days in settings:", case_settings['validation_cutoff_days'])
+            print("DEBUG: validation_cutoff_days in period:", crash_case.period.validation_cutoff_days)
+            print("DEBUG: start_date:", crash_case.period.start_date)
+            print("DEBUG: crash_date:", crash_case.period.crash_date)
+            print("DEBUG: end_date:", crash_case.period.end_date)            
             
             data = self._get_market_data(
                 crash_case.symbol,
@@ -131,7 +137,7 @@ class CrashValidator:
         """フィッティング結果の検証"""
         # パラメータの相対誤差を計算
         errors = {
-            'beta': abs(result.parameters['beta'] - crash_case.parameters.m),
+            'beta': abs(result.parameters['beta'] - crash_case.parameters.beta),
             'omega': abs(result.parameters['omega'] - crash_case.parameters.omega),
         }
 

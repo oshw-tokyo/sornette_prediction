@@ -3,17 +3,22 @@
 from typing import Dict
 
 VALIDATION_SETTINGS = {
-    'default': {
-        'validation_cutoff_days': 30,  # デフォルトは90日前まで
-        'minimum_data_points': 100,    # 最小必要データ点数
-        'maximum_data_points': 1000    # 最大データ点数
-    },
-    'crash_1987': {
-        'validation_cutoff_days': 180,
+    '1987-10': {
+        'validation_cutoff_days': 40,  # クラッシュに近すぎると(tc-t が 0 に近づくと)、フィッティングが発散する
         'minimum_data_points': 200,
-        'maximum_data_points': 1000
+        'maximum_data_points': 1000,
+        'beta_expected': 0.33,  # 1987年クラッシュの期待されるパラメータ値
+        'omega_expected': 7.4,
+        'beta_tolerance': 0.03,  # 許容誤差
+        'omega_tolerance': 0.2
+    },
+    'default': {
+        'validation_cutoff_days': 30,
+        'minimum_data_points': 100,
+        'maximum_data_points': 1000,
+        'beta_tolerance': 0.05,
+        'omega_tolerance': 0.5
     }
-    # 他のケース固有の設定を追加可能
 }
 
 def get_validation_settings(crash_id: str) -> Dict:
