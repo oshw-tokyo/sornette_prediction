@@ -4,7 +4,7 @@ from typing import Dict
 
 VALIDATION_SETTINGS = {
     '1987-10': {
-        'validation_cutoff_days': 40,  # クラッシュに近すぎると(tc-t が 0 に近づくと)、フィッティングが発散する
+        'validation_cutoff_days': 101,  # クラッシュに近すぎると(tc-t が 0 に近づくと)、フィッティングが発散する
         'minimum_data_points': 200,
         'maximum_data_points': 1000,
         'beta_expected': 0.33,  # 1987年クラッシュの期待されるパラメータ値

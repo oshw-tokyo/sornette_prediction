@@ -55,7 +55,7 @@ class LogarithmPeriodicFitter:
 
             # 初期値の設定 - Aについては対数空間で設定（補足：価格に対数を取るケース想定）
             p0 = [
-            1.5,    # tc (critical time): クリティカル時刻。観測期間(t∈[0,1])の直後を初期値に
+            1.2,    # tc (critical time): クリティカル時刻。観測期間(t∈[0,1])の直後を初期値に
             0.45,   # β (beta): べき指数。論文で報告される典型値0.3-0.7の中央値を初期値に
             np.log(np.mean(y)),  # log(A): オフセットパラメータ。データの平均値の対数を初期値に 
             (y[-1]-y[0])/(t[-1]-t[0])  # B: スケールパラメータ。データの全体的な傾きを初期値に
@@ -102,7 +102,20 @@ class LogarithmPeriodicFitter:
             print("B: [-inf, inf]")            
 
             # フィッティングの実行
-            popt, pcov = curve_fit(power_law_func, t, y, p0=p0, bounds=bounds, maxfev=10000, method='trf')
+            popt, pcov = curve_fit(
+                            f=power_law_func,
+                            xdata=t,
+                            ydata=y,
+                            p0=p0,
+                            bounds=bounds,
+                            method='trf',           # 境界のある最適化に適している
+                            ftol=1e-8,             # 関数値の収束判定基準
+                            xtol=1e-8,             # パラメータの収束判定基準
+                            gtol=1e-8,             # 勾配の収束判定基準
+                            loss='soft_l1',        # 外れ値に対してロバスト
+                            max_nfev=10000,        # 最大反復回数
+                        )
+
 
             # パラメータの不確かさを計算
             perr = np.sqrt(np.diag(pcov))
@@ -171,10 +184,10 @@ class LogarithmPeriodicFitter:
             
             # 補足：価格に対数を取るケース想定            
             bounds = ([
-                1.01, p0[1]*0.5,  # より広い範囲
+                1.01, 0.1,  
                 2.0, -8*np.pi, -np.inf, -np.inf, -2.0
             ], [
-                p0[0]*1.4, p0[1]*1.5,
+                p0[0]*1.4, 0.9,
                 15.0, 8*np.pi, np.inf, np.inf, 2.0
             ])
 

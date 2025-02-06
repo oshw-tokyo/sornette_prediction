@@ -39,7 +39,7 @@ class CrashValidator:
         try:
             # クラッシュケース固有の設定を取得
             case_settings = get_validation_settings(crash_case.id)
-            case_settings = get_validation_settings(crash_case.id)
+            
             print("DEBUG: validation_cutoff_days in settings:", case_settings['validation_cutoff_days'])
             print("DEBUG: validation_cutoff_days in period:", crash_case.period.validation_cutoff_days)
             print("DEBUG: start_date:", crash_case.period.start_date)
