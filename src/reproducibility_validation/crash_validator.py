@@ -65,22 +65,16 @@ class CrashValidator:
                     f"Insufficient data points: {len(data)} < "
                     f"{case_settings['minimum_data_points']}"
                 )
-
+            
             t, prices = self.fitter.prepare_data(data['Close'].values)
             if t is None or prices is None:
                 raise ValueError("Failed to prepare data")
 
-            # 2. べき乗則フィット
-            print("INFO: ", "Performing power law fitting...")
-            power_law_result = self.fitter.fit_power_law(t, prices)
-            if not power_law_result.success:
-                raise ValueError("Power law fitting failed")
-
-            # 3. 対数周期フィット
-            print("INFO: ", "Performing logarithm-periodic fitting...")
-            logarithm_periodic_result = self.fitter.fit_logarithm_periodic(t, prices, power_law_result.parameters)
+            # 複数初期値でのフィッティングを実行
+            print("INFO: ", "Performing fitting with multiple initializations")
+            logarithm_periodic_result = self.fitter.fit_with_multiple_initializations(t, prices, n_tries=100)          
             if not logarithm_periodic_result.success:
-                raise ValueError("Logarithm-periodic fitting failed")
+                raise ValueError("Fitting failed")
 
             # 4. 結果の検証
             validation_metrics = self._validate_results(logarithm_periodic_result, crash_case, data.index)

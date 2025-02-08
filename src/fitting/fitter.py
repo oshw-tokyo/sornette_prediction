@@ -32,9 +32,53 @@ class LogarithmPeriodicFitter:
         except Exception as e:
             print(f"ERROR: Data preparation failed: {str(e)}")
             return None, None
+        
+    def fit_with_multiple_initializations(self, t: np.ndarray, y: np.ndarray, n_tries: int = 10) -> FittingResult:
+        """複数の初期値で最適なフィッティングを試みる"""
+        best_result = None
+        best_r2 = -np.inf
+        failed_attempts = 0     
 
-    def fit_power_law(self, t: np.ndarray, y: np.ndarray) -> FittingResult:
-        """第1段階: べき乗則フィッティング"""
+        # グリッドベースの初期値の生成
+        tc_values = np.linspace(1.01, 1.2, n_tries)
+        beta_values = np.linspace(0.30, 0.36, n_tries)
+        
+        print(f"\nStarting multiple initialization fitting with {n_tries} tries...")
+        
+        for i, (tc, beta) in enumerate(zip(tc_values, beta_values)):
+            try:
+                # べき乗則フィット
+                power_result = self.fit_power_law(t, y, initial_params={
+                    'tc': tc, 
+                    'beta': beta,
+                    'A': np.log(np.mean(y)),
+                    'B': (y[-1]-y[0])/(t[-1]-t[0])
+                })
+                
+                if power_result.success:
+                    # 対数周期フィット
+                    result = self.fit_logarithm_periodic(t, y, power_result.parameters)
+                    
+                    if result.success and result.r_squared > best_r2:
+                        best_r2 = result.r_squared
+                        best_result = result
+                        print(f"Trial {i+1}/{n_tries}:")
+                        print(f"  tc={result.parameters['tc']:.4f}")
+                        print(f"  beta={result.parameters['beta']:.4f}")
+                        print(f"  R2={result.r_squared:.4f}")
+            
+            except Exception as e:
+                failed_attempts += 1
+                print(f"Trial {i+1} failed: {str(e)}")
+                continue
+        
+        if best_result is None:
+            raise ValueError(f"All fitting attempts failed ({failed_attempts}/{n_tries} failures)")
+            
+        return best_result
+
+    def fit_power_law(self, t: np.ndarray, y: np.ndarray, initial_params: dict = None) -> FittingResult:
+        """べき乗則フィッティング（初期値を指定可能に修正）"""
         try:
 
             # データのシェイプを統一
@@ -54,12 +98,20 @@ class LogarithmPeriodicFitter:
                 raise ValueError("Invalid values in data")
 
             # 初期値の設定 - Aについては対数空間で設定（補足：価格に対数を取るケース想定）
-            p0 = [
-            1.2,    # tc (critical time): クリティカル時刻。観測期間(t∈[0,1])の直後を初期値に
-            0.45,   # β (beta): べき指数。論文で報告される典型値0.3-0.7の中央値を初期値に
-            np.log(np.mean(y)),  # log(A): オフセットパラメータ。データの平均値の対数を初期値に 
-            (y[-1]-y[0])/(t[-1]-t[0])  # B: スケールパラメータ。データの全体的な傾きを初期値に
-           ]
+            if initial_params is None:
+                p0 = [
+                    1.2,    # tc (critical time): クリティカル時刻。観測期間(t∈[0,1])の直後を初期値に
+                    0.45,   # β (beta): べき指数。論文で報告される典型値0.3-0.7の中央値を初期値に
+                    np.log(np.mean(y)),  # log(A): オフセットパラメータ。データの平均値の対数を初期値に 
+                    (y[-1]-y[0])/(t[-1]-t[0])  # B: スケールパラメータ。データの全体的な傾きを初期値に
+                ]
+            else:
+                p0 = [
+                    initial_params['tc'],
+                    initial_params['beta'],
+                    initial_params['A'],
+                    initial_params['B']
+                ]            
             
             print("\nInitial parameter values:")
             print(f"tc (critical time): {p0[0]:.3f}")
@@ -88,8 +140,8 @@ class LogarithmPeriodicFitter:
                 -np.inf  # B_min: スケールパラメータに制限なし
             ],
             [
-                2.0,    # tc_max: 観測期間の2倍程度まで
-                0.9,    # β_max: べき指数は1以下（対数価格では発散を防ぐ）
+                2.5,    # tc_max: 観測期間の2倍程度まで
+                0.99,    # β_max: べき指数は1以下（対数価格では発散を防ぐ）
                 np.inf,  # A_max: オフセットパラメータに制限なし
                 np.inf   # B_max: スケールパラメータに制限なし
             ]
@@ -109,13 +161,13 @@ class LogarithmPeriodicFitter:
                             p0=p0,
                             bounds=bounds,
                             method='trf',           # 境界のある最適化に適している
-                            ftol=1e-8,             # 関数値の収束判定基準
-                            xtol=1e-8,             # パラメータの収束判定基準
-                            gtol=1e-8,             # 勾配の収束判定基準
+                            ftol=1e-4,             # 関数値の収束判定基準
+                            xtol=1e-4,             # パラメータの収束判定基準
+                            gtol=1e-4,             # 勾配の収束判定基準
                             loss='soft_l1',        # 外れ値に対してロバスト
-                            max_nfev=10000,        # 最大反復回数
+                            max_nfev=50000,        # 最大反復回数
                         )
-
+                        # = curve_fit(power_law_func, t, y, p0=p0, bounds=bounds, maxfev=10000, method='trf')
 
             # パラメータの不確かさを計算
             perr = np.sqrt(np.diag(pcov))
@@ -136,6 +188,9 @@ class LogarithmPeriodicFitter:
             print(f"R-squared: {r_squared:.6f}")
             print(f"Residuals (MSE): {residuals:.6e}")
             print("---------------------------\n")
+
+            if r_squared < 0.6:  # この閾値は調整可能
+                raise ValueError(f"Poor fit quality (R2={r_squared:.3f})")            
 
             return FittingResult(
                 success=True,
