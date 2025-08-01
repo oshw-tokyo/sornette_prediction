@@ -23,3 +23,6 @@ market_analysis_results.csv
 data_template/
 old_trials/
 _temp/
+
+# docs & directions for Claude Code
+papers/
