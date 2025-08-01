@@ -18,6 +18,11 @@ market_analysis_results.csv
 .idea/
 *.swp
 
+# API Keys and Secrets
+.env
+*.key
+config/secrets.py
+
 # Others
 .DS_Store
 data_template/
