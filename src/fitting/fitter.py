@@ -32,49 +32,128 @@ class LogarithmPeriodicFitter:
         except Exception as e:
             print(f"ERROR: Data preparation failed: {str(e)}")
             return None, None
-        
+            
     def fit_with_multiple_initializations(self, t: np.ndarray, y: np.ndarray, n_tries: int = 10) -> FittingResult:
-        """複数の初期値で最適なフィッティングを試みる"""
+        """式(54)に限定して複数の初期値で対数周期フィッティングを試みる"""
+        """power_law_func の初期値のばらつきが、式(54)の初期値のばらつきに伝搬しないため"""                
         best_result = None
         best_r2 = -np.inf
-        failed_attempts = 0     
+        failed_attempts = 0
 
-        # グリッドベースの初期値の生成
-        tc_values = np.linspace(1.01, 1.2, n_tries)
-        beta_values = np.linspace(0.30, 0.36, n_tries)
+        t = np.asarray(t).ravel()
+        y = np.asarray(y).ravel() # y の形式がずれるケースあり。
+
+        print(f"\nStarting multiple initialization LPPL fitting with {n_tries} tries...")
         
-        print(f"\nStarting multiple initialization fitting with {n_tries} tries...")
+        # データの検証
+        print("\nData Validation:")
+        print(f"t shape: {t.shape}, range: [{t.min():.3f}, {t.max():.3f}]")
+        print(f"y shape: {y.shape}, range: [{y.min():.3f}, {y.max():.3f}]")
         
-        for i, (tc, beta) in enumerate(zip(tc_values, beta_values)):
-            try:
-                # べき乗則フィット
-                power_result = self.fit_power_law(t, y, initial_params={
-                    'tc': tc, 
-                    'beta': beta,
-                    'A': np.log(np.mean(y)),
-                    'B': (y[-1]-y[0])/(t[-1]-t[0])
-                })
-                
-                if power_result.success:
-                    # 対数周期フィット
-                    result = self.fit_logarithm_periodic(t, y, power_result.parameters)
-                    
-                    if result.success and result.r_squared > best_r2:
-                        best_r2 = result.r_squared
-                        best_result = result
-                        print(f"Trial {i+1}/{n_tries}:")
-                        print(f"  tc={result.parameters['tc']:.4f}")
-                        print(f"  beta={result.parameters['beta']:.4f}")
-                        print(f"  R2={result.r_squared:.4f}")
-            
-            except Exception as e:
-                failed_attempts += 1
-                print(f"Trial {i+1} failed: {str(e)}")
-                continue
+        # グリッドベースの初期値生成
+        tc_values = np.linspace(1.01, 1.5, n_tries)
+        beta_values = np.linspace(0.30, 0.45, n_tries)
+        omega_values = np.linspace(5.0, 8.0, n_tries)
         
+        print("\nParameter Ranges:")
+        print(f"tc: [{tc_values[0]:.3f}, {tc_values[-1]:.3f}]")
+        print(f"beta: [{beta_values[0]:.3f}, {beta_values[-1]:.3f}]")
+        print(f"omega: [{omega_values[0]:.3f}, {omega_values[-1]:.3f}]")
+
+        # 境界条件を前もって定義
+        bounds = (
+            np.array([1.01, 0.3, 5.0, -8*np.pi, -10, -10, -2.0]),  # lower bounds
+            np.array([1.5,  0.7, 8.0,  8*np.pi,  10,  10,  2.0])   # upper bounds
+        )
+
+        for i, tc in enumerate(tc_values):
+            for j, beta in enumerate(beta_values):
+                for k, omega in enumerate(omega_values):
+                    try:
+                        trial_num = i*100 + j*10 + k + 1
+                        print(f"\nTrial {trial_num} Parameters:")
+                        print(f"tc={tc:.4f}, beta={beta:.4f}, omega={omega:.4f}")
+                        
+                        # 初期値をnumpy配列として正しく設定
+                        p0 = np.array([
+                            float(tc),           # tc
+                            float(beta),         # beta
+                            float(omega),        # omega
+                            0.0,                 # phi
+                            float(np.log(np.mean(y))),  # log(A)
+                            float((y[-1]-y[0])/(t[-1]-t[0])),  # B
+                            0.1                  # C
+                        ], dtype=float)
+
+                        print("Initial values:", p0)
+
+                        try:
+                            # # フィッティングの試行前にデータ形状を確認
+                            # print("Debug: Data shapes before curve_fit:")
+                            # print(f"t shape: {t.shape}")
+                            # print(f"y shape: {y.shape}")
+                            # y_test = logarithm_periodic_func(t, *p0)
+                            # print(f"Test function output shape: {y_test.shape}")                            
+                            # フィッティングの試行
+                            popt, pcov = curve_fit(
+                                logarithm_periodic_func, 
+                                t, 
+                                y,
+                                p0=p0,
+                                bounds=bounds,
+                                method='trf',
+                                ftol=1e-6,
+                                xtol=1e-6,
+                                gtol=1e-6,
+                                loss='soft_l1',
+                                max_nfev=50000
+                            )
+                            
+                            # フィッティング結果の評価
+                            y_fit = logarithm_periodic_func(t, *popt).ravel()
+                            residuals, r_squared = calculate_fit_metrics(y, y_fit)
+
+                            print(f"Fit results:")
+                            print(f"  Optimized parameters: {popt}")
+                            print(f"  R-squared: {r_squared:.4f}")
+                            print(f"  Residuals: {residuals:.4e}")
+
+                            if r_squared > best_r2:
+                                best_r2 = r_squared
+                                best_result = FittingResult(
+                                    success=True,
+                                    parameters={
+                                        'tc': popt[0],
+                                        'beta': popt[1],
+                                        'omega': popt[2],
+                                        'phi': popt[3],
+                                        'A': np.exp(popt[4]),
+                                        'B': popt[5],
+                                        'C': popt[6]
+                                    },
+                                    residuals=residuals,
+                                    r_squared=r_squared,
+                                    statistical_significance=assess_statistical_significance(y, y_fit)
+                                )
+
+                        except Exception as e:
+                            print(f"Fitting error: {str(e)}")
+                            print(f"Error type: {type(e)}")
+                            if hasattr(e, '__traceback__'):
+                                import traceback
+                                print("Traceback:")
+                                traceback.print_tb(e.__traceback__)
+                            failed_attempts += 1
+                            continue
+
+                    except Exception as e:
+                        print(f"Outer loop error: {str(e)}")
+                        failed_attempts += 1
+                        continue
+
         if best_result is None:
-            raise ValueError(f"All fitting attempts failed ({failed_attempts}/{n_tries} failures)")
-            
+            raise ValueError(f"All fitting attempts failed ({failed_attempts}/{1000} failures)")
+        
         return best_result
 
     def fit_power_law(self, t: np.ndarray, y: np.ndarray, initial_params: dict = None) -> FittingResult:

@@ -72,7 +72,7 @@ class CrashValidator:
 
             # 複数初期値でのフィッティングを実行
             print("INFO: ", "Performing fitting with multiple initializations")
-            logarithm_periodic_result = self.fitter.fit_with_multiple_initializations(t, prices, n_tries=100)          
+            logarithm_periodic_result = self.fitter.fit_with_multiple_initializations(t, prices, n_tries=10)          
             if not logarithm_periodic_result.success:
                 raise ValueError("Fitting failed")
 
