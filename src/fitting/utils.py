@@ -21,7 +21,15 @@ def power_law_func(t: np.ndarray, tc: float, beta: float, A: float, B: float) ->
 
 def logarithm_periodic_func(t: np.ndarray, tc: float, beta: float, omega: float,
                      phi: float, A: float, B: float, C: float) -> np.ndarray:
-    """式(54)の対数周期関数"""
+    """
+    対数周期パワー法則モデル (LPPL)
+    
+    参照論文: papers/extracted_texts/sornette_2004_0301543v1_Critical_Market_Crashes__Anti-Buble_extracted.txt
+    数式: 式(54)
+    I(t) = A + B(tc - t)^β + C(tc - t)^β cos(ω ln(tc - t) - φ)
+    
+    理論値: β = 0.33 ± 0.03, ω = 6-8 (Sornette, 2004)
+    """
     # # 入力の形状を確認
     # print(f"\nFunction call info:")
     # print(f"Input t type: {type(t)}")

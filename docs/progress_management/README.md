@@ -60,21 +60,22 @@ progress_management/
 
 - [数学的基礎](../mathematical_foundation.md) - モデルの理論的背景（論文参照指示あり）
 - [実装戦略](../implementation_strategy.md) - 全体的な実装方針
-- [論文アーカイブ](../papers/) - 実装の科学的根拠となる原論文
+- [論文アーカイブ（テキスト版）](../papers/extracted_texts/) - 実装の科学的根拠となる原論文（テキスト変換済み）
 - [過去の記録](./archives/) - 歴史的な進捗とIssue
 
 ## 📚 論文参照ガイドライン
 
 ### Claude Code のための特別指示
-1. **実装前の必須確認**: Readツールでpapers/内の関連論文を確認
+1. **実装前の必須確認**: Readツールでpapers/extracted_texts/内の関連論文（テキスト版）を確認
+   - **⚠️ 重要**: PDFファイルの直接読み込みは「Context low」エラーを引き起こすため、必ずテキスト版を使用
 2. **数式の完全一致**: 論文の数式と実装コードの照合
 3. **定量的検証**: 論文報告値と実装結果の数値比較
 4. **乖離のIssue化**: 5%以上の乖離はCURRENT_ISSUES.mdに記録
 
-### 主要論文の役割
-- **sornette_2004_0301543v1_Critical_Market_Crashes__Anti-Buble.pdf**: 核となる式(54)とパラメータ制約
-- **sornette_2001_0106520v1_a_recent-review_and_assessment.pdf**: 総合的レビューと手法論
-- **sornette_2012_1212.2833v1.pdf**: 最新の改良手法
+### 主要論文の役割（テキスト版を使用）
+- **sornette_2004_0301543v1_Critical_Market_Crashes__Anti-Buble_extracted.txt**: 核となる式(54)とパラメータ制約
+- **sornette_2001_0106520v1_a_recent- review_and_assessment_extracted.txt**: 総合的レビューと手法論
+- **sornette_2012_1212.2833v1_extracted.txt**: 最新の改良手法
 
 ## 連絡先・サポート
 
