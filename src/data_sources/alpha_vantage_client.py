@@ -34,10 +34,26 @@ class AlphaVantageClient:
         self.base_url = "https://www.alphavantage.co/query"
         self.session = requests.Session()
         
+        # レート制限対応（無料プランは5 calls per minute, 500 calls per day）
+        self.last_call_time = 0
+        self.min_interval = 12  # 秒（安全のため12秒間隔）
+        
         if not self.api_key:
             print("⚠️ Alpha Vantage API key が設定されていません")
             print("   1. https://www.alphavantage.co/support/#api-key で無料APIキーを取得")
             print("   2. 環境変数 ALPHA_VANTAGE_KEY に設定するか、初期化時に指定")
+    
+    def _rate_limit(self):
+        """レート制限の実装"""
+        current_time = time.time()
+        time_since_last_call = current_time - self.last_call_time
+        
+        if time_since_last_call < self.min_interval:
+            sleep_time = self.min_interval - time_since_last_call
+            print(f"   ⏱️ レート制限: {sleep_time:.1f}秒待機...")
+            time.sleep(sleep_time)
+        
+        self.last_call_time = time.time()
     
     def get_daily_data(self, symbol: str, outputsize: str = 'full') -> Optional[pd.DataFrame]:
         """
@@ -53,6 +69,8 @@ class AlphaVantageClient:
         if not self.api_key:
             print("❌ APIキーが設定されていません")
             return None
+        
+        self._rate_limit()
         
         print(f"📊 Alpha Vantage データ取得中: {symbol} ({outputsize})")
         
@@ -150,6 +168,45 @@ class AlphaVantageClient:
             data = data[data.index <= end_date]
         
         return data
+    
+    def get_series_data(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+        """
+        指定期間の日次データを取得（FRED互換インターフェース）
+        
+        Args:
+            symbol: 株式シンボル
+            start_date: 開始日 (YYYY-MM-DD)
+            end_date: 終了日 (YYYY-MM-DD)
+            
+        Returns:
+            DataFrame: Close価格データ（FREDと同じ形式）
+        """
+        
+        # フルデータ取得
+        full_data = self.get_daily_data(symbol, outputsize='full')
+        
+        if full_data is None:
+            return None
+        
+        # 期間フィルタリング
+        start_dt = pd.to_datetime(start_date)
+        end_dt = pd.to_datetime(end_date)
+        
+        filtered_data = full_data[(full_data.index >= start_dt) & 
+                                 (full_data.index <= end_dt)]
+        
+        if filtered_data.empty:
+            print(f"⚠️ 指定期間にデータがありません: {start_date} - {end_date}")
+            return None
+        
+        # FRED互換形式に変換（Closeのみ）
+        result = pd.DataFrame({
+            'Close': filtered_data['Close']
+        })
+        
+        print(f"📅 期間フィルタリング完了: {len(result)}日分")
+        
+        return result
     
     def test_connection(self) -> bool:
         """API接続テスト"""
@@ -354,6 +411,10 @@ class UnifiedDataClient:
 def main():
     """メイン実行関数"""
     print("🎯 Alpha Vantage API実装・テスト開始\n")
+    
+    # 環境変数読み込み
+    from dotenv import load_dotenv
+    load_dotenv()
     
     # API設定ガイド表示
     if not os.getenv('ALPHA_VANTAGE_KEY'):

@@ -1,0 +1,98 @@
+2025-01-23 19:27:05 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-23 19:27:06 - INFO - Market data downloaded: 561 rows
+2025-01-23 19:27:06 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-23 19:27:06 - INFO - Data preparation completed. Shape: (561,)
+2025-01-23 19:27:06 - INFO - Performing power law fitting...
+2025-01-23 19:27:06 - INFO - Performing logarithm-periodic fitting...
+2025-01-23 19:27:06 - INFO - Data preparation completed. Shape: (100,)
+2025-01-23 19:28:00 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-23 19:28:01 - INFO - Market data downloaded: 561 rows
+2025-01-23 19:28:01 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-23 19:28:01 - INFO - Data preparation completed. Shape: (561,)
+2025-01-23 19:28:01 - INFO - Performing power law fitting...
+2025-01-23 19:28:01 - INFO - Performing logarithm-periodic fitting...
+2025-01-23 19:28:01 - INFO - Data preparation completed. Shape: (100,)
+2025-01-23 19:32:38 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-23 19:32:39 - INFO - Market data downloaded: 561 rows
+2025-01-23 19:32:39 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-23 19:32:39 - INFO - Data preparation completed. Shape: (561,)
+2025-01-23 19:32:39 - INFO - Performing power law fitting...
+2025-01-23 19:32:39 - INFO - Performing logarithm-periodic fitting...
+2025-01-23 19:32:39 - INFO - Data preparation completed. Shape: (100,)
+2025-01-23 20:37:29 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-23 20:37:29 - INFO - Market data downloaded: 561 rows
+2025-01-23 20:37:29 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-23 20:37:29 - INFO - Data preparation completed. Shape: (561,)
+2025-01-23 20:37:29 - INFO - Performing power law fitting...
+2025-01-23 20:37:29 - INFO - Performing logarithm-periodic fitting...
+2025-01-23 20:37:29 - INFO - Data preparation completed. Shape: (100,)
+2025-01-24 00:43:20 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 00:43:20 - ERROR - Fit process failed: Log-periodic fitting failed
+2025-01-24 00:43:20 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 00:43:20 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 00:43:20 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-24 00:43:21 - INFO - Market data downloaded: 561 rows
+2025-01-24 00:43:21 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-24 00:43:21 - INFO - Data preparation completed. Shape: (561,)
+2025-01-24 00:43:21 - INFO - Performing power law fitting...
+2025-01-24 00:43:21 - INFO - Performing logarithm-periodic fitting...
+2025-01-24 00:43:21 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 00:43:21 - ERROR - Validation failed due to error: Log-periodic fitting failed
+2025-01-24 00:43:21 - INFO - Data preparation completed. Shape: (100,)
+2025-01-24 00:43:21 - ERROR - Statistical tests failed: local variable 'numerator' referenced before assignment
+2025-01-24 01:07:27 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:07:27 - ERROR - Fit process failed: Log-periodic fitting failed
+2025-01-24 01:07:27 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:07:27 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:07:28 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-24 01:07:28 - INFO - Market data downloaded: 561 rows
+2025-01-24 01:07:28 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-24 01:07:28 - INFO - Data preparation completed. Shape: (561,)
+2025-01-24 01:07:28 - INFO - Performing power law fitting...
+2025-01-24 01:07:28 - INFO - Performing logarithm-periodic fitting...
+2025-01-24 01:07:28 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:07:28 - ERROR - Validation failed due to error: Log-periodic fitting failed
+2025-01-24 01:07:28 - INFO - Data preparation completed. Shape: (100,)
+2025-01-24 01:07:28 - ERROR - Statistical tests failed: local variable 'numerator' referenced before assignment
+2025-01-24 01:13:16 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:13:16 - ERROR - Fit process failed: Log-periodic fitting failed
+2025-01-24 01:13:16 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:13:16 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:13:17 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-24 01:13:17 - INFO - Market data downloaded: 561 rows
+2025-01-24 01:13:17 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-24 01:13:17 - INFO - Data preparation completed. Shape: (561,)
+2025-01-24 01:13:17 - INFO - Performing power law fitting...
+2025-01-24 01:13:17 - INFO - Performing logarithm-periodic fitting...
+2025-01-24 01:13:17 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:13:17 - ERROR - Validation failed due to error: Log-periodic fitting failed
+2025-01-24 01:13:17 - INFO - Data preparation completed. Shape: (100,)
+2025-01-24 01:13:17 - ERROR - Statistical tests failed: local variable 'numerator' referenced before assignment
+2025-01-24 01:18:19 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:18:19 - ERROR - Fit process failed: Log-periodic fitting failed
+2025-01-24 01:18:19 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:18:19 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:18:20 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-24 01:18:20 - INFO - Market data downloaded: 561 rows
+2025-01-24 01:18:20 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-24 01:18:20 - INFO - Data preparation completed. Shape: (561,)
+2025-01-24 01:18:20 - INFO - Performing power law fitting...
+2025-01-24 01:18:20 - INFO - Performing logarithm-periodic fitting...
+2025-01-24 01:18:20 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:18:20 - ERROR - Validation failed due to error: Log-periodic fitting failed
+2025-01-24 01:18:20 - INFO - Data preparation completed. Shape: (100,)
+2025-01-24 01:18:20 - ERROR - Statistical tests failed: local variable 'numerator' referenced before assignment
+2025-01-24 01:19:16 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:19:16 - ERROR - Fit process failed: Log-periodic fitting failed
+2025-01-24 01:19:16 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:19:16 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:19:17 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+2025-01-24 01:19:17 - INFO - Market data downloaded: 561 rows
+2025-01-24 01:19:17 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-24 01:19:17 - INFO - Data preparation completed. Shape: (561,)
+2025-01-24 01:19:17 - INFO - Performing power law fitting...
+2025-01-24 01:19:17 - INFO - Performing logarithm-periodic fitting...
+2025-01-24 01:19:17 - ERROR - Log-periodic fitting failed: `x0` is infeasible.
+2025-01-24 01:19:17 - ERROR - Validation failed due to error: Log-periodic fitting failed
+2025-01-24 01:19:17 - INFO - Data preparation completed. Shape: (100,)
+2025-01-24 01:19:17 - ERROR - Statistical tests failed: local variable 'numerator' referenced before assignment

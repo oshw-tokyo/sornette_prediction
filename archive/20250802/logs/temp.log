@@ -1,0 +1,61 @@
+)
+統合フィッティングのテスト ... ok
+test_log_periodic_fitting (fitting.test_fitter.TestLogarithmarithmarithmPeriodicFitter)
+対数周期フィッティングのテスト ... ok
+test_noisy_fitting (fitting.test_fitter.TestLogarithmPeriodicFitter)
+ノイズを含むデータでのフィッティングテスト ... ok
+test_power_law_fitting (fitting.test_fitter.TestLogarithmPeriodicFitter)
+べき乗則フィッティングのテスト ... ok
+test_calculate_r_squared (fitting.test_utils.TestUtils)
+決定係数計算のテスト ... ok
+test_calculate_residuals (fitting.test_utils.TestUtils)
+残差計算のテスト ... ok
+test_1987_specific_validation (reproducibility_validation.test_crash_validator.Test1987CrashValidator)
+1987年特有の検証機能のテスト ... /home/no-rules/Sornnet_Prediction/sornette_prediction_codes/src/log_utils/analysis_logger.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/no-rules/Sornnet_Prediction/sornette_prediction_codes/analysis_results/logs/analysis.log' mode='a' encoding='UTF-8'>
+  self._logger.handlers.clear()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+2025-01-24 01:38:12 - INFO - Downloading market data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00...
+[*********************100%***********************]  1 of 1 completed
+2025-01-24 01:38:12 - INFO - Market data downloaded: 561 rows
+2025-01-24 01:38:12 - INFO - Retrieved data for ^GSPC from 1985-07-01 00:00:00 to 1987-09-19 00:00:00
+2025-01-24 01:38:12 - INFO - Data preparation completed. Shape: (561,)
+2025-01-24 01:38:12 - INFO - Performing power law fitting...
+2025-01-24 01:38:12 - INFO - Performing log-periodic fitting...
+2025-01-24 01:38:12 - ERROR - Statistical tests failed: local variable 'numerator' referenced before assignment
+FAIL
+test_data_preparation (reproducibility_validation.test_crash_validator.TestCrashValidator)
+データ前処理のテスト ... /home/no-rules/Sornnet_Prediction/sornette_prediction_codes/src/log_utils/analysis_logger.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/no-rules/Sornnet_Prediction/sornette_prediction_codes/analysis_results/logs/analysis.log' mode='a' encoding='UTF-8'>
+  self._logger.handlers.clear()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+2025-01-24 01:38:12 - INFO - Data preparation completed. Shape: (100,)
+ok
+test_log_periodic_fitting (reproducibility_validation.test_crash_validator.TestCrashValidator)
+対数周期フィッティングのテスト ... ok
+test_statistical_tests (reproducibility_validation.test_crash_validator.TestCrashValidator)
+統計的検定のテスト ... 2025-01-24 01:38:12 - ERROR - Statistical tests failed: local variable 'numerator' referenced before assignment
+ok
+test_crash_case_retrieval (reproducibility_validation.test_historical_crashes.TestHistoricalCrashes)
+クラッシュケースの取得テスト ... ok
+test_crash_metrics_validation (reproducibility_validation.test_historical_crashes.TestHistoricalCrashes)
+クラッシュメトリクスの妥当性検証 ... ok
+test_crash_parameters_validation (reproducibility_validation.test_historical_crashes.TestHistoricalCrashes)
+クラッシュパラメータの妥当性検証 ... ok
+test_crash_period_validation (reproducibility_validation.test_historical_crashes.TestHistoricalCrashes) ... ok
+test_invalid_crash_id (reproducibility_validation.test_historical_crashes.TestHistoricalCrashes)
+無効なクラッシュIDの処理テスト ... ok
+test_list_available_crashes (reproducibility_validation.test_historical_crashes.TestHistoricalCrashes)
+利用可能なクラッシュ一覧のテスト ... ok
+
+======================================================================
+FAIL: test_1987_specific_validation (reproducibility_validation.test_crash_validator.Test1987CrashValidator)
+1987年特有の検証機能のテスト
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/no-rules/Sornnet_Prediction/sornette_prediction_codes/tests/reproducibility_validation/test_crash_validator.py", line 153, in test_1987_specific_validation
+    self.assertTrue(result.success, f"Validation failed: {result.error_message}")
+AssertionError: False is not true : Validation failed: None
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.873s
+
+FAILED (failures=1)

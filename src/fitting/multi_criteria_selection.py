@@ -36,10 +36,11 @@ class FittingCandidate:
     rmse: float
     initial_params: List[float]
     convergence_success: bool = True
+    quality_assessment: Optional[Any] = None  # QualityAssessmentオブジェクト
     
     def to_dict(self) -> Dict:
         """辞書形式に変換"""
-        return {
+        result = {
             'tc': self.tc,
             'beta': self.beta,
             'omega': self.omega,
@@ -52,6 +53,11 @@ class FittingCandidate:
             'initial_params': self.initial_params,
             'convergence_success': self.convergence_success
         }
+        
+        if self.quality_assessment:
+            result['quality_assessment'] = self.quality_assessment.to_dict()
+        
+        return result
 
 @dataclass
 class SelectionResult:
@@ -143,8 +149,13 @@ class MultiCriteriaSelector:
                     convergence_success=True
                 )
                 
-                # 基本的な物理制約チェック
-                if self._is_physically_valid(candidate):
+                # 品質評価を実行
+                candidate.quality_assessment = self._evaluate_fitting_quality(
+                    candidate, bounds, p0
+                )
+                
+                # 基本的な物理制約チェック（品質評価を考慮）
+                if self._is_physically_valid(candidate) and candidate.quality_assessment.is_usable:
                     all_candidates.append(candidate)
                     
             except Exception as e:
@@ -390,6 +401,35 @@ class MultiCriteriaSelector:
         }
         
         return best_candidate, scores
+    
+    def _evaluate_fitting_quality(self, candidate: FittingCandidate, 
+                                 bounds: Tuple, initial_params: List[float]):
+        """フィッティング品質の評価"""
+        from src.fitting.fitting_quality_evaluator import FittingQualityEvaluator
+        
+        evaluator = FittingQualityEvaluator()
+        
+        parameters = {
+            'tc': candidate.tc,
+            'beta': candidate.beta,
+            'omega': candidate.omega,
+            'phi': candidate.phi,
+            'A': candidate.A,
+            'B': candidate.B,
+            'C': candidate.C
+        }
+        
+        statistics = {
+            'r_squared': candidate.r_squared,
+            'rmse': candidate.rmse
+        }
+        
+        return evaluator.evaluate_fitting(
+            parameters=parameters,
+            statistics=statistics,
+            bounds=bounds,
+            initial_params=initial_params
+        )
 
 # 使用例とテスト
 def example_usage():

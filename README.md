@@ -12,16 +12,44 @@
 
 このプロジェクトは生成AI（Claude Code）との協働を前提として設計されています。
 
-### 進捗・Issue管理
-- **[現在の進捗状況](./docs/progress_management/CURRENT_PROGRESS.md)** - タスクの進行状況を確認
-- **[アクティブなIssue](./docs/progress_management/CURRENT_ISSUES.md)** - 現在の問題と対策状況
-- **[管理システムガイド](./docs/progress_management/README.md)** - 進捗管理の仕組み
+### 🎯 中核ドキュメント（必須参照）
+- **[Claude Code指示書](./CLAUDE.md)** - AIが最初に読むべきファイル
+- **[現在の進捗状況](./docs/progress_management/CURRENT_PROGRESS.md)** - タスクの進行状況
+- **[アクティブなIssue](./docs/progress_management/CURRENT_ISSUES.md)** - 現在の問題と対策
+- **[数学的基礎](./docs/mathematical_foundation.md)** - LPPLモデルの理論と数式
+
+### 📁 プロジェクト構造（2025-08-02更新）
+```
+sornette_prediction/
+├── CLAUDE.md                     # AI用指示書（中核ファイル参照）
+├── README.md                     # このファイル
+├── USER_EXECUTION_GUIDE.md       # ユーザー実行ガイド
+│
+├── docs/                         # ドキュメント（統合済み）
+│   ├── progress_management/      # 🎯 中央管理システム
+│   ├── mathematical_foundation.md # 🎯 数学的基礎
+│   ├── implementation_strategy.md # 🎯 実装戦略
+│   ├── api_guides/               # API戦略（統合済み）
+│   ├── analysis/                 # 分析結果（統合済み）
+│   └── validation_results/       # 検証結果
+│
+├── src/                          # ソースコード
+│   ├── main.py                   # エントリポイント
+│   ├── fitting/                  # LPPLフィッティング
+│   ├── data_sources/             # データ取得（FRED/Alpha Vantage）
+│   ├── visualization/            # 可視化
+│   └── analysis/                 # 分析モジュール
+│
+├── tests/                        # テストコード
+├── results/                      # 実行結果
+└── papers/                       # 参照論文（テキスト版）
+```
 
 ### 技術ドキュメント
-- **[数学的基礎](./docs/mathematical_foundation.md)** - LPPLモデルの理論と数式（論文参照指示あり）
 - **[実装戦略](./docs/implementation_strategy.md)** - システム設計と開発方針
-- **[論文アーカイブ（テキスト版）](./papers/extracted_texts/)** - 実装の科学的根拠となる原論文（テキスト変換済み）
-- **⚠️ 重要**: PDFファイルは`Context low`エラーを避けるため、必ずテキスト版を参照してください
+- **[API統合ガイド](./docs/api_guides/)** - データソース戦略
+- **[論文アーカイブ（テキスト版）](./papers/extracted_texts/)** - 実装の科学的根拠
+- **⚠️ 重要**: PDFファイルは`Context low`エラーを避けるため、必ずテキスト版を参照
 
 ## 🎯 現在の最優先課題
 

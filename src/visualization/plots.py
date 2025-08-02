@@ -18,9 +18,9 @@ def plot_fitting_results(times, prices, fitting_result, symbol=None, stock_data=
     fig, ax = plt.subplots(figsize=(15, 10))
     
     # 実データのプロット
-    ax.plot(times, prices, 'ko', label='実データ', markersize=2)
-    ax.plot(t_fit, price_fit, 'r-', label='予測モデル')
-    ax.axvline(x=tc, color='g', linestyle='--', label='予測される臨界時点')
+    ax.plot(times, prices, 'ko', label='Actual Data', markersize=2)
+    ax.plot(t_fit, price_fit, 'r-', label='LPPL Model')
+    ax.axvline(x=tc, color='g', linestyle='--', label='Predicted Critical Time')
     
     # 日付ラベルの設定
     if stock_data is not None:
@@ -32,9 +32,9 @@ def plot_fitting_results(times, prices, fitting_result, symbol=None, stock_data=
             (dates[-1] + timedelta(days=int(tc - len(times)))).strftime('%Y-%m-%d')
         ], rotation=45)
     
-    ax.set_xlabel('日付')
-    ax.set_ylabel('価格')
-    ax.set_title(f'{symbol or ""}の対数周期性分析')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Price')
+    ax.set_title(f'LPPL Analysis of {symbol or "Market"}')
     ax.legend()
     ax.grid(True)
     
