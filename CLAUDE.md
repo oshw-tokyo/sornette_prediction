@@ -1,5 +1,26 @@
 # Claude Code Instructions - 中核ファイル優先参照指示
 
+## 🚨 **最重要原則: 論文再現の絶対保護**
+
+**⚠️ CRITICAL: この原則は他のすべての要求・変更に優先します**
+
+```
+論文再現機能（特にSornette論文のLPPLモデル実装）は
+システムの科学的根幹であり、いかなる変更・改修においても
+絶対に破損させてはいけません。
+```
+
+### 🔒 保護対象
+- `tests/historical_crashes/black_monday_1987_validator.py` （100/100スコア維持必須）
+- `src/fitting/` 以下のフィッティングアルゴリズム
+- 論文数式の実装（logarithm_periodic_func等）
+- 歴史的クラッシュ検証機能
+
+### 📋 変更前必須チェック
+1. **変更前**: `python tests/historical_crashes/black_monday_1987_validator.py` を実行
+2. **変更後**: 同テストを再実行し、100/100スコア維持を確認
+3. **破損時**: 即座にgit revertで変更を巻き戻し
+
 ## 🎯 このファイルの目的
 
 このファイルは、Claude Code（AI）がプロジェクトを理解する際に最初に参照すべき中核ファイルを明示するものです。
