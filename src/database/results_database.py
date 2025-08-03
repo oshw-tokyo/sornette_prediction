@@ -235,8 +235,11 @@ class ResultsDatabase:
             query = '''
                 SELECT 
                     id, symbol, analysis_date, data_source,
-                    tc, beta, omega, r_squared, quality, confidence, is_usable,
-                    predicted_crash_date, days_to_crash
+                    data_period_start, data_period_end, data_points,
+                    tc, beta, omega, phi, A, B, C,
+                    r_squared, rmse, quality, confidence, is_usable,
+                    predicted_crash_date, days_to_crash,
+                    window_days, total_candidates, successful_candidates
                 FROM analysis_results
             '''
             
