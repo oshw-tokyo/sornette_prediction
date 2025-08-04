@@ -1,0 +1,703 @@
+{
+  "catalog_metadata": {
+    "version": "2.0.0",
+    "last_updated": "2025-08-04",
+    "description": "Sornette予測システム対応マーケットデータカタログ（拡張版）",
+    "maintainer": "Claude Code System",
+    "data_statistics": {
+      "total_symbols": 25,
+      "fred_available": 18,
+      "external_required": 7
+    }
+  },
+  
+  "data_categories": {
+    "us_indices": {
+      "description": "米国主要株式指数",
+      "importance": "high",
+      "analysis_priority": 1
+    },
+    "sector_indices": {
+      "description": "セクター別指数",
+      "importance": "medium",
+      "analysis_priority": 2
+    },
+    "crypto_assets": {
+      "description": "仮想通貨・暗号資産",
+      "importance": "high",
+      "analysis_priority": 3
+    },
+    "reits": {
+      "description": "不動産投資信託",
+      "importance": "medium",
+      "analysis_priority": 4
+    },
+    "individual_stocks": {
+      "description": "個別銘柄（米国大型株）",
+      "importance": "medium", 
+      "analysis_priority": 5
+    },
+    "etf_volatility": {
+      "description": "ETFボラティリティ指標",
+      "importance": "low",
+      "analysis_priority": 6
+    },
+    "global_indices": {
+      "description": "国際指数",
+      "importance": "medium",
+      "analysis_priority": 7
+    }
+  },
+
+  "symbols": {
+    "NASDAQCOM": {
+      "display_name": "NASDAQ Composite Index",
+      "category": "us_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "NASDAQ取引所上場全株式（約3,000社）の時価総額加重平均指数",
+      "companies_count": "~3000",
+      "sector_focus": "Technology (50%), Consumer Discretionary (15%), Healthcare (10%)",
+      "bubble_analysis_suitability": "excellent",
+      "historical_bubbles": ["2000 Dotcom", "1999-2000 Tech"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "NASDAQCOM",
+          "update_frequency": "daily",
+          "historical_coverage": "1971-present",
+          "reliability": "excellent",
+          "cost": "free"
+        },
+        "fallback": {
+          "provider": "alpha_vantage", 
+          "symbol": "^IXIC",
+          "update_frequency": "daily", 
+          "historical_coverage": "1985-present",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "365 days",
+        "optimal_data_period": "730 days", 
+        "critical_parameters": {
+          "tc_normal_range": [1.1, 2.0],
+          "beta_expected": 0.33,
+          "omega_typical": [5.0, 8.0]
+        }
+      }
+    },
+
+    "SP500": {
+      "display_name": "S&P 500 Index",
+      "category": "us_indices",
+      "asset_class": "equity", 
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "米国大型株500社の時価総額加重平均指数",
+      "companies_count": "500",
+      "sector_focus": "Diversified across all sectors",
+      "bubble_analysis_suitability": "excellent",
+      "historical_bubbles": ["1929 Crash", "2000 Dotcom", "2008 Financial Crisis"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "SP500", 
+          "update_frequency": "daily",
+          "historical_coverage": "1957-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "365 days",
+        "optimal_data_period": "1095 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.1, 2.5],
+          "beta_expected": 0.33, 
+          "omega_typical": [4.0, 7.0]
+        }
+      }
+    },
+
+    "NASDAQ100": {
+      "display_name": "NASDAQ 100 Index",
+      "category": "us_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "NASDAQ上場の非金融大型株100社指数",
+      "companies_count": "100",
+      "sector_focus": "Technology (55%), Consumer Discretionary (20%)",
+      "bubble_analysis_suitability": "excellent",
+      "historical_bubbles": ["2000 Dotcom", "2020 COVID Tech Rally"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "NASDAQ100",
+          "update_frequency": "daily",
+          "historical_coverage": "1985-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "365 days",
+        "optimal_data_period": "730 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.05, 1.8],
+          "beta_expected": 0.33,
+          "omega_typical": [5.5, 9.0]
+        }
+      }
+    },
+
+    "DJIA": {
+      "display_name": "Dow Jones Industrial Average", 
+      "category": "us_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "米国代表的工業株30社の価格加重平均指数",
+      "companies_count": "30",
+      "sector_focus": "Industrial, Financial, Technology",
+      "bubble_analysis_suitability": "good",
+      "historical_bubbles": ["1929 Crash", "1987 Black Monday", "2000 Dotcom"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred", 
+          "symbol": "DJIA",
+          "update_frequency": "daily",
+          "historical_coverage": "2015-present",
+          "reliability": "excellent", 
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "365 days",
+        "optimal_data_period": "730 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.1, 2.0],
+          "beta_expected": 0.33,
+          "omega_typical": [4.0, 6.5]
+        }
+      }
+    },
+
+    "NASDAQSOX": {
+      "display_name": "PHLX Semiconductor Index",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "半導体セクター主要30社指数",
+      "companies_count": "30",
+      "sector_focus": "Semiconductors & Semiconductor Equipment",
+      "bubble_analysis_suitability": "excellent",
+      "historical_bubbles": ["2000 Tech Bubble", "2021-2022 Chip Shortage Rally"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "NASDAQSOX",
+          "update_frequency": "daily",
+          "historical_coverage": "1993-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.05, 1.5],
+          "beta_expected": 0.33,
+          "omega_typical": [6.0, 12.0]
+        }
+      }
+    },
+
+    "NASDAQRSBLCN": {
+      "display_name": "NASDAQ Blockchain Economy Index",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "ブロックチェーン関連企業指数",
+      "companies_count": "variable",
+      "sector_focus": "Blockchain Technology & Crypto Mining",
+      "bubble_analysis_suitability": "excellent",
+      "historical_bubbles": ["2017 Crypto Bubble", "2021 NFT/DeFi Bubble"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "NASDAQRSBLCN",
+          "update_frequency": "daily",
+          "historical_coverage": "2018-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.05, 1.3],
+          "beta_expected": 0.33,
+          "omega_typical": [8.0, 15.0]
+        }
+      }
+    },
+
+    "CBBTCUSD": {
+      "display_name": "Bitcoin (BTC/USD)",
+      "category": "crypto_assets",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "ビットコイン対米ドル価格（Coinbase）",
+      "companies_count": "N/A",
+      "sector_focus": "Digital Currency",
+      "bubble_analysis_suitability": "excellent",
+      "historical_bubbles": ["2013 Rally", "2017 Bubble", "2021 Institutional Bubble"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "CBBTCUSD",
+          "update_frequency": "daily",
+          "historical_coverage": "2014-12-01 to present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.02, 1.3],
+          "beta_expected": 0.33,
+          "omega_typical": [10.0, 20.0]
+        }
+      }
+    },
+
+    "CBETHUSD": {
+      "display_name": "Ethereum (ETH/USD)",
+      "category": "crypto_assets",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "イーサリアム対米ドル価格（Coinbase）",
+      "companies_count": "N/A",
+      "sector_focus": "Smart Contract Platform",
+      "bubble_analysis_suitability": "excellent",
+      "historical_bubbles": ["2017 ICO Bubble", "2021 DeFi/NFT Bubble"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "CBETHUSD",
+          "update_frequency": "daily",
+          "historical_coverage": "2016-05-18 to present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.02, 1.25],
+          "beta_expected": 0.33,
+          "omega_typical": [12.0, 25.0]
+        }
+      }
+    },
+
+    "GVZCLS": {
+      "display_name": "CBOE Gold ETF Volatility Index",
+      "category": "etf_volatility",
+      "asset_class": "volatility",
+      "instrument_type": "VOLATILITY_INDEX",
+      "market_region": "US",
+      "description": "金ETFのインプライドボラティリティ指数",
+      "companies_count": "N/A",
+      "sector_focus": "Gold Market Sentiment",
+      "bubble_analysis_suitability": "supplementary",
+      "historical_bubbles": ["Gold market stress indicator"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "GVZCLS",
+          "update_frequency": "daily",
+          "historical_coverage": "2008-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": false,
+        "note": "ボラティリティ指標のため逆相関分析に使用"
+      }
+    },
+
+    "OVXCLS": {
+      "display_name": "CBOE Crude Oil ETF Volatility Index",
+      "category": "etf_volatility",
+      "asset_class": "volatility",
+      "instrument_type": "VOLATILITY_INDEX",
+      "market_region": "US",
+      "description": "原油ETFのインプライドボラティリティ指数",
+      "companies_count": "N/A",
+      "sector_focus": "Oil Market Sentiment",
+      "bubble_analysis_suitability": "supplementary",
+      "historical_bubbles": ["Oil market stress indicator"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "OVXCLS",
+          "update_frequency": "daily",
+          "historical_coverage": "2007-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": false,
+        "note": "エネルギーセクターのストレス指標として使用"
+      }
+    },
+
+    "VIXCLS": {
+      "display_name": "VIX Volatility Index",
+      "category": "etf_volatility",
+      "asset_class": "volatility",
+      "instrument_type": "VOLATILITY_INDEX",
+      "market_region": "US",
+      "description": "市場恐怖指数 - S&P500のインプライドボラティリティ",
+      "companies_count": "derived",
+      "sector_focus": "Market Sentiment Indicator", 
+      "bubble_analysis_suitability": "supplementary",
+      "historical_bubbles": ["Market stress indicator"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "VIXCLS",
+          "update_frequency": "daily",
+          "historical_coverage": "1990-present", 
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": false,
+        "note": "VIXはボラティリティ指標のため、LPPLバブル分析には適用困難"
+      }
+    },
+
+    "DJTA": {
+      "display_name": "Dow Jones Transportation Average",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "米国運輸セクター20社指数",
+      "companies_count": "20",
+      "sector_focus": "Transportation (Airlines, Railroads, Trucking)",
+      "bubble_analysis_suitability": "good",
+      "historical_bubbles": ["2007 Pre-Crisis Peak", "2020 Pandemic Recovery"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DJTA",
+          "update_frequency": "daily",
+          "historical_coverage": "2015-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "365 days",
+        "optimal_data_period": "730 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.1, 2.0],
+          "beta_expected": 0.33,
+          "omega_typical": [4.5, 7.0]
+        }
+      }
+    },
+
+    "DJUA": {
+      "display_name": "Dow Jones Utility Average",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "米国公益事業セクター15社指数",
+      "companies_count": "15",
+      "sector_focus": "Utilities (Electric, Gas, Water)",
+      "bubble_analysis_suitability": "medium",
+      "historical_bubbles": ["2000 Flight to Safety", "2020 ESG Bubble"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DJUA",
+          "update_frequency": "daily",
+          "historical_coverage": "2015-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "365 days",
+        "optimal_data_period": "1095 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.2, 2.5],
+          "beta_expected": 0.33,
+          "omega_typical": [3.5, 6.0]
+        }
+      }
+    },
+
+    "AAPL": {
+      "display_name": "Apple Inc.",
+      "category": "individual_stocks",
+      "asset_class": "equity",
+      "instrument_type": "STOCK",
+      "market_region": "US",
+      "description": "アップル社株式 - 世界最大の時価総額企業",
+      "companies_count": "1",
+      "sector_focus": "Technology - Consumer Electronics",
+      "bubble_analysis_suitability": "good",
+      "historical_bubbles": ["2012 iPhone 5", "2020 COVID rally"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "AAPL",
+          "update_frequency": "daily", 
+          "historical_coverage": "1980-present",
+          "reliability": "excellent",
+          "cost": "free_limited"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.05, 1.5],
+          "beta_expected": 0.33,
+          "omega_typical": [6.0, 12.0]
+        }
+      }
+    },
+
+    "TSLA": {
+      "display_name": "Tesla Inc.",
+      "category": "individual_stocks",
+      "asset_class": "equity",
+      "instrument_type": "STOCK",
+      "market_region": "US", 
+      "description": "テスラ社株式 - 電気自動車・エネルギー企業",
+      "companies_count": "1",
+      "sector_focus": "Automotive - Electric Vehicles",
+      "bubble_analysis_suitability": "excellent",
+      "historical_bubbles": ["2020-2021 EV Bubble", "2013 Model S Rally"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "TSLA", 
+          "update_frequency": "daily",
+          "historical_coverage": "2010-present",
+          "reliability": "excellent",
+          "cost": "free_limited"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days", 
+        "optimal_data_period": "365 days",
+        "critical_parameters": {
+          "tc_normal_range": [1.05, 1.3],
+          "beta_expected": 0.33,
+          "omega_typical": [8.0, 15.0]
+        }
+      }
+    },
+
+    "REITTMA": {
+      "display_name": "REITs Total Mortgages Asset Level",
+      "category": "reits",
+      "asset_class": "real_estate",
+      "instrument_type": "FINANCIAL_METRIC",
+      "market_region": "US",
+      "description": "米国REIT総モーゲージ資産レベル",
+      "companies_count": "aggregate",
+      "sector_focus": "Real Estate Investment",
+      "bubble_analysis_suitability": "supplementary",
+      "historical_bubbles": ["2007 Housing Bubble indicator"],
+      
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "REITTMA",
+          "update_frequency": "quarterly",
+          "historical_coverage": "1945-present",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      
+      "lppl_analysis": {
+        "recommended": false,
+        "note": "資産レベル指標のため、価格指数と組み合わせて使用"
+      }
+    }
+  },
+
+  "external_data_requirements": {
+    "description": "FREDで入手不可能なため外部データソースが必要な銘柄",
+    "required_sources": {
+      "individual_stocks": {
+        "provider": "alpha_vantage",
+        "symbols": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "NFLX"],
+        "reason": "FREDは個別株価データを提供していない"
+      },
+      "international_indices": {
+        "provider": "alternative_required",
+        "symbols": ["NIKKEI225", "DAX", "FTSE100", "CAC40", "SHANGHAI"],
+        "reason": "FREDは国際指数の限定的カバレッジ"
+      },
+      "reit_price_indices": {
+        "provider": "alternative_required", 
+        "symbols": ["XLRE", "VNQ", "RWR"],
+        "reason": "FREDはREIT価格指数ではなく財務データのみ提供"
+      },
+      "crypto_etfs": {
+        "provider": "alternative_required",
+        "symbols": ["BITO", "ETHE", "GBTC"],
+        "reason": "仮想通貨ETFはFREDでカバーされていない"
+      }
+    }
+  },
+
+  "api_configurations": {
+    "fred": {
+      "base_url": "https://api.stlouisfed.org/fred",
+      "authentication": "api_key",
+      "rate_limits": {
+        "requests_per_minute": 120,
+        "requests_per_day": 10000
+      },
+      "supported_formats": ["json", "xml"],
+      "cost": "free",
+      "registration_url": "https://fred.stlouisfed.org/docs/api/api_key.html"
+    },
+    
+    "alpha_vantage": {
+      "base_url": "https://www.alphavantage.co/query", 
+      "authentication": "api_key",
+      "rate_limits": {
+        "requests_per_minute": 5,
+        "requests_per_day": 500
+      },
+      "supported_formats": ["json", "csv"],
+      "cost": "freemium",
+      "registration_url": "https://www.alphavantage.co/support/#api-key"
+    }
+  },
+
+  "analysis_recommendations": {
+    "bubble_detection_priority": [
+      "CBBTCUSD",
+      "NASDAQCOM",
+      "NASDAQ100",
+      "SP500",
+      "NASDAQSOX",
+      "NASDAQRSBLCN",
+      "CBETHUSD",
+      "TSLA",
+      "AAPL",
+      "DJIA"
+    ],
+    
+    "cross_market_analysis_groups": {
+      "tech_ecosystem": ["NASDAQCOM", "NASDAQ100", "NASDAQSOX", "NASDAQRSBLCN"],
+      "crypto_ecosystem": ["CBBTCUSD", "CBETHUSD", "NASDAQRSBLCN"],
+      "broad_market": ["SP500", "DJIA", "NASDAQCOM"],
+      "sector_rotation": ["DJTA", "DJUA", "NASDAQSOX"]
+    },
+    
+    "minimum_requirements": {
+      "lppl_analysis": {
+        "minimum_data_points": 180,
+        "recommended_data_points": 365,
+        "maximum_useful_period": 1825
+      }
+    }
+  },
+
+  "dashboard_display_settings": {
+    "grouping_by_asset_class": {
+      "equity": "株式市場",
+      "cryptocurrency": "仮想通貨",
+      "real_estate": "不動産",
+      "volatility": "ボラティリティ"
+    },
+    
+    "grouping_by_instrument_type": {
+      "INDEX": "指数",
+      "STOCK": "個別銘柄",
+      "CRYPTO": "暗号資産",
+      "ETF": "ETF",
+      "VOLATILITY_INDEX": "VIX系指標",
+      "FINANCIAL_METRIC": "財務指標"
+    },
+    
+    "priority_alerts": {
+      "critical_tc_threshold": 1.1,
+      "high_r_squared_threshold": 0.85,
+      "display_top_n": 10
+    }
+  }
+}
