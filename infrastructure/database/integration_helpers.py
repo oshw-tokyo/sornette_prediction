@@ -10,7 +10,7 @@ import pandas as pd
 import os
 
 from .results_database import ResultsDatabase
-from ..fitting.multi_criteria_selection import SelectionResult, FittingCandidate
+from core.fitting.multi_criteria_selection import SelectionResult, FittingCandidate
 
 class AnalysisResultSaver:
     """分析結果の自動保存クラス"""
@@ -65,7 +65,7 @@ class AnalysisResultSaver:
             'quality': best.quality_assessment.quality.value if best.quality_assessment else 'unknown',
             'confidence': best.quality_assessment.confidence if best.quality_assessment else 0.0,
             'is_usable': best.quality_assessment.is_usable if best.quality_assessment else False,
-            'predicted_crash_date': predicted_date.strftime('%Y-%m-%d') if predicted_date else None,
+            'predicted_crash_date': predicted_date.strftime('%Y-%m-%d %H:%M:%S') if predicted_date else None,
             'days_to_crash': days_to_crash,
             'fitting_method': 'multi_criteria',
             'window_days': len(data),
@@ -109,24 +109,40 @@ class AnalysisResultSaver:
     
     def _calculate_predicted_date(self, tc: float, last_date: pd.Timestamp) -> Optional[datetime]:
         """
-        tc値から予測日を計算
+        tc値から予測日時を計算（時間精度対応）
         
         Args:
             tc: tc値（正規化時間）
             last_date: データの最終日
             
         Returns:
-            datetime: 予測日
+            datetime: 予測日時（時間精度まで含む）
         """
         try:
             if tc > 1.0:
-                # データ期間を超えた予測
+                # データ期間を超えた予測（将来）
                 days_beyond = (tc - 1.0) * 365  # 1年を基準とした近似
-                return last_date + timedelta(days=days_beyond)
+                
+                # 日数と時間に分離（時間精度対応）
+                full_days = int(days_beyond)
+                fractional_day = days_beyond - full_days
+                hours = fractional_day * 24
+                
+                # pandas.Timestampをdatetimeに変換
+                if hasattr(last_date, 'to_pydatetime'):
+                    base_datetime = last_date.to_pydatetime()
+                else:
+                    base_datetime = last_date
+                
+                # 時間精度まで含めた予測日時を計算
+                predicted_datetime = base_datetime + timedelta(days=full_days, hours=hours)
+                
+                return predicted_datetime
             else:
-                # データ期間内の予測（過去）
+                # データ期間内の予測（過去）- 通常はクラッシュ予測では使用されない
                 return None
-        except:
+        except Exception as e:
+            print(f"⚠️ tc値から日時計算エラー: tc={tc}, error={str(e)}")
             return None
     
     def _extract_quality_metadata(self, candidate: FittingCandidate) -> Dict[str, Any]:

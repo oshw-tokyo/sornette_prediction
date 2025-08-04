@@ -1,7 +1,6 @@
 #!/bin/bash
-
 # 銘柄別可視化ダッシュボード起動スクリプト
-# Usage: ./start_symbol_dashboard.sh
+# プロジェクト方針に従い、entry_points/main.pyを経由して起動
 
 echo "🚀 Starting Symbol Visualization Dashboard..."
 
@@ -21,7 +20,7 @@ fi
 # データベースファイルが存在するか確認
 if [ ! -f "results/analysis_results.db" ]; then
     echo "⚠️  Database file not found. Please run some analysis first."
-    echo "   You can use: python examples/basic_analysis.py"
+    echo "   You can use: python entry_points/main.py analyze ALL"
     read -p "Continue anyway? (y/n): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -34,8 +33,5 @@ echo "🌐 Starting Streamlit dashboard..."
 echo "📊 Dashboard will be available at: http://localhost:8501"
 echo "🔒 To stop the dashboard, press Ctrl+C"
 
-streamlit run src/web_interface/symbol_visualization_dashboard.py \
-    --server.port 8501 \
-    --server.address localhost \
-    --browser.serverAddress localhost \
-    --browser.serverPort 8501
+# 統一エントリーポイント経由で起動
+python entry_points/main.py dashboard --type main

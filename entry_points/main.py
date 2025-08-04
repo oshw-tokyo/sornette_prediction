@@ -42,15 +42,38 @@ def run_analysis(symbol, period='1y'):
     """Run LPPL analysis on specified symbol"""
     print(f"📊 Running LPPL analysis: {symbol} ({period})")
     
-    # Import and run basic analysis
-    try:
-        from applications.examples.basic_analysis import main as run_basic_analysis
-        run_basic_analysis()
-    except ImportError:
-        print("❌ Analysis module not available")
-        return False
-    
-    return True
+    if symbol.upper() == 'ALL':
+        # 全銘柄包括解析（カタログベース）
+        try:
+            from applications.analysis_tools.crash_alert_system import main as run_crash_alert
+            print("🌍 カタログベース包括解析を実行...")
+            run_crash_alert()
+            return True
+        except Exception as e:
+            print(f"❌ Crash alert analysis error: {e}")
+            return False
+    elif symbol.upper() == 'MARKET':
+        # 市場リスク分析
+        try:
+            from applications.analysis_tools.market_analyzer import main as run_market_analysis
+            print("📈 市場リスク分析を実行...")
+            run_market_analysis()
+            return True
+        except Exception as e:
+            print(f"❌ Market analysis error: {e}")
+            return False
+    else:
+        # 個別銘柄解析
+        try:
+            from applications.examples.simple_symbol_analysis import analyze_symbol
+            print(f"🎯 個別銘柄解析: {symbol}")
+            result = analyze_symbol(symbol, period)
+            if result:
+                print(f"✅ {symbol} analysis completed")
+            return True
+        except Exception as e:
+            print(f"❌ Symbol analysis error: {e}")
+            return False
 
 def run_validation(crash_type='all'):
     """Run historical crash validation"""
@@ -79,32 +102,12 @@ def run_validation(crash_type='all'):
             print(f"❌ 2000 validation error: {e}")
 
 def run_scheduler(symbol):
-    """Run analysis scheduler for symbol"""
-    print(f"⏰ Running scheduler for: {symbol}")
-    
-    if symbol.upper() == 'NASDAQCOM':
-        try:
-            import subprocess
-            result = subprocess.run([
-                sys.executable, 'applications/schedulers/nasdaq_scheduler.py'
-            ])
-            return result.returncode == 0
-        except Exception as e:
-            print(f"❌ NASDAQ scheduler error: {e}")
-            return False
-    elif symbol.upper() == 'AAPL':
-        try:
-            import subprocess
-            result = subprocess.run([
-                sys.executable, 'applications/schedulers/aapl_scheduler.py'
-            ])
-            return result.returncode == 0
-        except Exception as e:
-            print(f"❌ AAPL scheduler error: {e}")
-            return False
-    else:
-        print(f"❌ Scheduler not available for symbol: {symbol}")
-        return False
+    """Run analysis scheduler for symbol (DEPRECATED)"""
+    print(f"⚠️ スケジューラー機能は廃止されました")
+    print(f"📊 代わりに以下のコマンドを使用してください:")
+    print(f"   python applications/analysis_tools/crash_alert_system.py")
+    print(f"   python applications/analysis_tools/market_analyzer.py")
+    return False
 
 def run_dev_tools(check_env=False, debug_viz=False):
     """Run development tools"""
@@ -143,10 +146,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python entry_points/main.py dashboard --type symbol
-  python entry_points/main.py analyze NASDAQCOM --period 2y
+  python entry_points/main.py dashboard --type main
+  python entry_points/main.py analyze ALL              # カタログ全銘柄解析
+  python entry_points/main.py analyze MARKET           # 市場リスク分析
+  python entry_points/main.py analyze NASDAQCOM --period 2y  # 個別銘柄解析
   python entry_points/main.py validate --crash 1987
-  python entry_points/main.py schedule AAPL
   python entry_points/main.py dev --check-env
         """
     )
@@ -160,8 +164,8 @@ Examples:
     
     # Analysis commands  
     analysis_parser = subparsers.add_parser('analyze', help='Run LPPL analysis')
-    analysis_parser.add_argument('symbol', help='Symbol to analyze')
-    analysis_parser.add_argument('--period', default='1y', help='Analysis period')
+    analysis_parser.add_argument('symbol', help='Symbol to analyze (ALL for all symbols, MARKET for market analysis, or specific symbol)')
+    analysis_parser.add_argument('--period', default='1y', help='Analysis period (1y, 2y, 3y, 5y)')
     
     # Validation commands
     validate_parser = subparsers.add_parser('validate', help='Run validation tests')

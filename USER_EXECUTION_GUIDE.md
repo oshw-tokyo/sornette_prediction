@@ -49,8 +49,14 @@ cp .env.example .env
 
 ### 1. 単一市場の簡易分析
 ```bash
-# NASDAQ分析の実行
-python simple_1987_prediction.py
+# 統一エントリーポイントからの実行（推奨）
+python entry_points/main.py analyze NASDAQCOM --period 1y
+
+# カタログ全銘柄の包括解析
+python entry_points/main.py analyze ALL
+
+# 市場リスク分析
+python entry_points/main.py analyze MARKET
 ```
 
 **期待される出力**:
@@ -77,14 +83,18 @@ python test_quality_aware_fitting.py
 
 ### 1. 複数市場の同時分析
 ```bash
-# 包括的市場分析の実行
-python comprehensive_market_analysis.py
+# マーケットデータカタログv2.0による包括分析
+python entry_points/main.py analyze ALL
+
+# 市場リスク分析（全市場の統合分析）
+python entry_points/main.py analyze MARKET
 ```
 
 **期待される結果**:
-- 米国主要市場（NASDAQ, S&P500, ダウ平均）の分析
-- リスクレベル別分類
-- 高リスク市場の特定
+- **16銘柄・7カテゴリ**の包括分析（crypto, indices, sectors, REITs等）
+- **4段階リスク評価**（CRITICAL/HIGH/MEDIUM/LOW）
+- **投資判断支援**（ポジションサイズ推奨付き）
+- **APIレート制限管理**（自動待機・進捗表示）
 - 可視化レポート生成
 
 ### 2. 結果の確認
@@ -176,8 +186,11 @@ head -20 results/retrospective_analysis/nasdaq_retrospective_data_*.csv
 
 ### 1. Streamlitダッシュボードの起動
 ```bash
-# ダッシュボード起動
-streamlit run src/ui/criteria_comparison_dashboard.py
+# ダッシュボード起動（統一エントリーポイント）
+python entry_points/main.py dashboard --type main
+
+# 旧実装（シンボル別ダッシュボード）
+python entry_points/main.py dashboard --type symbol
 ```
 
 ### 2. ダッシュボードの使用方法
@@ -354,5 +367,26 @@ done
 
 ---
 
-*最終更新: 2025年8月2日*
+## 🎯 最新の実行方法（2025-08-04更新）
+
+### 重要な変更点
+1. **全ての実行は`entry_points/main.py`から行う**（プロジェクト方針）
+2. **個別スケジューラーは廃止**（カタログベースに統合）
+3. **時間精度付き予測**（日時まで保存されるように改善）
+
+### クイックスタート
+```bash
+# 環境確認
+python entry_points/main.py dev --check-env
+
+# カタログ全銘柄解析（25銘柄を優先度順に）
+python entry_points/main.py analyze ALL
+
+# ダッシュボード確認
+python entry_points/main.py dashboard --type main
+```
+
+---
+
+*最終更新: 2025年8月4日*
 *作成者: Claude Code (Anthropic)*

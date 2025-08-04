@@ -86,44 +86,64 @@ sornette_prediction/
 pip install -r requirements.txt
 ```
 
-### 2. 銘柄リストの準備
-```bash
-python src/get_market_symbols.py
-```
+### 2. 分析実行
 
-### 3. 分析実行
+**全ての実行は統一エントリーポイント（`entry_points/main.py`）から行います**：
+
 ```bash
-# 基本的な市場分析
-python src/analysis/market_analysis.py
+# カタログ全銘柄の包括解析（推奨）
+python entry_points/main.py analyze ALL
+
+# 個別銘柄の分析
+python entry_points/main.py analyze NASDAQCOM --period 2y
 
 # 過去のクラッシュ検証
-python -m src.reproducibility_validation.crash_1987_validator
+python entry_points/main.py validate --crash 1987
+
+# ダッシュボード起動
+python entry_points/main.py dashboard --type main
 ```
 
-## 📁 プロジェクト構造
+## 📁 プロジェクト構造（4層アーキテクチャ）
 
 ```
 sornette_prediction/
 ├── README.md                          # このファイル
+├── CLAUDE.md                          # AI開発者向け指示書（重要）
+├── USER_EXECUTION_GUIDE.md            # ユーザー実行ガイド
+│
+├── entry_points/                      # 統一エントリーポイント
+│   └── main.py                        # 全機能への中央インターフェース
+│
+├── core/                              # 科学的中核（保護対象）
+│   ├── fitting/                       # LPPLフィッティングアルゴリズム
+│   ├── sornette_theory/               # 理論実装
+│   └── validation/                    # 歴史的検証（100/100スコア保護）
+│
+├── applications/                      # アプリケーション層
+│   ├── analysis_tools/                # 分析ツール（crash_alert_system等）
+│   ├── dashboards/                    # Webダッシュボード
+│   └── examples/                      # 実行例・デモ
+│
+├── infrastructure/                    # インフラ層
+│   ├── data_sources/                  # データ取得（FRED/Alpha Vantage）
+│   ├── database/                      # SQLite結果管理
+│   └── visualization/                 # 可視化ツール
+│
+├── tests/                             # テストコード
+│   └── historical_crashes/            # 歴史的クラッシュ検証
+│
 ├── docs/                              # ドキュメント
 │   ├── progress_management/           # 進捗・Issue管理システム
 │   ├── mathematical_foundation.md     # 数学的基礎（論文再現結果含む）
 │   └── implementation_strategy.md     # 実装戦略
-├── src/                               # ソースコード
-│   ├── fitting/                       # LPPLフィッティング
-│   ├── analysis/                      # 市場分析
-│   ├── reproducibility_validation/    # 論文再現性検証
-│   └── visualization/                 # 可視化
-├── tests/                             # テストコード
-│   └── reproducibility/               # 再現性テスト
-├── tools/                             # プロジェクトツール
-│   ├── pdf_converter.py               # PDF変換ツール
-│   └── validation/                    # 検証・デバッグツール
-├── plots/                             # 生成された図表
-│   └── validation/                    # 検証結果の図表
+│
+├── results/                           # 分析結果
+│   └── analysis_results.db            # SQLiteデータベース
+│
 └── papers/                            # 論文アーカイブ
-    ├── extracted_texts/               # テキスト変換済み論文（作業用）
-    └── pdf_archive/                   # 元PDFファイル（直接読み込み禁止）
+    ├── extracted_texts/               # テキスト変換済み論文
+    └── pdf_archive/                   # 元PDFファイル
 ```
 
 ## 🗂️ ファイル整理方針
