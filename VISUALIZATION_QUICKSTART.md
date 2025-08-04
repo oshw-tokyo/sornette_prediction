@@ -21,19 +21,19 @@
 
 ## 🚀 起動方法
 
-### 方法1: 直接起動
+### 統一エントリーポイント経由（推奨）
 ```bash
-./start_symbol_dashboard.sh
+# ダッシュボード起動（統一版）
+./start_dashboard.sh
+
+# または直接実行
+python entry_points/main.py dashboard --type main
 ```
 
-### 方法2: ランチャー経由
+### 旧方法（非推奨・参考用）
 ```bash
-streamlit run src/web_interface/dashboard_launcher.py
-```
-
-### 方法3: Python直接実行
-```bash
-streamlit run src/web_interface/symbol_visualization_dashboard.py --server.port 8501
+# 以下は4層アーキテクチャ移行前の旧方法
+streamlit run applications/dashboards/main_dashboard.py
 ```
 
 ## 🎛️ 操作方法
@@ -117,10 +117,10 @@ python test_symbol_dashboard.py
 
 ## 🔗 関連ファイル
 
-- `src/web_interface/symbol_visualization_dashboard.py`: メインダッシュボード
-- `src/web_interface/dashboard_launcher.py`: ランチャー
-- `start_symbol_dashboard.sh`: 起動スクリプト
-- `test_symbol_dashboard.py`: テストスクリプト
+- `applications/dashboards/main_dashboard.py`: メインダッシュボード
+- `entry_points/main.py`: 統一エントリーポイント
+- `start_dashboard.sh`: 起動スクリプト（統一版）
+- `infrastructure/visualization/`: 可視化ツール
 
 ---
 
