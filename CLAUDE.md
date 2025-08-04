@@ -25,6 +25,43 @@ python entry_points/main.py validate --crash 1987
 
 **科学的検証が破損した場合は即座にgit revertで変更を巻き戻してください。**
 
+## 🕐 **最重要概念: 分析基準日の定義**
+
+**⚠️ CRITICAL: この概念は全実装で必ず遵守すること**
+
+### **分析基準日 (Analysis Basis Date) の定義**
+```
+分析基準日 = 分析対象期間の最終日
+例: 2024-01-01〜2025-08-01の365日間のデータを分析する場合
+    → 分析基準日は2025-08-01
+```
+
+### **🚨 重要な区別**
+- **分析基準日 (analysis_basis_date)**: データ期間の最終日 ← **表示・ソートの基準**
+- **分析実行日 (analysis_date)**: 実際に計算を実行した日時 ← 表示・ソート対象外
+
+### **実装時の必須ルール**
+1. **ダッシュボード表示**: 必ず `analysis_basis_date` でソート
+2. **データ取得クエリ**: `ORDER BY analysis_basis_date DESC`
+3. **時系列表示**: 分析基準日をX軸に使用
+4. **履歴管理**: 同一銘柄の分析基準日ベースで重複管理
+
+### **❌ 避けるべき実装パターン**
+```sql
+-- ❌ 間違い: 実行日でソート
+ORDER BY analysis_date DESC
+
+-- ✅ 正しい: 基準日でソート  
+ORDER BY analysis_basis_date DESC
+```
+
+### **背景説明**
+- フィッティング結果は「その時点までのデータに基づく予測」
+- 重要なのは「いつまでのデータで分析したか」（基準日）
+- 「いつ計算したか」（実行日）は技術的メタデータに過ぎない
+
+**この概念違反は科学的解釈の誤りを招くため、論文再現保護と同等に重要です。**
+
 ---
 
 ## 🎯 このファイルの目的
@@ -173,6 +210,18 @@ ALPHA_VANTAGE_KEY=your_alpha_vantage_key_here
 - **投資判断支援** (ポジションサイズ推奨付き)
 - **API制限管理** (自動待機・進捗表示)
 
+### 🕐 **定期スケジュール分析システム** ⭐⭐⭐⭐⭐ **要件定義完了**
+- **自動スケジュール実行**: 毎週土曜日朝の定期分析（頻度設定可能）
+- **時系列データ蓄積**: 継続的な予測履歴の構築・追跡
+- **差分実行**: 重複回避による効率的なデータ更新
+- **バックフィル機能**: 初回実行時の過去データ自動蓄積
+- **分析基準日**: フィッティング期間最終日基準の科学的予測
+- **予測有効期限**: 時間経過による予測精度劣化の自動管理
+
+**📋 詳細仕様**: 
+- `docs/scheduled_analysis_requirements.md` - 完全要件定義
+- `docs/theoretical_validation.md` - 理論的妥当性検証 (✅ 5/5推奨)
+
 ### 🧪 **論文再現システム**
 - **1987年ブラックマンデー検証** (100/100スコア保護)
 - **2000年ドットコムバブル検証** (定性的検証)
@@ -185,6 +234,11 @@ python entry_points/main.py analyze ALL      # カタログ全銘柄包括解析
 python entry_points/main.py analyze SYMBOL   # 個別銘柄解析
 python entry_points/main.py dashboard        # ダッシュボード起動
 python entry_points/main.py validate         # 論文再現テスト
+
+# 🕐 定期解析システム（実装中）
+python entry_points/main.py scheduled-analysis run     # 定期解析実行
+python entry_points/main.py scheduled-analysis backfill --start 2024-01-01  # 過去データ蓄積
+python entry_points/main.py scheduled-analysis status  # 解析状態確認
 ```
 
 ---

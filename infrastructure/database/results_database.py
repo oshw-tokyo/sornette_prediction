@@ -110,12 +110,57 @@ class ResultsDatabase:
                 )
             ''')
             
+            # スケジュール設定テーブル
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS schedule_config (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    schedule_name TEXT UNIQUE NOT NULL,
+                    frequency TEXT NOT NULL,  -- 'daily', 'weekly', 'monthly'
+                    day_of_week INTEGER,      -- 0=月曜, 6=日曜 (weekly用)
+                    hour INTEGER DEFAULT 9,
+                    minute INTEGER DEFAULT 0,
+                    timezone TEXT DEFAULT 'UTC',
+                    symbols TEXT,             -- JSON配列形式
+                    enabled BOOLEAN DEFAULT 1,
+                    last_run TIMESTAMP,
+                    next_run TIMESTAMP,
+                    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    auto_backfill_limit INTEGER DEFAULT 30
+                )
+            ''')
+            
+            # analysis_resultsテーブルの拡張（既存テーブルに列追加）
+            self._add_column_if_not_exists(cursor, 'analysis_results', 'schedule_name', 'TEXT')
+            self._add_column_if_not_exists(cursor, 'analysis_results', 'analysis_basis_date', 'DATE')
+            self._add_column_if_not_exists(cursor, 'analysis_results', 'is_scheduled', 'BOOLEAN DEFAULT 0')
+            self._add_column_if_not_exists(cursor, 'analysis_results', 'backfill_batch_id', 'TEXT')
+            self._add_column_if_not_exists(cursor, 'analysis_results', 'is_expired', 'BOOLEAN DEFAULT 0')
+            
+            # 曜日メタ情報の追加（ダッシュボード表示最適化）
+            self._add_column_if_not_exists(cursor, 'analysis_results', 'basis_day_of_week', 'INTEGER')  # 0=月曜, 6=日曜
+            self._add_column_if_not_exists(cursor, 'analysis_results', 'analysis_frequency', 'TEXT')     # weekly, daily
+            
             # インデックス作成
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_symbol_date ON analysis_results (symbol, analysis_date)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_quality ON analysis_results (quality, is_usable)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_schedule_enabled ON schedule_config (enabled)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_schedule_basis ON analysis_results (schedule_name, analysis_basis_date)')
+            
+            # 分析基準日ベースのインデックス（最重要：ダッシュボード表示最適化）
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_symbol_basis_date ON analysis_results (symbol, analysis_basis_date DESC)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_frequency_basis ON analysis_results (analysis_frequency, analysis_basis_date DESC)')
             
             conn.commit()
             print(f"📊 データベース初期化完了: {self.db_path}")
+    
+    def _add_column_if_not_exists(self, cursor, table_name: str, column_name: str, column_def: str):
+        """テーブルに列が存在しない場合のみ追加"""
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        if column_name not in columns:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
+            print(f"  ✅ 列追加: {table_name}.{column_name}")
     
     def save_analysis_result(self, result_data: Dict[str, Any]) -> int:
         """
@@ -248,10 +293,84 @@ class ResultsDatabase:
                 query += ' WHERE symbol = ?'
                 params.append(symbol)
             
-            query += ' ORDER BY analysis_date DESC LIMIT ?'
+            # ⚠️ CRITICAL: 分析基準日でソート（analysis_dateではない）
+            query += ' ORDER BY analysis_basis_date DESC, analysis_date DESC LIMIT ?'
             params.append(limit)
             
             return pd.read_sql_query(query, conn, params=params)
+    
+    def get_recent_analyses_by_frequency(self, symbol: str = None, frequency: str = 'weekly', limit: int = 50) -> pd.DataFrame:
+        """
+        頻度別最近の分析結果を取得（週次データ優先表示）
+        
+        Args:
+            symbol: 特定銘柄のみ取得する場合
+            frequency: 取得頻度 ('weekly', 'daily', 'monthly')
+            limit: 取得件数制限
+            
+        Returns:
+            DataFrame: 分析結果
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            query = '''
+                SELECT 
+                    id, symbol, analysis_date, data_source,
+                    data_period_start, data_period_end, data_points,
+                    tc, beta, omega, phi, A, B, C,
+                    r_squared, rmse, quality, confidence, is_usable,
+                    predicted_crash_date, days_to_crash,
+                    window_days, total_candidates, successful_candidates,
+                    schedule_name, analysis_basis_date, analysis_frequency,
+                    basis_day_of_week
+                FROM analysis_results
+                WHERE analysis_frequency = ?
+            '''
+            params = [frequency]
+            
+            if symbol:
+                query += ' AND symbol = ?'
+                params.append(symbol)
+            
+            # ⚠️ CRITICAL: 分析基準日でソート（analysis_dateではない）
+            query += ' ORDER BY analysis_basis_date DESC, analysis_date DESC LIMIT ?'
+            params.append(limit)
+            
+            return pd.read_sql_query(query, conn, params=params)
+    
+    def get_latest_analysis_per_frequency(self, symbol: str) -> pd.DataFrame:
+        """
+        銘柄別・頻度別の最新分析結果を取得
+        
+        Args:
+            symbol: 対象銘柄
+            
+        Returns:
+            DataFrame: 頻度別最新分析結果
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            query = '''
+                SELECT DISTINCT
+                    a1.id, a1.symbol, a1.analysis_date, a1.data_source,
+                    a1.data_period_start, a1.data_period_end, a1.data_points,
+                    a1.tc, a1.beta, a1.omega, a1.phi, a1.A, a1.B, a1.C,
+                    a1.r_squared, a1.rmse, a1.quality, a1.confidence, a1.is_usable,
+                    a1.predicted_crash_date, a1.days_to_crash,
+                    a1.window_days, a1.total_candidates, a1.successful_candidates,
+                    a1.schedule_name, a1.analysis_basis_date, a1.analysis_frequency,
+                    a1.basis_day_of_week
+                FROM analysis_results a1
+                INNER JOIN (
+                    SELECT analysis_frequency, MAX(analysis_basis_date) as max_basis_date
+                    FROM analysis_results 
+                    WHERE symbol = ? AND analysis_frequency IS NOT NULL
+                    GROUP BY analysis_frequency
+                ) a2 ON a1.analysis_frequency = a2.analysis_frequency 
+                    AND a1.analysis_basis_date = a2.max_basis_date
+                WHERE a1.symbol = ?
+                ORDER BY a1.analysis_frequency, a1.analysis_basis_date DESC
+            '''
+            
+            return pd.read_sql_query(query, conn, params=[symbol, symbol])
     
     def get_analysis_details(self, analysis_id: int) -> Dict[str, Any]:
         """

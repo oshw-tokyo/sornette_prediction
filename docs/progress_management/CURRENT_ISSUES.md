@@ -31,11 +31,11 @@
 
 ## Issue統計サマリー
 
-- **総アクティブIssue数**: 19
+- **総アクティブIssue数**: 21
 - **Critical**: 1
 - **High**: 6  
-- **Medium**: 11
-- **Low**: 1
+- **Medium**: 12
+- **Low**: 2
 - **今週解決**: 6
 - **平均解決時間**: 1日
 
@@ -80,6 +80,7 @@
 | I019 | ParametersタブData Period表示問題 | data_start・data_end・period_daysが全てN/A表示・データ存在するが表示されない | 2025-08-04 | ダッシュボード機能性 | 調査中 |
 | I022 | NASDAQ高リスク分析結果の科学的検証必要 | tc=1.0057・R²=0.9163で🔴高リスク判定されたが、にわかには信じがたい結果のため詳細検証が必要 | 2025-08-04 | 予測結果の信頼性 | 検証計画策定 |
 | I023 | FREDで入手不可能な重要データソースの代替確保 | 国際指数(日経225・DAX等)・REIT価格指数・仮想通貨ETF等の重要データがFREDで取得不可 | 2025-08-04 | データカバレッジ | 対応検討中 |
+| I028 | 通知システム未実装 | 定期分析やクラッシュ警告の通知機能が未実装・リアルタイム監視に必要・メール/Slack/Discord等の通知手段検討必要 | 2025-08-05 | 実運用・監視 | 要件定義必要 |
 
 ---
 
@@ -88,6 +89,9 @@
 | Issue ID | タイトル | 詳細 | 発生日 | 影響範囲 | ステータス |
 |----------|---------|------|--------|----------|-----------|
 | I024 | ローカルデータ保存による古いデータ参照時の潜在的問題 | 解析済みデータのみ保存するため過去データ再取得時に不整合の可能性・ダッシュボード表示に影響する可能性あり | 2025-08-04 | データ整合性 | リスク認識済 |
+| I027 | スケジュール管理設計の改善必要 | 現在のfred_weeklyやstock_weekly命名がデータソース性質と実行頻度を混在させており設計不適切・より体系的なスケジュール管理が必要 | 2025-08-05 | スケジュールシステム設計 | ✅ 解決済 |
+| I029 | 頻度混在データの曜日バイアス問題 | 週次・日次データが混在時に土曜日（週次基準日）に偏ったデータ表示となる可能性・ユーザーが最新性を誤解するリスク | 2025-08-05 | ダッシュボード表示・UX | 軽微リスク |
+| I030 | バックフィル曜日整合性未実装 | 週次解析のバックフィルで任意の日付を指定した場合、スケジュール設定の曜日と異なる基準日で分析実行される重大な問題 | 2025-08-05 | 科学的整合性・データ品質 | ✅ 解決済 |
 
 ---
 
@@ -258,6 +262,223 @@ FREDは米国中心のデータに限定されており、以下の重要デー�
 - パフォーマンスへの影響評価
 
 **優先度**: 高（ユーザー体験に直結、投資判断機能の中核）
+
+### Issue I027: スケジュール管理設計の改善必要 【Low】
+
+**現状の問題**:
+現在のスケジュール命名規則に設計上の問題がある：
+
+**1. 不適切な命名例**:
+- `fred_weekly` ← データソース + 頻度の混在
+- `stock_weekly` ← 対象種別 + 頻度の混在  
+- どちらも「何を週次にするのか」の性質が異なる
+
+**2. 概念的混乱**:
+- データソース (FRED vs Alpha Vantage) と実行頻度 (daily vs weekly) の混在
+- 拡張性の欠如（新しいソースや頻度追加時の一貫性不備）
+- ユーザー理解しにくいコマンド体系
+
+**改善提案**:
+**データソース別 × 頻度別の分離設計:**
+
+```bash
+# 設定コマンド（改善案）
+python entry_points/main.py scheduled-analysis configure --source fred --frequency weekly --symbols NASDAQ,SP500
+python entry_points/main.py scheduled-analysis configure --source alpha_vantage --frequency daily --symbols AAPL,MSFT
+
+# 実行コマンド（改善案）  
+python entry_points/main.py scheduled-analysis run --source fred --frequency weekly
+python entry_points/main.py scheduled-analysis run --source all --frequency daily
+```
+
+**データベース設計の改善:**
+```sql
+schedule_config (
+    id, source_type, frequency, day_of_week, hour,
+    enabled, symbols_list, last_run, created_at
+)
+```
+
+**命名規則の統一:**
+- `fred_market_weekly` (FRED経済指標、週次)
+- `av_stocks_daily` (Alpha Vantage株式、日次)  
+- `av_etf_weekly` (Alpha Vantage ETF、週次)
+
+**対応優先度**: Low（機能的には問題ないが、将来の拡張性・保守性向上のため）
+
+### Issue I028: 通知システム未実装 【Medium】
+
+**現状の問題**:
+定期分析システムに通知機能が未実装：
+
+**1. 必要な通知シナリオ**:
+- **定期分析完了通知**: スケジュール実行結果のサマリー
+- **クラッシュ警告通知**: 高リスク分析結果の即座通知
+- **エラー発生通知**: システムエラー・API制限等の障害通知
+- **システム状況通知**: 週次/月次の稼働状況レポート
+
+**2. 対象通知手段**:
+- **メール**: 基本的な通知手段
+- **Slack**: チーム/組織向けの即座通知
+- **Discord**: 個人/小規模チーム向け
+- **Webhook**: 外部システム連携
+
+**3. 通知レベル設計案**:
+- **Info**: 定期実行完了、正常なシステム稼働
+- **Warning**: API制限接近、データ取得遅延
+- **Critical**: 高リスククラッシュ警告、システムエラー
+- **Emergency**: システム停止、重大な障害
+
+**実装要件**:
+1. **設定ファイル管理**: `.env` での通知設定
+2. **テンプレート系統**: メッセージ形式の統一
+3. **配信制御**: 通知頻度制限、重複回避
+4. **認証管理**: APIキー・トークンの安全な管理
+5. **失敗時処理**: 通知失敗時のフォールバック処理
+
+**実装例**:
+```python
+# .env 設定例
+NOTIFICATION_EMAIL_ENABLED=true
+NOTIFICATION_SLACK_WEBHOOK=https://hooks.slack.com/...
+NOTIFICATION_DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+
+# 使用例
+notifier.send_analysis_complete(schedule_name, results)
+notifier.send_crash_alert(symbol, risk_level, parameters)
+notifier.send_error_alert(error_category, error_details)
+```
+
+**対応方針**:
+1. **要件定義**: 通知シナリオ・手段の詳細設計
+2. **段階的実装**: メール → Slack → Discord の順で実装
+3. **設定管理**: 環境変数での柔軟な設定管理
+4. **テスト環境**: 開発時の通知テスト仕組み
+
+**対応優先度**: Medium（実運用に重要だが、現時点では手動監視で代替可能）
+
+### Issue I029: 頻度混在データの曜日バイアス問題 【Low】
+
+**現状の問題**:
+週次・日次分析データが混在する運用において、潜在的な表示バイアスが発生する可能性：
+
+**1. 曜日バイアスの発生パターン**:
+- **週次データ**: 土曜日を基準日とする（スケジュール設定）
+- **日次データ**: 毎日異なる曜日を基準日とする
+- **表示時の影響**: 土曜日のデータが他の曜日より多く表示される可能性
+
+**2. ユーザー理解への影響**:
+- **最新性の誤解**: 土曜日データが最新に見えてしまう
+- **頻度の混乱**: 週次・日次の区別が不明確
+- **データ量の偏り**: 特定曜日のデータが過多表示
+
+**3. 想定される問題シナリオ**:
+```
+例: NASDAQCOM銘柄の表示
+- 2025-08-02 (土): fred_weekly
+- 2025-08-01 (金): fred_daily  
+- 2025-07-31 (木): fred_daily
+- 2025-07-26 (土): fred_weekly ← 週次データが目立つ
+```
+
+**対策実装済み**:
+1. **曜日メタデータ**: `basis_day_of_week` カラムで曜日情報管理
+2. **頻度別表示**: `analysis_frequency` でデータ分類
+3. **専用クエリ**: `get_recent_analyses_by_frequency()` で頻度別取得
+4. **最新分析抽出**: `get_latest_analysis_per_frequency()` で重複解消
+
+**軽微リスクと判断する理由**:
+- **影響は限定的**: 表示順序の問題であり、データ品質に影響なし
+- **対策実装済み**: 曜日メタデータにより識別・分離可能
+- **ユーザー対応可能**: ダッシュボードでの表示改善により解決可能
+
+**将来の改善案**:
+1. **頻度別タブ表示**: 週次・日次を明確に分離
+2. **最新データ優先**: 各頻度の最新分析を優先表示
+3. **曜日表示**: 基準日の曜日を明示的に表示
+
+**対応優先度**: Low（運用上は問題なし、UI改善により解決可能）
+
+### Issue I030: バックフィル曜日整合性未実装 【Critical → Resolved】
+
+**問題の詳細**:
+週次解析のバックフィル機能において、重大な科学的整合性の問題が発見されました：
+
+**1. 問題の発生パターン**:
+```bash
+# 例: fred_weeklyは土曜日基準（day_of_week=5）
+# ユーザーが火曜日を指定してバックフィル実行
+python entry_points/main.py scheduled-analysis backfill --start 2025-01-07 --schedule fred_weekly
+
+# 修正前の問題のある動作
+2025-01-07 (火)  ← ❌ 曜日が不整合
+2025-01-14 (火)  ← ❌ 曜日が不整合  
+2025-01-21 (火)  ← ❌ 曜日が不整合
+
+# 修正後の正しい動作
+2025-01-11 (土)  ← ✅ スケジュール設定と整合
+2025-01-18 (土)  ← ✅ スケジュール設定と整合
+2025-01-25 (土)  ← ✅ スケジュール設定と整合
+```
+
+**2. 科学的影響**:
+- **データ整合性の破綻**: 同一スケジュールで異なる曜日の基準日が混在
+- **時系列分析の歪み**: 曜日効果による予測精度の低下
+- **論文再現性の損失**: 週次分析の定義違反
+
+**3. 根本原因**:
+```python
+# 修正前の問題コード
+def _generate_backfill_periods(self, start: datetime, end: datetime, frequency: str):
+    if frequency == 'weekly':
+        current = start  # ❌ 開始日をそのまま使用
+        while current <= end:
+            periods.append(current.strftime('%Y-%m-%d'))
+            current += timedelta(days=7)  # ❌ 7日間隔だが曜日無視
+```
+
+**4. 解決策の実装**:
+```python
+# 修正後の正しいコード
+def _generate_backfill_periods(self, start: datetime, end: datetime, frequency: str, 
+                              schedule_config: Optional[ScheduleConfig] = None):
+    if frequency == 'weekly':
+        target_weekday = schedule_config.day_of_week if schedule_config else 5
+        # 開始日を指定曜日に調整
+        days_until_target = (target_weekday - start.weekday()) % 7
+        current = start + timedelta(days=days_until_target)
+        # 範囲内の前の対象曜日も含める
+        if days_until_target > 0:
+            prev_target = current - timedelta(days=7)
+            if prev_target >= start:
+                current = prev_target
+```
+
+**5. 検証結果**:
+```
+🧪 テスト結果（2025-01-07 火曜日開始）:
+開始日: 2025-01-07 (Tue)
+対象曜日: 土曜日 (day_of_week=5)
+
+生成された期間:
+  1. 2025-01-11 (Sat)  ✅ 正しい曜日
+  2. 2025-01-18 (Sat)  ✅ 正しい曜日
+  3. 2025-01-25 (Sat)  ✅ 正しい曜日
+  4. 2025-02-01 (Sat)  ✅ 正しい曜日
+```
+
+**6. 影響範囲**:
+- **既存データへの影響**: なし（新しいバックフィル実行時のみ適用）
+- **科学的整合性**: 完全回復
+- **ユーザー体験**: 透明性向上（どの曜日で分析されるかが明確）
+
+**解決確認**: ✅ 完了
+- 曜日整合性を確保するロジック実装
+- テストでの動作確認完了
+- 科学的整合性の回復
+
+**学習事項**: 
+週次分析における曜日の整合性は科学的正確性の根幹であり、バックフィル機能でも厳密に遵守する必要がある。
 
 ---
 
