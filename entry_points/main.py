@@ -21,6 +21,41 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
+# 🔧 自動.env読み込み機能
+def load_environment_variables():
+    """プロジェクトの.envファイルを自動読み込み"""
+    try:
+        from dotenv import load_dotenv
+        env_path = project_root / '.env'
+        
+        if env_path.exists():
+            load_dotenv(env_path)
+            print("✅ .env ファイル読み込み完了")
+            
+            # APIキー設定確認
+            fred_key = os.getenv('FRED_API_KEY')
+            alpha_key = os.getenv('ALPHA_VANTAGE_KEY')
+            
+            if fred_key:
+                print(f"✅ FRED API Key: {fred_key[:10]}...")
+            else:
+                print("⚠️  FRED API Key が設定されていません")
+            
+            if alpha_key:
+                print(f"✅ Alpha Vantage Key: {alpha_key[:10]}...")
+            else:
+                print("⚠️  Alpha Vantage Key が設定されていません")
+        else:
+            print("⚠️  .env ファイルが見つかりません")
+            
+    except ImportError:
+        print("⚠️  python-dotenv が未インストール: pip install python-dotenv")
+    except Exception as e:
+        print(f"⚠️  環境変数読み込みエラー: {e}")
+
+# システム起動時に環境変数を自動読み込み
+load_environment_variables()
+
 def launch_dashboard(dashboard_type='main'):
     """Launch web dashboard"""
     print(f"🚀 Launching {dashboard_type} dashboard...")

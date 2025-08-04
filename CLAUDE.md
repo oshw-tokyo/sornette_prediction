@@ -65,9 +65,10 @@ sornette_prediction/
 ├── CLAUDE.md                          # このファイル（AI指示書）
 ├── README.md                          # プロジェクト概要
 ├── USER_EXECUTION_GUIDE.md            # ユーザー実行ガイド
+├── .env                               # 🔐 API認証設定（自動読み込み対応）
 │
 ├── entry_points/                      # 【第1層】統一エントリーポイント
-│   ├── main.py                        # 中央コマンドインターフェース（唯一の実行点）
+│   ├── main.py                        # 中央コマンドインターフェース（.env自動読込機能付き）
 │   └── validator.py                   # 検証専用エントリー
 │
 ├── core/                              # 【第2層】科学的中核（絶対保護対象）
@@ -141,6 +142,28 @@ sornette_prediction/
 
 ---
 
+## 🔧 **環境変数・API認証設定**
+
+### 📄 **.envファイル自動読み込み機能**
+
+```bash
+# プロジェクトルート/.env ファイル（必須）
+FRED_API_KEY=your_fred_api_key_here
+ALPHA_VANTAGE_KEY=your_alpha_vantage_key_here
+```
+
+**特徴**:
+- `entry_points/main.py` 実行時に**自動読み込み**
+- 手動 `source .env` 不要
+- 起動時にAPIキー設定状況を表示・確認
+- python-dotenv を使用した安全な読み込み
+
+**APIキー取得方法**:
+- **FRED**: https://fred.stlouisfed.org/docs/api/api_key.html (無料・無制限)
+- **Alpha Vantage**: https://www.alphavantage.co/support/#api-key (無料・500req/日)
+
+---
+
 ## 🎯 システム機能概要
 
 ### 📊 **カタログベース市場分析システム**
@@ -194,10 +217,88 @@ python entry_points/main.py validate --crash 1987
 ls -la results/analysis_results.db
 ```
 
-#### 3. カタログベース解析システム理解
-- **market_data_catalog.json**: 25銘柄・7カテゴリの完全定義
-- **crash_alert_system.py**: 包括解析のメインエンジン
-- **api_rate_limiter.py**: API制限管理（FRED 120req/min, Alpha Vantage 25req/day）
+#### 3. **🚨 実装前の必須確認事項（重複・誤変更防止）**
+
+**Claude Codeは実装開始前に必ず以下を確認すること**：
+
+##### A. **既存実装の詳細調査**
+```bash
+# 1. 類似機能の存在確認
+grep -r "実装したい機能キーワード" applications/ infrastructure/ core/
+
+# 2. 既存ファイルの役割確認  
+head -20 既存ファイル名.py  # コメント・docstringを読む
+
+# 3. インポート関係の確認
+grep -r "from.*実装対象モジュール" .
+```
+
+##### B. **修正対象ファイルの正確な特定**
+```bash
+# 修正すべきファイルを正確に特定してから実装開始
+ls -la applications/analysis_tools/  # 既存の分析ツール確認
+ls -la infrastructure/data_sources/  # データソース実装状況確認
+```
+
+##### C. **プロジェクト方針との整合性確認**
+- **統一エントリーポイント**: `entry_points/main.py`経由以外の実行は禁止
+- **カタログベース原則**: ハードコード銘柄禁止、`market_data_catalog.json`ベース必須
+- **4層アーキテクチャ**: 新機能は適切な層（core/applications/infrastructure/entry_points）に配置
+- **重複禁止**: 既存機能の拡張を優先、新規作成は最後の手段
+
+##### D. **変更禁止対象の確認**
+- **`core/fitting/fitter.py`** - 数学的実装（論文再現の根幹）
+- **`infrastructure/database/integration_helpers.py`** - tc→日時変換ロジック
+- **`entry_points/main.py`** - 統一エントリーポイント（拡張のみ可能）
+- **`infrastructure/data_sources/market_data_catalog.json`** - 25銘柄カタログ定義
+
+##### E. **実装方針の決定フロー**
+1. **既存機能拡張 > 新規作成**: まず既存コードに機能追加を検討
+2. **統合 > 分離**: 関連機能は既存ファイルに統合
+3. **テスト実行**: 変更後必ず論文再現テスト実行
+4. **段階的実装**: 一度に大きな変更をせず、小さな変更を積み重ね
+
+#### 4. **現在のカタログベース解析システム理解**
+
+##### 🎯 **既実装済みシステム（変更前に必ず確認）**
+
+**A. カタログベース分析の現状**:
+- **`applications/analysis_tools/crash_alert_system.py`**: 
+  - ✅ **既に分析実行機能を統合済み** (2025-08-05追加)
+  - ✅ `run_catalog_analysis()`: カタログベース包括分析
+  - ✅ `_analyze_single_symbol()`: 単一銘柄分析＋DB保存
+  - ✅ データベース保存・可視化生成まで一貫実装
+  - **重要**: これ以上の重複実装は禁止
+
+**B. データソース管理**:
+- **`infrastructure/data_sources/market_data_catalog.json`**: 16銘柄（実測値）
+  - カテゴリ: us_indices, crypto_assets, sector_indices等
+  - **注意**: メタデータは25銘柄と記載されているが実際は16銘柄
+- **`infrastructure/data_sources/api_rate_limiter.py`**: API制限管理
+- **`infrastructure/data_sources/unified_data_client.py`**: FRED + Alpha Vantage統合
+
+**C. 実行フロー（確定済み）**:
+```bash
+# 正しいカタログベース分析実行方法
+python entry_points/main.py analyze ALL
+  ↓
+applications/analysis_tools/crash_alert_system.py:main()
+  ↓
+run_catalog_analysis() で16銘柄を自動分析・DB保存
+```
+
+##### 🚫 **実装時の重要な注意事項**
+
+**絶対に避けるべき行為**:
+1. **新しい分析エンジンの作成** - `crash_alert_system.py`が既に完備
+2. **カタログ読み込み機能の重複実装** - 既存システムが完動
+3. **データベース保存機能の再実装** - `AnalysisResultSaver`が統合済み
+4. **API制限管理の再発明** - `APIRateLimiter`が実装済み
+
+**正しいアプローチ**:
+1. **機能追加**: 既存`crash_alert_system.py`にメソッド追加
+2. **パラメータ調整**: 既存メソッドの引数で制御
+3. **設定変更**: `market_data_catalog.json`で銘柄・設定管理
 
 ---
 

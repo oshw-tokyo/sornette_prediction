@@ -15,6 +15,18 @@ from enum import Enum
 import json
 import sqlite3
 from pathlib import Path
+import time
+
+# 追加インポート: カタログベース分析用
+from infrastructure.data_sources.unified_data_client import UnifiedDataClient
+from infrastructure.data_sources.api_rate_limiter import APIRateLimiter
+from core.fitting.multi_criteria_selection import MultiCriteriaSelector
+from infrastructure.database.integration_helpers import AnalysisResultSaver
+from infrastructure.visualization.lppl_visualizer import LPPLVisualizer
+from infrastructure.config.matplotlib_config import configure_matplotlib_for_automation
+
+# matplotlib GUI無効化
+configure_matplotlib_for_automation()
 
 class RiskLevel(Enum):
     """リスクレベル"""
@@ -99,6 +111,13 @@ class CrashAlertSystem:
             catalog_path: マーケットデータカタログのパス
         """
         self.database_path = database_path or "results/analysis_results.db"
+        
+        # カタログベース分析用コンポーネント追加
+        self.data_client = UnifiedDataClient()
+        self.rate_limiter = APIRateLimiter()
+        self.selector = MultiCriteriaSelector()
+        self.db_saver = AnalysisResultSaver(self.database_path)
+        self.visualizer = LPPLVisualizer(self.database_path)
         
         # カタログデータの読み込み
         if catalog_path is None:
@@ -246,7 +265,7 @@ class CrashAlertSystem:
                 SELECT 
                     symbol, tc, beta, omega, phi, A, B, C, r_squared, rmse,
                     analysis_date, data_period_start, data_period_end, data_points
-                FROM lppl_analysis_results 
+                FROM analysis_results 
                 WHERE analysis_date >= date('now', '-7 days')
                 ORDER BY analysis_date DESC
                 """
@@ -407,16 +426,143 @@ class CrashAlertSystem:
             json.dump(data, f, indent=2, ensure_ascii=False)
         
         print(f"📄 警告データ保存: {file_path}")
+    
+    def run_catalog_analysis(self, max_symbols: Optional[int] = None) -> Dict:
+        """
+        カタログベース包括分析を実行
+        
+        Args:
+            max_symbols: 最大分析銘柄数（Noneで全銘柄）
+            
+        Returns:
+            Dict: 分析結果サマリー
+        """
+        print("🌍 カタログベース包括分析開始")
+        print("=" * 80)
+        
+        # カタログから銘柄リストを取得
+        symbols = self.catalog_data.get('symbols', {})
+        symbol_list = list(symbols.keys())
+        
+        if max_symbols:
+            symbol_list = symbol_list[:max_symbols]
+        
+        print(f"📋 分析対象: {len(symbol_list)}銘柄")
+        for i, symbol in enumerate(symbol_list, 1):
+            display_name = symbols[symbol].get('display_name', 'N/A')
+            category = symbols[symbol].get('category', 'N/A')
+            print(f"  {i:2d}. {symbol:12} [{category}] - {display_name}")
+        
+        # 分析実行
+        results = {
+            'start_time': datetime.now(),
+            'total_symbols': len(symbol_list),
+            'successful_analyses': [],
+            'failed_symbols': [],
+        }
+        
+        for i, symbol in enumerate(symbol_list, 1):
+            print(f"\n📊 進捗: {i}/{len(symbol_list)} - {symbol}")
+            
+            success = self._analyze_single_symbol(symbol)
+            
+            if success:
+                results['successful_analyses'].append(symbol)
+                print(f"✅ {symbol} 完了")
+            else:
+                results['failed_symbols'].append(symbol)
+                print(f"❌ {symbol} 失敗")
+            
+            # API制限対応の待機
+            if i < len(symbol_list):
+                print("⏳ API制限管理: 2秒待機...")
+                time.sleep(2)
+        
+        # 結果サマリー
+        results['end_time'] = datetime.now()
+        results['duration'] = results['end_time'] - results['start_time']
+        results['success_rate'] = len(results['successful_analyses']) / len(symbol_list) * 100
+        
+        return results
+    
+    def _analyze_single_symbol(self, symbol: str, period_days: int = 365) -> bool:
+        """
+        単一銘柄のLPPL分析を実行
+        
+        Args:
+            symbol: 分析対象銘柄
+            period_days: 分析期間（日数）
+            
+        Returns:
+            bool: 成功したかどうか
+        """
+        try:
+            # 1. データ取得
+            print(f"📊 {symbol} データ取得中...")
+            
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=period_days)
+            
+            # API制限管理
+            self.rate_limiter.check_and_wait('fred', 1)
+            
+            data, source = self.data_client.get_data_with_fallback(
+                symbol,
+                start_date.strftime('%Y-%m-%d'),
+                end_date.strftime('%Y-%m-%d')
+            )
+            
+            if data is None or data.empty:
+                print(f"❌ {symbol}: データ取得失敗")
+                return False
+            
+            print(f"✅ {symbol}: {len(data)}日分のデータ取得成功 (ソース: {source})")
+            
+            # 2. LPPL分析実行
+            print(f"🎯 {symbol} LPPL分析実行中...")
+            
+            result = self.selector.perform_comprehensive_fitting(data)
+            if result is None:
+                print(f"❌ {symbol}: LPPL分析失敗")
+                return False
+            
+            # 選択された結果を取得
+            selected_result = result.get_selected_result()
+            print(f"✅ {symbol} 分析完了: tc={selected_result.tc:.4f}, R²={selected_result.r_squared:.4f}")
+            
+            # 3. データベース保存
+            analysis_id = self.db_saver.save_lppl_analysis(symbol, data, result, source)
+            print(f"💾 {symbol} データベース保存完了: ID={analysis_id}")
+            
+            # 4. 可視化生成
+            viz_id = self.visualizer.create_comprehensive_visualization(analysis_id)
+            print(f"🎨 {symbol} 可視化生成完了: 可視化ID={viz_id}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ {symbol} 分析エラー: {e}")
+            return False
 
 def main():
-    """デモンストレーション"""
-    print("🚨 差し迫ったクラッシュ警告システム デモ")
+    """カタログベース包括分析システム"""
+    print("🌍 カタログベース包括分析システム")
     print("=" * 50)
     
     # システム初期化
     alert_system = CrashAlertSystem()
     
-    # 警告スキャン実行
+    # まず、カタログベース分析を実行（最初は3銘柄でテスト）
+    print("🎯 Step 1: カタログベース分析実行")
+    analysis_results = alert_system.run_catalog_analysis(max_symbols=3)
+    
+    print(f"\n📊 分析結果サマリー:")
+    print(f"   成功率: {analysis_results['success_rate']:.1f}%")
+    print(f"   成功: {len(analysis_results['successful_analyses'])}銘柄")
+    print(f"   失敗: {len(analysis_results['failed_symbols'])}銘柄")
+    
+    # 次に、警告スキャン実行
+    print(f"\n🎯 Step 2: クラッシュ警告スキャン")
     alerts = alert_system.scan_for_alerts(min_confidence=60.0, max_results=10)
     
     # レポート生成・表示
@@ -432,6 +578,9 @@ def main():
         json_file = output_dir / f"crash_alerts_{timestamp}.json"
         
         alert_system.save_alerts_to_json(alerts, str(json_file))
+    
+    print(f"\n🌐 ダッシュボードでの確認:")
+    print(f"python entry_points/main.py dashboard")
 
 if __name__ == "__main__":
     main()
