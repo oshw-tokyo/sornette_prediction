@@ -8,8 +8,8 @@
 
 ### 開発・変更時の必須ルール
 ```bash
-# 変更前・後で必ず実行
-python tests/historical_crashes/black_monday_1987_validator.py
+# 変更前・後で必ず実行（統一エントリーポイント経由）
+python entry_points/main.py validate --crash 1987
 # 期待結果: 予測可能性スコア 100/100
 ```
 

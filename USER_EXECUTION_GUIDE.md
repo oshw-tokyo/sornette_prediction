@@ -67,8 +67,8 @@ python entry_points/main.py analyze MARKET
 
 ### 2. 現在のNASDAQ状況確認
 ```bash
-# 品質評価付きNASDAQ分析
-python test_quality_aware_fitting.py
+# 統一エントリーポイント経由でNASDAQ分析
+python entry_points/main.py analyze NASDAQCOM --period 1y
 ```
 
 **確認ポイント**:
@@ -97,6 +97,43 @@ python entry_points/main.py analyze MARKET
 - **APIレート制限管理**（自動待機・進捗表示）
 - 可視化レポート生成
 
+---
+
+## 🧪 システム検証・テスト
+
+### 1. 論文再現テスト（最重要）
+```bash
+# 1987年ブラックマンデー検証（100/100スコア必須）
+python entry_points/main.py validate --crash 1987
+
+# 2000年ドットコムバブル検証
+python entry_points/main.py validate --crash 2000
+
+# 全検証テスト実行
+python entry_points/main.py validate --crash all
+```
+
+**期待される結果**:
+- **1987年検証**: 100/100スコア維持必須（科学的根幹保護）
+- **2000年検証**: 定性的検証合格
+- システム整合性確認
+
+### 2. 統合テストスイート
+```bash
+# 統一テストランナー実行
+./run_tests.sh
+```
+
+**実行内容**:
+- 論文再現テスト（1987年ブラックマンデー）
+- 追加検証テスト（2000年ドットコムバブル）
+- システム全体整合性確認
+- 環境・依存関係チェック
+
+---
+
+## 📊 分析結果の確認
+
 ### 2. 結果の確認
 ```bash
 # 結果ディレクトリの確認
@@ -115,7 +152,7 @@ cat results/comprehensive_analysis/market_risk_report_*.csv
 # Pythonインタラクティブモードで実行
 python
 
->>> from src.fitting.fitting_quality_evaluator import FittingQualityEvaluator
+>>> from core.fitting.fitting_quality_evaluator import FittingQualityEvaluator
 >>> evaluator = FittingQualityEvaluator()
 
 # 境界張り付きケースのテスト
@@ -129,7 +166,7 @@ python
 
 ### 2. 多基準選択システムの実行
 ```python
->>> from src.fitting.multi_criteria_selection import MultiCriteriaSelector
+>>> from core.fitting.multi_criteria_selection import MultiCriteriaSelector
 >>> import pandas as pd
 >>> import numpy as np
 
