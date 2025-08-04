@@ -222,28 +222,45 @@ def create_analysis_plot(data, result, symbol, source):
     
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
     
-    # 1. 価格チャート + LPPL予測
-    ax1.plot(data.index, data['Close'], 'b-', linewidth=1.5, alpha=0.8, label='実際価格')
+    # 1. Price Chart + LPPL Prediction
+    ax1.plot(data.index, data['Close'], 'b-', linewidth=1.5, alpha=0.8, label='Actual Price')
     
-    # LPPL予測線
+    # LPPL prediction line
     t = np.linspace(0, 1, len(data))
     predicted_log = result['y_pred']
     predicted_price = np.exp(predicted_log)
-    ax1.plot(data.index, predicted_price, 'r--', linewidth=2, label='LPPL予測')
+    ax1.plot(data.index, predicted_price, 'r--', linewidth=2, label='LPPL Prediction')
     
-    ax1.set_ylabel('価格')
-    ax1.set_title(f'{symbol} LPPL分析結果 (ソース: {source})', fontsize=14, fontweight='bold')
+    # Add crash prediction vertical line
+    tc = result['tc']
+    if tc > 1.0:  # Only show if crash is predicted in the future
+        # Calculate crash date based on tc value
+        data_period_days = len(data)
+        crash_days_from_end = (tc - 1.0) * data_period_days
+        if crash_days_from_end < 365:  # Only show if within reasonable time frame
+            crash_date = data.index[-1] + pd.Timedelta(days=int(crash_days_from_end))
+            ax1.axvline(crash_date, color='red', linestyle=':', linewidth=2, alpha=0.8, 
+                       label=f'Predicted Crash (tc={tc:.3f})')
+    
+    ax1.set_ylabel('Price')
+    ax1.set_title(f'{symbol} LPPL Analysis (Source: {source})', fontsize=14, fontweight='bold')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
     
-    # 2. 対数価格 + フィッティング
+    # 2. Log Price + Fitting
     log_prices = np.log(data['Close'].values)
-    ax2.plot(range(len(data)), log_prices, 'b-', linewidth=1.5, alpha=0.8, label='実際(対数)')
-    ax2.plot(range(len(data)), predicted_log, 'r--', linewidth=2, label='LPPL予測')
+    ax2.plot(range(len(data)), log_prices, 'b-', linewidth=1.5, alpha=0.8, label='Actual (Log)')
+    ax2.plot(range(len(data)), predicted_log, 'r--', linewidth=2, label='LPPL Fit')
     
-    ax2.set_ylabel('対数価格')
-    ax2.set_xlabel('日数')
-    ax2.set_title('対数価格フィッティング', fontsize=12)
+    # Add crash prediction vertical line in normalized space
+    if tc > 1.0 and (tc - 1.0) * data_period_days < 365:
+        crash_position = tc * len(data)
+        if crash_position <= len(data) * 1.5:  # Show if within reasonable range
+            ax2.axvline(crash_position, color='red', linestyle=':', linewidth=2, alpha=0.8)
+    
+    ax2.set_ylabel('Log Price')
+    ax2.set_xlabel('Days')
+    ax2.set_title('Log Price Fitting', fontsize=12)
     ax2.legend()
     ax2.grid(True, alpha=0.3)
     
@@ -251,42 +268,42 @@ def create_analysis_plot(data, result, symbol, source):
     ax3.axis('off')
     
     param_text = f"""
-{symbol} LPPL分析結果
+{symbol} LPPL Analysis Results
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-データソース: {source}
-分析期間: {data.index[0].date()} - {data.index[-1].date()}
-データ点数: {len(data)}日
+Data Source: {source}
+Analysis Period: {data.index[0].date()} - {data.index[-1].date()}
+Data Points: {len(data)} days
 
-LPPLパラメータ
+LPPL Parameters
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-tc (臨界時間): {result['tc']:.4f}
-β (臨界指数): {result['beta']:.4f}
-ω (角周波数): {result['omega']:.4f}
-φ (位相): {result['phi']:.4f}
+tc (Critical Time): {result['tc']:.4f}
+β (Critical Exponent): {result['beta']:.4f}
+ω (Angular Frequency): {result['omega']:.4f}
+φ (Phase): {result['phi']:.4f}
 
-品質指標
+Quality Metrics
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-R² (決定係数): {result['r_squared']:.4f}
+R² (R-squared): {result['r_squared']:.4f}
 RMSE: {result['rmse']:.4f}
 
-予測解釈
+Risk Assessment
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{'🔴 バブル警戒' if result['tc'] < 1.2 else '🟡 要注意' if result['tc'] < 1.5 else '🟢 正常範囲'}
+{'🔴 High Risk' if result['tc'] < 1.2 else '🟡 Medium Risk' if result['tc'] < 1.5 else '🟢 Low Risk'}
 """
     
     ax3.text(0.05, 0.95, param_text, transform=ax3.transAxes, fontsize=11,
             verticalalignment='top',
             bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
     
-    # 4. 残差分析
+    # 4. Residuals Analysis
     residuals = log_prices - predicted_log
     ax4.plot(range(len(data)), residuals, 'g-', linewidth=1, alpha=0.7)
     ax4.axhline(y=0, color='black', linestyle='--', alpha=0.5)
     ax4.fill_between(range(len(data)), residuals, alpha=0.3, color='green')
     
-    ax4.set_ylabel('残差')
-    ax4.set_xlabel('日数')
-    ax4.set_title('フィッティング残差', fontsize=12)
+    ax4.set_ylabel('Residuals')
+    ax4.set_xlabel('Days')
+    ax4.set_title('Fitting Residuals', fontsize=12)
     ax4.grid(True, alpha=0.3)
     
     plt.tight_layout()

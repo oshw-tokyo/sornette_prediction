@@ -216,10 +216,10 @@ class BaseCrashValidator(ABC):
         # ピーク・重要ポイントのマーク
         peak_date = bubble_analysis['peak_date']
         peak_price = bubble_analysis['peak_price']
-        ax1.scatter(peak_date, peak_price, color='orange', s=100, zorder=5, label='バブルピーク')
+        ax1.scatter(peak_date, peak_price, color='orange', s=100, zorder=5, label='Bubble Peak')
         
-        ax1.set_ylabel('価格指数')
-        ax1.set_title(f'{self.crash_name} - 市場データ分析', fontsize=14, fontweight='bold')
+        ax1.set_ylabel('Price Index')
+        ax1.set_title(f'{self.crash_name} - Market Data Analysis', fontsize=14, fontweight='bold')
         ax1.legend()
         ax1.grid(True, alpha=0.3)
         
@@ -227,12 +227,12 @@ class BaseCrashValidator(ABC):
         bubble_start_date = self.pre_crash_data.index[0]
         bubble_period = self.pre_crash_data[self.pre_crash_data.index >= bubble_start_date]
         
-        ax2.plot(bubble_period.index, bubble_period['Close'], 'g-', linewidth=2, label='バブル期間')
-        ax2.axvline(peak_date, color='orange', linestyle=':', alpha=0.7, label='ピーク')
-        ax2.axvline(self.crash_date, color='red', linestyle='--', alpha=0.7, label='クラッシュ')
+        ax2.plot(bubble_period.index, bubble_period['Close'], 'g-', linewidth=2, label='Bubble Period')
+        ax2.axvline(peak_date, color='orange', linestyle=':', alpha=0.7, label='Peak')
+        ax2.axvline(self.crash_date, color='red', linestyle='--', alpha=0.7, label='Crash')
         
-        ax2.set_ylabel('価格指数')
-        ax2.set_title('バブル形成期間詳細', fontsize=12)
+        ax2.set_ylabel('Price Index')
+        ax2.set_title('Bubble Formation Period Details', fontsize=12)
         ax2.legend()
         ax2.grid(True, alpha=0.3)
         
@@ -246,29 +246,29 @@ class BaseCrashValidator(ABC):
         crash_info = ""
         if bubble_analysis['crash_analysis']:
             max_decline = bubble_analysis['crash_analysis']['max_decline']
-            crash_info = f"最大下落: {max_decline:.1f}%"
+            crash_info = f"Max Decline: {max_decline:.1f}%"
         
         summary_text = f"""
-{self.crash_name} 分析サマリー
+{self.crash_name} Analysis Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-データソース: {self.data_series}
-分析期間: {self.pre_crash_data.index[0].date()} - {self.pre_crash_data.index[-1].date()}
-データ点数: {data_points}日
+Data Source: {self.data_series}
+Analysis Period: {self.pre_crash_data.index[0].date()} - {self.pre_crash_data.index[-1].date()}
+Data Points: {data_points} days
 
-バブル形成
+Bubble Formation
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-総上昇率: {total_gain:+.1f}%
-ピーク上昇率: {peak_gain:+.1f}%
-ピーク日: {peak_date.date()}
+Total Gain: {total_gain:+.1f}%
+Peak Gain: {peak_gain:+.1f}%
+Peak Date: {peak_date.date()}
 
-クラッシュ分析
+Crash Analysis
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-クラッシュ日: {self.crash_date.date()}
+Crash Date: {self.crash_date.date()}
 {crash_info}
 
-LPPLモデル適用性
+LPPL Model Applicability
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-予測可能性評価準備完了
+Predictability Assessment Ready
 """
         
         ax3.text(0.05, 0.95, summary_text, transform=ax3.transAxes, fontsize=10,
@@ -278,10 +278,10 @@ LPPLモデル適用性
         # 4. 価格変動率分析
         returns = self.pre_crash_data['Close'].pct_change().dropna()
         ax4.hist(returns, bins=50, alpha=0.7, color='skyblue', edgecolor='black')
-        ax4.axvline(returns.mean(), color='red', linestyle='--', label=f'平均: {returns.mean():.4f}')
-        ax4.set_xlabel('日次リターン')
-        ax4.set_ylabel('頻度')
-        ax4.set_title('価格変動率分布', fontsize=12)
+        ax4.axvline(returns.mean(), color='red', linestyle='--', label=f'Mean: {returns.mean():.4f}')
+        ax4.set_xlabel('Daily Returns')
+        ax4.set_ylabel('Frequency')
+        ax4.set_title('Price Return Distribution', fontsize=12)
         ax4.legend()
         ax4.grid(True, alpha=0.3)
         

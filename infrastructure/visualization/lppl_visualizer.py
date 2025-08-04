@@ -12,8 +12,8 @@ from typing import Dict, Tuple, Optional
 import os
 
 from ..database.results_database import ResultsDatabase
-from ..fitting.fitter import LogarithmPeriodicFitter
-from ..fitting.utils import logarithm_periodic_func
+from core.fitting.fitter import LogarithmPeriodicFitter
+from core.fitting.utils import logarithm_periodic_func
 from ..config.matplotlib_config import save_and_close_figure
 
 class LPPLVisualizer:

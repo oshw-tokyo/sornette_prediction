@@ -17,7 +17,7 @@ class BlackMonday1987Validator(BaseCrashValidator):
     
     def __init__(self):
         super().__init__(
-            crash_name="1987年ブラックマンデー",
+            crash_name="1987 Black Monday",
             crash_date="1987-10-19",
             data_series="NASDAQCOM"
         )
