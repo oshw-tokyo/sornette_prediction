@@ -17,8 +17,8 @@ warnings.filterwarnings('ignore')
 load_dotenv()
 sys.path.append('.')
 
-from src.fitting.utils import logarithm_periodic_func
-from src.data_sources.fred_data_client import FREDDataClient
+from core.sornette_theory.lppl_model import logarithm_periodic_func
+from infrastructure.data_sources.fred_data_client import FREDDataClient
 from scipy.optimize import curve_fit
 
 def main():

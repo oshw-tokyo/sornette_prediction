@@ -20,13 +20,13 @@ load_dotenv()
 sys.path.append('.')
 
 # matplotlib設定（GUIを無効化）
-from src.config.matplotlib_config import configure_matplotlib_for_automation
+from infrastructure.config.matplotlib_config import configure_matplotlib_for_automation
 configure_matplotlib_for_automation()
 
-from src.data_sources.unified_data_client import UnifiedDataClient
-from src.fitting.multi_criteria_selection import MultiCriteriaSelector
-from src.database.integration_helpers import AnalysisResultSaver
-from src.visualization.lppl_visualizer import LPPLVisualizer
+from infrastructure.data_sources.unified_data_client import UnifiedDataClient
+from core.fitting.multi_criteria_selection import MultiCriteriaSelector
+from infrastructure.database.integration_helpers import AnalysisResultSaver
+from infrastructure.visualization.lppl_visualizer import LPPLVisualizer
 
 def perform_basic_lppl_analysis(symbol: str = 'NASDAQ', days: int = 180) -> Dict:
     """
@@ -153,7 +153,7 @@ def launch_dashboard():
     print("=" * 50)
     print("以下のコマンドで結果をブラウザで確認できます:")
     print()
-    print("streamlit run src/web_interface/analysis_dashboard.py")
+    print("python entry_points/main.py dashboard")
     print()
     print("または:")
     print("./start_dashboard.sh")
