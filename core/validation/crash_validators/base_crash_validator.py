@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore')
 
 # Environment setup
 load_dotenv()
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 
 from core.sornette_theory.lppl_model import logarithm_periodic_func
 from infrastructure.data_sources.fred_data_client import FREDDataClient
