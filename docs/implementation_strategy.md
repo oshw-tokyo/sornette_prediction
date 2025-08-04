@@ -43,24 +43,64 @@ Didier Sornetteの対数周期パワー法則モデルを実装し、金融市�
 I(t) = A + B(tc - t)^β + C(tc - t)^β cos(ω ln(tc - t) - φ)
 ```
 
-### 実装アーキテクチャ
+### 実装アーキテクチャ（現在の4層構造）
 ```
-src/
-├── core/           # 核となるモデル実装
-├── data/           # データ取得・管理
-├── analysis/       # 市場分析ロジック  
-├── fitting/        # パラメータフィッティング
-├── validation/     # 検証・バックテスト
-├── monitoring/     # リアルタイム監視
-├── trading/        # 取引戦略実装
-└── visualization/  # 結果可視化
+sornette_prediction/
+├── 🧠 core/                    # 【保護対象】科学的中核理論
+│   ├── sornette_theory/        # 純粋なSornette LPPL実装
+│   ├── fitting/                # フィッティングアルゴリズム
+│   └── validation/             # 歴史的検証（100/100スコア保護）
+│
+├── 🔧 applications/            # アプリケーション層
+│   ├── analysis_tools/         # 解析ツール（scheduled_analyzer等）
+│   ├── dashboards/             # Webインターフェース
+│   └── examples/               # 実行例・デモ
+│
+├── 🔍 infrastructure/          # インフラ・サポート
+│   ├── data_sources/           # データ取得（unified_data_client）
+│   ├── database/               # データベース管理（SQLite）
+│   ├── error_handling/         # エラーハンドリングシステム
+│   └── visualization/          # 可視化サポート
+│
+└── 🎯 entry_points/            # 統一エントリポイント
+    └── main.py                 # メインコマンドインターフェース
+```
+
+### 📅 スケジュール分析システム（新規実装）
+```
+スケジュール管理の基本概念:
+- Source×Frequency分離: データソース（fred/alpha_vantage）と頻度（weekly/daily）を独立管理
+- 分析基準日 (Analysis Basis Date): 分析対象期間の最終日を基準とした日付管理
+- 曜日メタデータ: 混在する頻度データの適切な表示・選択を支援
+- 自動バックフィル: 指定期間の欠損データを適切な曜日で自動補完
 ```
 
 ### 開発プロセス
-1. **Phase 1**: 基本モデルの実装と検証（1987年、1929年データでの再現）
-2. **Phase 2**: リアルタイムデータ取得とモニタリングシステム
-3. **Phase 3**: 取引戦略の実装とバックテスト
-4. **Phase 4**: 他市場（仮想通貨、不動産など）への展開
+1. **Phase 1** ✅: 基本モデルの実装と検証（1987年、1929年データでの再現）
+2. **Phase 2** ✅: リアルタイムデータ取得とモニタリングシステム
+3. **Phase 2.5** ✅: スケジュール分析システム（自動定期解析・バックフィル機能）
+4. **Phase 3**: 取引戦略の実装とバックテスト
+5. **Phase 4**: 他市場（仮想通貨、不動産など）への展開
+
+### ⚙️ データベース設計（最新版）
+```sql
+-- 分析結果テーブル（拡張済み）
+analysis_results:
+  - analysis_basis_date (DATE): 分析対象期間の最終日【重要】
+  - basis_day_of_week (INTEGER): 曜日メタデータ (0=月曜, 6=日曜)
+  - analysis_frequency (TEXT): 解析頻度 ('weekly', 'daily')
+  - schedule_name (TEXT): スケジュール識別子
+  - is_scheduled (BOOLEAN): スケジュール実行フラグ
+  - backfill_batch_id (TEXT): バックフィル実行バッチID
+
+-- スケジュール設定テーブル（新規）
+schedule_config:
+  - schedule_name (TEXT): 'fred_weekly', 'alpha_vantage_daily'
+  - frequency (TEXT): 'weekly', 'daily' 
+  - day_of_week (INTEGER): 実行曜日（週次の場合）
+  - symbols (JSON): 対象銘柄リスト
+  - auto_backfill_limit (INTEGER): 自動バックフィル日数制限
+```
 
 ## 品質管理方針
 
