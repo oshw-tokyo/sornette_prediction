@@ -4,36 +4,146 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
 env/
 venv/
+ENV/
+VENV/
+.venv/
+.env/
 
-# Analysis results
+# Analysis Results and Generated Data (Temporary/Runtime files)
+results/
 analysis_results/
 analysis_progress.json
 market_symbols.json
 market_analysis_results.csv
 
-# IDE
+# Database Files (Generated/Runtime)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+precision_test.db
+test_analysis.db
+
+# Generated Images and Visualizations (Exclude temporary results, keep validation plots)
+results/**/*.png
+results/**/*.jpg
+results/**/*.jpeg
+results/**/*.gif
+results/**/*.svg
+
+# Keep important validation plots but exclude temporary generated ones
+!plots/historical_crashes/
+!plots/market_validation/
+!plots/validation/
+!plots/crash_prediction/
+!plots/detailed_analysis/
+!plots/README.md
+
+# Log Files
+*.log
+logs/
+analysis_errors.log
+
+# CSV and JSON Data Files (Generated)
+*.csv
+*.json
+!requirements.txt
+!package.json
+!*config*.json
+!market_data_catalog*.json
+
+# IDE and Editor Files  
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
+.sublime-*
+*.sublime-workspace
 
 # API Keys and Secrets
 .env
+.env.*
+!.env.example
 *.key
+*.pem
 config/secrets.py
+secrets/
 
-# Others
+# OS Generated Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Temporary Files and Directories
+_temp/
+temp/
+tmp/
 data_template/
 old_trials/
-_temp/
+archive/*/logs/
+archive/*/_temp/
 
-# docs & directions for Claude Code
-papers/
-# Analysis results and logs (temporary files)
-results/analysis_errors.log
-results/comprehensive_viz/*.png
-results/symbol_analysis/*.png
-results/test_analysis.db
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Documentation and Papers (Large files)
+papers/pdf_archive/
+papers/extracted_texts/
+
+# Backup Files
+*.backup
+*.bak
+*~
+*.orig
+
+# Development and Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Streamlit
+.streamlit/
+
+# Keep important structure files
+!results/README.md
+!results/.gitkeep
+!plots/README.md  
+!plots/.gitkeep
+!papers/README.md
 
