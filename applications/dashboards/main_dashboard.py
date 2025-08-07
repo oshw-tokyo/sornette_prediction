@@ -20,7 +20,20 @@ from typing import Dict, List, Optional, Tuple
 # パスの設定
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
+# .envファイル自動読み込み（ダッシュボード用）
+try:
+    from dotenv import load_dotenv
+    dotenv_path = os.path.join(os.path.dirname(__file__), '../../.env')
+    if os.path.exists(dotenv_path):
+        load_dotenv(dotenv_path)
+        print("✅ ダッシュボード: .env ファイル読み込み完了")
+    else:
+        print("⚠️ ダッシュボード: .env ファイルが見つかりません")
+except ImportError:
+    print("⚠️ ダッシュボード: python-dotenv がインストールされていません")
+
 from infrastructure.database.results_database import ResultsDatabase
+from infrastructure.data_sources.unified_data_client import UnifiedDataClient
 
 class SymbolAnalysisDashboard:
     """Symbol-Based Analysis Dashboard"""
@@ -28,6 +41,7 @@ class SymbolAnalysisDashboard:
     def __init__(self):
         self.db = ResultsDatabase()
         self.market_catalog = self.load_market_catalog()
+        self.data_client = UnifiedDataClient()
         
         # Page configuration
         st.set_page_config(
@@ -254,44 +268,147 @@ class SymbolAnalysisDashboard:
             
             return selected_symbol, n_results, priority_filter
     
-    def get_symbol_price_data(self, symbol: str, days: int = 365) -> Optional[pd.DataFrame]:
-        """Get symbol price data (placeholder - would need actual data client)"""
-        # This would need to be implemented with actual data client
-        # For now, return None to indicate no price data available
-        return None
+    def get_symbol_price_data(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+        """Get symbol price data from unified data client"""
+        try:
+            # データベースから最新の分析結果を取得してデータソースを特定
+            latest_analysis = self.db.get_recent_analyses(symbol=symbol, limit=1)
+            preferred_source = None
+            if not latest_analysis.empty:
+                data_source = latest_analysis.iloc[0].get('data_source')
+                if data_source:
+                    preferred_source = 'fred' if data_source == 'fred' else 'alpha_vantage'
+            
+            # 統合データクライアントからフォールバック付きでデータ取得
+            data, source_used = self.data_client.get_data_with_fallback(
+                symbol, start_date, end_date, preferred_source=preferred_source
+            )
+            
+            if data is not None and len(data) > 0:
+                print(f"✅ ダッシュボード用データ取得成功: {symbol} ({source_used}) - {len(data)}日分")
+                return data
+            else:
+                print(f"❌ データ取得失敗: {symbol}")
+                return None
+            
+        except Exception as e:
+            st.error(f"データ取得エラー: {str(e)}")
+            return None
+    
+    def compute_lppl_fit(self, prices: pd.Series, params: Dict) -> Dict:
+        """Compute LPPL model fit and normalized data for visualization"""
+        try:
+            # 価格を対数変換
+            log_prices = np.log(prices)
+            N = len(prices)
+            
+            # 時間配列を正規化（0-1）
+            t = np.linspace(0, 1, N)
+            
+            # LPPLパラメータ
+            tc = params['tc']
+            beta = params['beta'] 
+            omega = params['omega']
+            phi = params['phi']
+            A = params['A']
+            B = params['B']
+            C = params['C']
+            
+            # LPPL関数の計算
+            # log(p(t)) = A + B*(tc-t)^β + C*(tc-t)^β * cos(ω*ln(tc-t) + φ)
+            tau = tc - t
+            tau_power_beta = np.power(np.abs(tau), beta)
+            
+            # 負の値を避けるために絶対値を使用
+            with np.errstate(divide='ignore', invalid='ignore'):
+                log_term = np.log(np.abs(tau))
+                oscillation = np.cos(omega * log_term + phi)
+                
+            fitted_log_prices = A + B * tau_power_beta + C * tau_power_beta * oscillation
+            fitted_prices = np.exp(fitted_log_prices)
+            
+            # 正規化データの計算（論文再現テストの右上グラフ相当）
+            # 価格データを0-1に正規化
+            price_min, price_max = prices.min(), prices.max()
+            normalized_prices = (prices - price_min) / (price_max - price_min)
+            normalized_fitted = (fitted_prices - price_min) / (price_max - price_min)
+            
+            return {
+                'fitted_prices': fitted_prices,
+                'fitted_log_prices': fitted_log_prices,
+                'normalized_prices': normalized_prices,
+                'normalized_fitted': normalized_fitted,
+                'time_normalized': t
+            }
+            
+        except Exception as e:
+            st.error(f"LPPL計算エラー: {str(e)}")
+            return None
+    
+    def convert_tc_to_real_date(self, tc: float, data_start_date: str, data_end_date: str) -> datetime:
+        """Convert tc value to actual prediction date"""
+        try:
+            start_dt = pd.to_datetime(data_start_date)
+            end_dt = pd.to_datetime(data_end_date)
+            
+            # データ期間の日数を計算
+            total_days = (end_dt - start_dt).days
+            
+            # tc値を実際の日付に変換
+            # tc > 1の場合は未来の日付
+            if tc > 1:
+                days_beyond_end = (tc - 1) * total_days
+                prediction_date = end_dt + timedelta(days=days_beyond_end)
+            else:
+                # tc < 1の場合はデータ期間内
+                days_from_start = tc * total_days
+                prediction_date = start_dt + timedelta(days=days_from_start)
+            
+            return prediction_date
+            
+        except Exception as e:
+            st.error(f"日付変換エラー: {str(e)}")
+            return datetime.now() + timedelta(days=30)  # フォールバック
     
     def render_price_predictions_tab(self, symbol: str, analysis_data: pd.DataFrame):
-        """Tab 1: Price Chart with Crash Prediction Lines"""
+        """Tab 1: Price Chart with Crash Prediction Lines (論文再現テスト右上グラフ相当)"""
         
-        st.header(f"📈 {symbol} - Price History with Predictions")
+        st.header(f"📈 {symbol} - Market Data with LPPL Predictions")
         
         if analysis_data.empty:
             st.warning("No analysis data available for this symbol")
             return
         
-        # Display latest prediction metrics
+        # 最新の分析データを取得
         latest = analysis_data.iloc[0]
         
+        # メトリクス表示
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if pd.notna(latest.get('predicted_crash_date')):
-                crash_date = latest['predicted_crash_date']
-                if hasattr(crash_date, 'to_pydatetime'):
-                    crash_date = crash_date.to_pydatetime()
-                st.metric(
-                    "Predicted Crash Date",
-                    crash_date.strftime('%Y-%m-%d %H:%M'),
-                    help="Converted from tc value to actual date/time"
-                )
+            # 最新の予測クラッシュ日を表示（tc値から変換）
+            if pd.notna(latest.get('tc')):
+                tc = latest['tc']
+                data_start = latest.get('data_period_start')
+                data_end = latest.get('data_period_end')
+                
+                if data_start and data_end:
+                    pred_date = self.convert_tc_to_real_date(tc, data_start, data_end)
+                    st.metric(
+                        "Latest Crash Prediction",
+                        pred_date.strftime('%Y-%m-%d'),
+                        help=f"Converted from tc={tc:.4f}"
+                    )
+                else:
+                    st.metric("Latest Crash Prediction", "N/A")
             else:
-                st.metric("Predicted Crash Date", "N/A")
+                st.metric("Latest Crash Prediction", "N/A")
         
         with col2:
             st.metric(
                 "Model Fit (R²)",
-                f"{latest['r_squared']:.3f}" if pd.notna(latest.get('r_squared')) else "N/A",
-                help="Goodness of fit - higher values indicate better model reliability"
+                f"{latest['r_squared']:.4f}" if pd.notna(latest.get('r_squared')) else "N/A",
+                help="Goodness of fit for LPPL model"
             )
         
         with col3:
@@ -301,78 +418,178 @@ class SymbolAnalysisDashboard:
                 help="Analysis quality assessment"
             )
         
-        # Try to get price data for chart
-        price_data = self.get_symbol_price_data(symbol)
-        
-        if price_data is not None and not price_data.empty:
-            # Create price chart with prediction lines
-            fig = go.Figure()
+        # 最新のフィッティングデータを使って生データを取得
+        if pd.notna(latest.get('data_period_start')) and pd.notna(latest.get('data_period_end')):
+            data_start = latest['data_period_start']
+            data_end = latest['data_period_end']
             
-            # Price data
-            fig.add_trace(go.Scatter(
-                x=price_data.index,
-                y=price_data['Close'],
-                mode='lines',
-                name='Price',
-                line=dict(color='blue', width=2)
-            ))
+            print(f"🔍 Getting price data for {symbol}: {data_start} to {data_end}")
             
-            # Add prediction lines
-            valid_predictions = analysis_data.dropna(subset=['predicted_crash_date'])
-            for i, (_, pred) in enumerate(valid_predictions.head(10).iterrows()):
-                pred_date = pred['predicted_crash_date']
-                if hasattr(pred_date, 'to_pydatetime'):
-                    pred_date = pred_date.to_pydatetime()
+            # 実際の価格データを取得
+            price_data = self.get_symbol_price_data(symbol, data_start, data_end)
+            
+            if price_data is not None and not price_data.empty and 'Close' in price_data.columns:
+                print(f"✅ Price data retrieved successfully: {len(price_data)} days for {symbol}")
+                print(f"   Period: {price_data.index.min()} to {price_data.index.max()}")
+                print(f"   Price range: ${price_data['Close'].min():.0f} - ${price_data['Close'].max():.0f}")
+                # LPPLパラメータを抽出
+                lppl_params = {
+                    'tc': latest.get('tc', 1.0),
+                    'beta': latest.get('beta', 0.33),
+                    'omega': latest.get('omega', 6.0),
+                    'phi': latest.get('phi', 0.0),
+                    'A': latest.get('A', 0.0),
+                    'B': latest.get('B', 0.0),
+                    'C': latest.get('C', 0.0)
+                }
                 
-                # Add vertical line for prediction
-                fig.add_shape(
-                    type="line",
-                    x0=pred_date,
-                    x1=pred_date,
-                    y0=0,
-                    y1=1,
-                    yref="paper",
-                    line=dict(color=f'rgba(255, {100-i*10}, {100-i*10}, 0.7)', width=2, dash="dash")
-                )
-            
-            fig.update_layout(
-                title=f"{symbol} - Price History with Crash Predictions",
-                xaxis_title="Date",
-                yaxis_title="Price",
-                height=600,
-                hovermode='x unified'
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Price data not available. Showing prediction information only.")
-            
-            # Show prediction timeline without price data
-            valid_predictions = analysis_data.dropna(subset=['predicted_crash_date'])
-            if not valid_predictions.empty:
-                st.subheader("🔮 Crash Prediction Timeline")
+                # LPPLフィッティングを計算
+                lppl_results = self.compute_lppl_fit(price_data['Close'], lppl_params)
                 
-                for i, (_, pred) in enumerate(valid_predictions.head(5).iterrows()):
-                    pred_date = pred['predicted_crash_date']
-                    if hasattr(pred_date, 'to_pydatetime'):
-                        pred_date = pred_date.to_pydatetime()
+                if lppl_results:
+                    # 論文再現テスト右上グラフに相当する正規化表示を作成
+                    fig = go.Figure()
                     
-                    days_to_crash = (pred_date - datetime.now()).days
+                    # 正規化された実データ
+                    fig.add_trace(go.Scatter(
+                        x=price_data.index,
+                        y=lppl_results['normalized_prices'],
+                        mode='lines',
+                        name='Normalized Market Data',
+                        line=dict(color='blue', width=2),
+                        opacity=0.8
+                    ))
                     
-                    if days_to_crash <= 30:
-                        emoji = "🚨"
-                        color = "red"
-                    elif days_to_crash <= 90:
-                        emoji = "⚠️"
-                        color = "orange"
-                    else:
-                        emoji = "📅"
-                        color = "blue"
+                    # 正規化されたLPPLフィット
+                    fig.add_trace(go.Scatter(
+                        x=price_data.index,
+                        y=lppl_results['normalized_fitted'],
+                        mode='lines',
+                        name='LPPL Fit (Normalized)',
+                        line=dict(color='red', width=2.5)
+                    ))
                     
-                    st.markdown(
-                        f"{emoji} **{pred_date.strftime('%Y-%m-%d %H:%M')}** "
-                        f"({days_to_crash} days) - R²: {pred.get('r_squared', 0):.3f}"
+                    # Number of Results で指定された数の予測線を縦線で表示
+                    display_count = min(len(analysis_data), 10)  # Number of Results の値を使用
+                    
+                    for i, (_, pred) in enumerate(analysis_data.head(display_count).iterrows()):
+                        if pd.notna(pred.get('tc')):
+                            pred_tc = pred['tc']
+                            pred_start = pred.get('data_period_start', data_start)
+                            pred_end = pred.get('data_period_end', data_end)
+                            
+                            if pred_start and pred_end:
+                                pred_date = self.convert_tc_to_real_date(pred_tc, pred_start, pred_end)
+                                
+                                # 未来の日付の場合、グラフを適切にスケールするため範囲を拡張
+                                max_date = max(price_data.index.max(), pred_date)
+                                
+                                # 予測線を縦線で表示
+                                color_intensity = max(50, 255 - i * 20)  # 色の濃度を調整
+                                fig.add_shape(
+                                    type="line",
+                                    x0=pred_date,
+                                    x1=pred_date,
+                                    y0=0,
+                                    y1=1,
+                                    line=dict(
+                                        color=f'rgba(255, {color_intensity//2}, {color_intensity//2}, 0.7)', 
+                                        width=2, 
+                                        dash="dash"
+                                    )
+                                )
+                                
+                                # 予測線のラベル
+                                fig.add_annotation(
+                                    x=pred_date,
+                                    y=0.95 - i * 0.05,
+                                    text=f"tc={pred_tc:.3f}",
+                                    showarrow=False,
+                                    font=dict(size=10, color=f'rgba(255, {color_intensity//2}, {color_intensity//2}, 0.8)'),
+                                    bgcolor="rgba(255,255,255,0.7)"
+                                )
+                    
+                    # グラフのレイアウト設定
+                    fig.update_layout(
+                        title=f"{symbol} - Normalized Price Data with LPPL Predictions",
+                        xaxis_title="Date",
+                        yaxis_title="Normalized Price",
+                        height=600,
+                        hovermode='x unified',
+                        showlegend=True,
+                        # x軸の範囲を予測線まで拡張
+                        xaxis=dict(range=[
+                            price_data.index.min(),
+                            max(price_data.index.max(), 
+                                max([self.convert_tc_to_real_date(row.get('tc', 1.0), 
+                                                                 row.get('data_period_start', data_start),
+                                                                 row.get('data_period_end', data_end)) 
+                                     for _, row in analysis_data.head(display_count).iterrows() 
+                                     if pd.notna(row.get('tc'))], default=price_data.index.max()))
+                        ])
                     )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # 予測サマリーを表示
+                    st.subheader("🔮 Prediction Summary")
+                    
+                    valid_predictions = analysis_data.head(display_count)
+                    for i, (_, pred) in enumerate(valid_predictions.iterrows()):
+                        if pd.notna(pred.get('tc')):
+                            pred_tc = pred['tc']
+                            pred_start = pred.get('data_period_start', data_start)
+                            pred_end = pred.get('data_period_end', data_end)
+                            
+                            if pred_start and pred_end:
+                                pred_date = self.convert_tc_to_real_date(pred_tc, pred_start, pred_end)
+                                days_to_crash = (pred_date - datetime.now()).days
+                                
+                                st.markdown(
+                                    f"**Prediction {i+1}:** {pred_date.strftime('%Y-%m-%d')} "
+                                    f"({days_to_crash:+d} days) - "
+                                    f"R²: {pred.get('r_squared', 0):.4f} - "
+                                    f"tc: {pred_tc:.4f}"
+                                )
+                else:
+                    st.error("LPPL フィッティング計算に失敗しました")
+            else:
+                # より詳細なエラー情報を表示
+                if price_data is None:
+                    st.error(f"❌ データ取得失敗: {symbol} のデータを取得できませんでした")
+                    st.info(f"期間: {data_start} から {data_end}")
+                    st.info("UnifiedDataClientの初期化またはAPI認証に問題がある可能性があります")
+                elif price_data.empty:
+                    st.warning(f"⚠️ データが空です: {symbol} の指定期間にデータがありません")
+                    st.info(f"期間: {data_start} から {data_end}")
+                elif 'Close' not in price_data.columns:
+                    st.warning(f"⚠️ 価格列が見つかりません: {symbol} データに'Close'列がありません")
+                    st.info(f"利用可能な列: {list(price_data.columns)}")
+                else:
+                    st.warning("❓ 不明なデータ問題が発生しました")
+                    
+                # データベース情報も表示
+                st.subheader("📊 データベース情報")
+                st.json({
+                    "Symbol": symbol,
+                    "Data Source": latest.get('data_source', 'N/A'),
+                    "Period Start": data_start,
+                    "Period End": data_end,
+                    "Data Points": latest.get('data_points', 'N/A'),
+                    "Analysis Basis Date": latest.get('analysis_basis_date', 'N/A')
+                })
+        else:
+            st.error("❌ データ期間情報が不完全です")
+            st.info("data_period_start または data_period_end がデータベースに保存されていません")
+            st.subheader("📊 利用可能なデータベース情報")
+            
+            # デバッグ情報表示
+            debug_info = {}
+            for col in ['data_period_start', 'data_period_end', 'data_source', 'analysis_basis_date', 'data_points']:
+                val = latest.get(col)
+                debug_info[col] = str(val) if val is not None else "None"
+            
+            st.json(debug_info)
     
     def render_prediction_convergence_tab(self, symbol: str, analysis_data: pd.DataFrame):
         """Tab 2: Prediction Convergence Analysis"""
@@ -503,72 +720,76 @@ class SymbolAnalysisDashboard:
         else:
             display_df['predicted_crash_date_formatted'] = 'N/A'
         
-        # Add data period information
-        data_period_info = []
+        # Add fitting basis date (フィッティング基準日) - most important date
+        if 'analysis_basis_date' in display_df.columns:
+            display_df['fitting_basis_date_formatted'] = display_df['analysis_basis_date'].apply(
+                lambda x: pd.to_datetime(x).strftime('%Y-%m-%d') if pd.notna(x) else 'N/A'
+            )
+        elif 'data_period_end' in display_df.columns:
+            # Fallback to data period end
+            display_df['fitting_basis_date_formatted'] = display_df['data_period_end'].apply(
+                lambda x: pd.to_datetime(x).strftime('%Y-%m-%d') if pd.notna(x) else 'N/A'
+            )
+        else:
+            display_df['fitting_basis_date_formatted'] = 'N/A'
+        
+        # Calculate data period (number of days used for fitting)
+        data_period_days = []
         for _, row in display_df.iterrows():
             try:
-                # Get data period start and end
-                data_start = None
-                data_end = None
-                period_days = None
-                
-                # Find data period end
-                for col in ['data_period_end', 'data_end', 'end_date']:
-                    if col in display_df.columns and pd.notna(row.get(col)):
-                        data_end = pd.to_datetime(row[col]).strftime('%Y-%m-%d')
-                        break
-                
-                # Find data period start
-                for col in ['data_period_start', 'data_start', 'start_date']:
-                    if col in display_df.columns and pd.notna(row.get(col)):
-                        data_start = pd.to_datetime(row[col]).strftime('%Y-%m-%d')
-                        break
-                
-                # Find period days
-                for col in ['window_days', 'data_points', 'period_days']:
-                    if col in display_df.columns and pd.notna(row.get(col)):
-                        period_days = f"{int(row[col])} days"
-                        break
-                
-                if data_start and data_end:
-                    period_info = f"{data_start} to {data_end}"
-                elif data_end and period_days:
-                    period_info = f"~{period_days} to {data_end}"
+                # Priority 1: Use window_days if available
+                if 'window_days' in display_df.columns and pd.notna(row.get('window_days')):
+                    days = int(row['window_days'])
+                    data_period_days.append(f"{days} days")
+                # Priority 2: Calculate from start and end dates
+                elif ('data_period_start' in display_df.columns and 'data_period_end' in display_df.columns and
+                      pd.notna(row.get('data_period_start')) and pd.notna(row.get('data_period_end'))):
+                    start_dt = pd.to_datetime(row['data_period_start'])
+                    end_dt = pd.to_datetime(row['data_period_end'])
+                    days = (end_dt - start_dt).days + 1  # +1 to include both start and end
+                    data_period_days.append(f"{days} days")
+                # Priority 3: Use data_points as fallback
+                elif 'data_points' in display_df.columns and pd.notna(row.get('data_points')):
+                    points = int(row['data_points'])
+                    data_period_days.append(f"{points} days")
                 else:
-                    period_info = period_days or 'N/A'
-                
-                data_period_info.append(period_info)
-                
+                    data_period_days.append('N/A')
+                    
             except Exception:
-                data_period_info.append('N/A')
+                data_period_days.append('N/A')
         
-        display_df['data_period'] = data_period_info
+        display_df['data_period_days'] = data_period_days
         
         # Define column priority for display (left to right)
         priority_columns = [
             'predicted_crash_date_formatted',  # Most important
+            'fitting_basis_date_formatted',    # フィッティング基準日 (replaces analysis_date)
+            'data_period_days',                # Number of days (replaces data_period)
             'r_squared',
+            'quality',                         # Quality and Confidence together
             'confidence',
-            'data_period',
             'tc',
             'beta', 'omega', 'phi',
             'A', 'B', 'C',
-            'rmse', 'quality'
+            'rmse'
         ]
         
         # Select existing columns in priority order
         existing_columns = [col for col in priority_columns if col in display_df.columns]
         
-        # Add analysis_date if available
-        if 'analysis_date' in display_df.columns:
-            existing_columns.insert(1, 'analysis_date')
-        
         final_df = display_df[existing_columns].copy()
         
-        # Sort by predicted crash date (earliest first)
-        if 'predicted_crash_date' in analysis_data.columns:
+        # Sort by fitting basis date (most recent first - analysis_basis_date)
+        sort_col = None
+        if 'analysis_basis_date' in analysis_data.columns:
+            sort_col = 'analysis_basis_date'
+        elif 'data_period_end' in analysis_data.columns:
+            sort_col = 'data_period_end'
+        elif 'predicted_crash_date' in analysis_data.columns:
             sort_col = 'predicted_crash_date'
-            final_df = final_df.loc[analysis_data.sort_values(sort_col, na_position='last').index]
+        
+        if sort_col:
+            final_df = final_df.loc[analysis_data.sort_values(sort_col, na_position='last', ascending=False).index]
         
         # Format numeric columns
         numeric_columns = ['r_squared', 'confidence', 'tc', 'beta', 'omega', 'phi', 'A', 'B', 'C', 'rmse']
@@ -579,7 +800,7 @@ class SymbolAnalysisDashboard:
                 )
         
         # Display the table
-        st.subheader("📊 Analysis Results (sorted by predicted crash date)")
+        st.subheader("📊 Analysis Results (sorted by fitting basis date)")
         
         st.dataframe(
             final_df,
@@ -591,33 +812,59 @@ class SymbolAnalysisDashboard:
                     help="Predicted crash date/time converted from tc ratio",
                     width="large"
                 ),
-                "analysis_date": st.column_config.DatetimeColumn(
-                    "📅 Analysis Date",
-                    help="When the analysis was performed"
+                "fitting_basis_date_formatted": st.column_config.TextColumn(
+                    "📅 Fitting Basis Date",
+                    help="フィッティング基準日 - Final day of fitting period (most important for sorting)",
+                    width="medium"
+                ),
+                "data_period_days": st.column_config.TextColumn(
+                    "📊 Data Period",
+                    help="Number of days used for fitting analysis",
+                    width="small"
                 ),
                 "r_squared": st.column_config.TextColumn(
                     "📊 R² Score",
-                    help="Model fit quality (higher = better)"
+                    help="Model fit quality (higher = better, 0-1 scale)"
+                ),
+                "quality": st.column_config.TextColumn(
+                    "🎯 Quality",
+                    help="Analysis quality assessment (high_quality/acceptable/poor)"
                 ),
                 "confidence": st.column_config.TextColumn(
                     "✅ Confidence",
-                    help="Prediction confidence level"
-                ),
-                "data_period": st.column_config.TextColumn(
-                    "📊 Data Period",
-                    help="Period of data used for analysis",
-                    width="medium"
+                    help="Prediction confidence level (0-1 scale, similar to Quality)"
                 ),
                 "tc": st.column_config.TextColumn(
                     "🔢 tc Ratio",
-                    help="Critical time ratio (for reference)"
-                ),
-                "quality": st.column_config.TextColumn(
-                    "✅ Quality",
-                    help="Analysis quality assessment"
+                    help="Critical time ratio used for crash prediction"
                 )
             }
         )
+        
+        # Explanatory text for Quality and Confidence metrics
+        st.subheader("📖 Metric Definitions")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **🎯 Quality Assessment:**
+            - `high_quality`: R² > 0.85, stable parameters
+            - `acceptable`: R² > 0.60, reasonable fit  
+            - `poor`: R² < 0.60, unstable fitting
+            
+            Quality is determined by statistical criteria including R² score, parameter stability, and fitting convergence.
+            """)
+        
+        with col2:
+            st.markdown("""
+            **✅ Confidence Level:**
+            - Range: 0.0 - 1.0 (higher = more confident)
+            - Based on: fitting quality, parameter consistency
+            - Similar to Quality but expressed as continuous value
+            
+            Confidence represents the overall reliability of the LPPL model prediction for this analysis.
+            """)
         
         # Summary statistics
         st.subheader("📈 Summary Statistics")

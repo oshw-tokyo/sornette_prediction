@@ -113,7 +113,11 @@ class AlertNotifier:
 └──────────────┘ └─────────────────────────┘
 ```
 
-#### 5つの主要ページ
+#### 5つの主要ページ（将来の拡張計画）
+
+**⚠️ 注意**: 以下は将来の拡張計画です。現在の実装（2025-08-07）は3タブ構成で稼働中です。
+- **現在実装済み**: Price & Predictions、Prediction Convergence、Parameters
+- **詳細仕様**: [dashboard_implementation_specification.md](../dashboard_implementation_specification.md) を参照
 
 1. **リアルタイム監視**
    - アクティブアラート一覧
