@@ -31,3 +31,9 @@ _temp/
 
 # docs & directions for Claude Code
 papers/
+# Analysis results and logs (temporary files)
+results/analysis_errors.log
+results/comprehensive_viz/*.png
+results/symbol_analysis/*.png
+results/test_analysis.db
+
