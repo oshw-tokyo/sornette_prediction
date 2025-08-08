@@ -108,6 +108,9 @@ old_trials/
 archive/*/logs/
 archive/*/_temp/
 
+# Claude AI Workspace (Experimental/Testing files)
+workspace_for_claude/
+
 # Jupyter Notebooks
 .ipynb_checkpoints/
 *.ipynb

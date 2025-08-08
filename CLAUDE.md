@@ -138,7 +138,7 @@ sornette_prediction/
 ├── infrastructure/                    # 【第4層】インフラ・サポート層
 │   ├── data_sources/                  # データ取得
 │   │   ├── unified_data_client.py     # FRED + Alpha Vantage統合
-│   │   ├── market_data_catalog.json   # 16銘柄・多カテゴリカタログ
+│   │   ├── market_data_catalog.json   # 16銘柄・多カテゴリカタログ（※銘柄は拡充予定）
 │   │   ├── market_data_manager.py     # カタログベース管理
 │   │   └── api_rate_limiter.py        # API制限管理
 │   ├── database/                      # データベース（SQLite）
@@ -162,6 +162,10 @@ sornette_prediction/
 │   ├── progress_management/           # 進捗・Issue管理システム
 │   ├── mathematical_foundation.md     # 数学的基礎（論文再現結果含む）
 │   └── implementation_strategy.md     # 実装戦略
+│
+├── workspace_for_claude/              # Claude AI専用ワークスペース
+│   ├── api_alternatives_analysis.md   # API代替候補調査結果
+│   └── test_yahoo_finance.py         # Yahoo Finance API利用テスト
 │
 └── papers/                            # 論文アーカイブ
     └── extracted_texts/               # テキスト変換済み論文（PDFは禁止）
@@ -366,6 +370,47 @@ run_catalog_analysis() で16銘柄を自動分析・DB保存
 2. **パラメータ調整**: 既存メソッドの引数で制御
 3. **設定変更**: `market_data_catalog.json`で銘柄・設定管理
 
+#### 5. **🧪 Claude AI専用ワークスペース**
+
+**目的**: Claude Codeの試行錯誤・実験・調査作業をプロジェクトコードから分離
+
+##### A. **ワークスペース利用原則**
+```bash
+workspace_for_claude/
+├── api_alternatives_analysis.md   # API代替候補調査結果
+├── test_yahoo_finance.py         # Yahoo Finance API利用テスト
+└── [その他の実験・調査ファイル]
+```
+
+##### B. **利用ルール**
+- **試行錯誤**: 新しいAPIテスト、実験的コード、プロトタイプ
+- **調査結果**: 技術調査レポート、比較分析、評価結果
+- **テンポラリファイル**: 検証用の一時的なスクリプト
+- **重要**: 実験完了後、有用な成果はプロジェクト本体に統合
+
+##### C. **使用場面**
+- **API代替調査**: 新しいデータソースのテスト・評価
+- **技術検証**: ライブラリ・手法の事前検証
+- **デバッグ支援**: 問題再現・原因特定のためのテストコード
+- **プロトタイプ**: アイデア検証段階の実装
+
+##### D. **ワークスペース運用ルール**
+1. **分離原則**: プロジェクト本体のコードに影響を与えない
+2. **実験専用**: 本格実装前の検証・試行錯誤に利用
+3. **統合フロー**: 検証完了後、成功したコードを適切な層に移行
+4. **クリーンアップ**: 不要になった実験ファイルは定期削除
+
+**実装時の指針**:
+```bash
+# ❌ 間違った実装場所
+applications/analysis_tools/experimental_api_test.py  # プロジェクト本体に実験コード
+
+# ✅ 正しい実装場所  
+workspace_for_claude/experimental_api_test.py        # ワークスペースで実験
+↓ (検証成功後)
+infrastructure/data_sources/twelve_data_client.py    # 本体に統合
+```
+
 ---
 
 ## 🛡️ **実装保護ガイドライン（Claude Code向け）**
@@ -450,5 +495,5 @@ Claude Code としてこのプロジェクトで作業を開始する場合：
 
 ---
 
-**最終更新**: 2025-08-04 (現在の実装ベース・矛盾解消・カタログベース統一)
+**最終更新**: 2025-08-08 (workspace_for_claude追加・API調査結果格納)
 **管理者**: プロジェクトオーナー + Claude Code
