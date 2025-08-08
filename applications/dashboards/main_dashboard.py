@@ -1889,7 +1889,12 @@ class SymbolAnalysisDashboard:
                 color=plot_data['r_squared'],
                 colorscale='Viridis',
                 showscale=True,
-                colorbar=dict(title="R² Score")
+                colorbar=dict(
+                    title="R² Score",
+                    x=1.02,  # Move colorbar further right to avoid overlap
+                    len=0.7,  # Make colorbar shorter
+                    y=0.5     # Center vertically
+                )
             ),
             text=hover_texts,
             hovertemplate='Fitting Basis Date: %{x}<br>Predicted Crash: %{y}<br>%{text}<extra></extra>',
@@ -1904,17 +1909,15 @@ class SymbolAnalysisDashboard:
         line_start = min(x_range[0], y_range[0])
         line_end = x_range[1]  # Use latest fitting basis date as end point
         
-        # Always add the y=x line
+        # Always add the y=x reference line (without annotations to avoid overlap)
         fig.add_trace(go.Scatter(
             x=[line_start, line_end],
             y=[line_start, line_end],
             mode='lines',
             line=dict(color='lightblue', width=1, dash='solid'),  # 青系、細線、実線
-            name='y=x (Same Day Prediction)',
-            hovertemplate='Same Day Prediction Line<br>Prediction Date = Fitting Date<extra></extra>',
-            showlegend=True,
-            legendgroup='reference',
-            legendrank=1000  # Put at the end of legend
+            name='Reference Line',
+            showlegend=False,  # Remove from legend to avoid clutter
+            hoverinfo='skip'   # Remove hover info to avoid annotation overlap
         ))
         
         fig.update_layout(
@@ -1926,6 +1929,11 @@ class SymbolAnalysisDashboard:
         )
         
         st.plotly_chart(fig, use_container_width=True)
+        
+        # Reference line explanation
+        st.info("""
+        📏 **Reference Line (Light Blue)**: The diagonal line represents the theoretical case where the predicted crash date equals the fitting basis date. If points are on the line, predictions suggest crashes on the same day as fitting (immediate risk).
+        """)
         
         # Multi-period convergence analysis
         st.subheader("📈 Multi-Period Convergence Analysis")
