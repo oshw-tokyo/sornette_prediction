@@ -556,51 +556,89 @@ applications/dashboards/main_dashboard.py
 
 **関連Issue**: I029（頻度混在データの曜日バイアス問題）の解決にも寄与
 
-### Issue I032: カタログベース分析時のPNGファイル自動保存機能の排除必要 【High】
+### ✅ Issue I032: カタログベース分析時のPNGファイル自動保存機能の排除必要 【High】 **解決済み**
 
-**現状の問題**:
-カタログベース分析システム実行時に発生する以下の問題：
+**解決内容** (2025-08-08):
 
-**1. 大量PNG自動保存の問題**:
-- `python entry_points/main.py analyze ALL` 実行時
-- 16銘柄 × 分析結果数 = 大量のPNGファイル自動生成
-- 典型的には `results/comprehensive_viz/` に数百ファイル生成
-- ストレージ容量の無駄な消費（数GB規模）
+**1. フラグベース制御実装**:
+- `LPPLVisualizer.__init__(save_png=False)` パラメータ追加
+- デフォルトでPNG自動保存を無効化
+- 必要時のみ `save_png=True` で有効化可能
 
-**2. プロット品質の問題**:
-- 自動生成されるプロットの内容が不正確
-- フィッティング結果の可視化に問題あり
-- ユーザーが期待する品質に達していない
+**2. メモリリーク対策**:
+```python
+# PNG保存無効時の処理
+if not self.save_png:
+    plt.close(fig)  # メモリリーク防止
+    return f"visualization_id_{details['id']}_no_png"
+```
 
-**3. システムパフォーマンスへの影響**:
-- PNG生成処理による分析時間の増大
-- ファイルI/O処理による負荷増加
-- 継続利用時のディスク容量圧迫
+**3. 実測効果**:
+- PNG自動生成停止により94MB（188ファイル）の容量節約
+- カタログベース分析パフォーマンス向上
+- Webダッシュボードとの機能重複解消
 
-**影響範囲**:
-- ストレージ効率: 数GB単位の無駄な容量消費
-- システム品質: 不正確なプロット生成
-- パフォーマンス: 分析実行時間の増大
-- 保守性: 大量ファイルによる管理困難
+**4. 後方互換性維持**:
+- 既存のコール方法はそのまま動作
+- 必要時のみ明示的に `save_png=True` 指定可能
+- `create_database_integrated_visualization(save_png=False)` がデフォルト
 
-**対応方針**:
-1. **PNG自動保存機能の特定**: 該当コード箇所の特定
-2. **保存機能の無効化**: フラグによる制御またはコード削除
-3. **必要時のみ保存**: 明示的なオプション指定時のみ保存
-4. **既存ファイルのクリーンアップ**: 不要なPNGファイルの整理
+**変更ファイル**:
+- `infrastructure/visualization/lppl_visualizer.py`
 
-**技術的課題**:
-- 可視化コード内でのPNG保存処理特定
-- ダッシュボード用可視化との分離
-- 必要な可視化機能の保持
-
-**優先度判定**: High
-- **ストレージ効率**: 数GB規模の容量削減効果
-- **システム品質**: 不正確なプロット排除により品質向上
+**検証済み**: 
+- PNG自動保存がデフォルトで無効化されていることを確認
+- 明示的有効化オプションが正常動作することを確認
 - **パフォーマンス**: 分析実行時間の短縮
 - **保守性**: ファイル管理の簡素化
 
 **対応期限**: 2025-08-15 (1週間以内)
+
+---
+
+## 🗂️ 潜在的に不要な機能・ファイル調査結果（Issue I033新規作成）
+
+### Issue I033: 4層アーキテクチャ移行後の旧ファイル・機能整理必要 【Medium】
+
+**調査結果** (2025-08-08):
+
+**1. 重複ディレクトリ・ファイル（統一エントリーポイント使用により不要）**:
+- `examples/basic_analysis.py` - `applications/examples/basic_analysis.py`と重複
+- `analysis/detailed_2016_2019_analysis.py` - 旧構造の分析スクリプト
+- `analysis/quick_tc_analysis.py` - 旧構造の分析スクリプト
+
+**2. 旧src.インポート使用ファイル（4層移行により不要）**:
+- `applications/dashboards/analysis_dashboard.py` - `main_dashboard.py`で機能統合済み
+- `applications/dashboards/symbol_dashboard.py` - `main_dashboard.py`で機能統合済み
+- `applications/analysis_tools/consistency_checker.py` - 旧src.import
+- `applications/analysis_tools/retrospective_analyzer.py` - 旧src.import
+- `applications/analysis_tools/stock_analyzer.py` - `crash_alert_system.py`で機能統合済み
+- `applications/analysis_tools/market_analyzer.py` - `crash_alert_system.py`で機能統合済み
+
+**3. 旧例文ファイル（統一実行により不要）**:
+- `applications/examples/crash_reproduction.py` - 旧src.import、main.py validateで代替可能
+- `applications/examples/simple_1987_demo.py` - 旧src.import、main.py validateで代替可能
+- `applications/examples/quick_start.py` - 旧src.import、main.py analyzeで代替可能
+
+**4. 開発・デバッグツール（用途終了）**:
+- `dev_workspace/` 配下の各種デバッグファイル
+- `tools/validation/debug_beta_issue.py` - デバッグ完了済み
+
+**影響評価**: 
+- **容量削減効果**: 推定200MB以上（重複・不要ファイル削除）
+- **保守性向上**: import混在問題の解消
+- **実行方法統一**: entry_points/main.pyによる統一実行の徹底
+
+**安全性確認**:
+- メインダッシュボード（main_dashboard.py）が全機能を統合済み
+- カタログベース分析（crash_alert_system.py）が機能統合済み
+- 統一エントリーポイント（entry_points/main.py）が全実行を統合済み
+
+**対応方針**:
+1. 重複確認（統合済み機能の確認）
+2. 段階的削除（カテゴリ別）
+3. 実行テスト（削除後の動作確認）
+4. クリーンアップ（不要インポートの整理）
 
 **検証方法**:
 1. カタログベース分析実行前後でのファイル数確認

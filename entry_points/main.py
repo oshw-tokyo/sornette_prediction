@@ -88,15 +88,11 @@ def run_analysis(symbol, period='1y'):
             print(f"❌ Crash alert analysis error: {e}")
             return False
     elif symbol.upper() == 'MARKET':
-        # 市場リスク分析
-        try:
-            from applications.analysis_tools.market_analyzer import main as run_market_analysis
-            print("📈 市場リスク分析を実行...")
-            run_market_analysis()
-            return True
-        except Exception as e:
-            print(f"❌ Market analysis error: {e}")
-            return False
+        # 市場リスク分析（カタログベース包括分析で代替）
+        print("📈 市場リスク分析を実行...")
+        print("💡 'MARKET'は'ALL'コマンドで代替されました")
+        print("   推奨: python entry_points/main.py analyze ALL")
+        return run_analysis('ALL')
     else:
         # 個別銘柄解析
         try:

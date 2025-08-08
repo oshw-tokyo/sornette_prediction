@@ -19,15 +19,17 @@ from ..config.matplotlib_config import save_and_close_figure
 class LPPLVisualizer:
     """LPPL分析結果の可視化クラス"""
     
-    def __init__(self, db_path: str = "results/analysis_results.db"):
+    def __init__(self, db_path: str = "results/analysis_results.db", save_png: bool = False):
         """
         初期化
         
         Args:
             db_path: データベースパス
+            save_png: PNG自動保存を有効にするか（デフォルト: False、Issue I032対応）
         """
         self.db = ResultsDatabase(db_path)
         self.fitter = LogarithmPeriodicFitter()
+        self.save_png = save_png
     
     def create_comprehensive_visualization(self, analysis_id: int, 
                                          original_data: Optional[pd.DataFrame] = None) -> str:
@@ -263,11 +265,19 @@ Predicted beyond data: {(params['tc'] - 1.0) * 365:.0f} days"""
         
         plt.tight_layout()
         
-        # 保存
-        os.makedirs('results/comprehensive_viz', exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fig_path = f'results/comprehensive_viz/lppl_comprehensive_id{details["id"]}_{timestamp}.png'
-        save_and_close_figure(fig, fig_path)
+        # PNG保存（Issue I032: デフォルトで無効化）
+        fig_path = None
+        if self.save_png:
+            os.makedirs('results/comprehensive_viz', exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fig_path = f'results/comprehensive_viz/lppl_comprehensive_id{details["id"]}_{timestamp}.png'
+            save_and_close_figure(fig, fig_path)
+            print(f"✅ PNG保存: {fig_path}")
+        else:
+            # Issue I032対応: PNG保存をスキップ
+            print("📊 PNG自動保存は無効化されています (save_png=False)")
+            plt.close(fig)  # メモリリーク防止
+            fig_path = f"visualization_id_{details['id']}_no_png"
         
         return fig_path
     
@@ -284,14 +294,15 @@ Predicted beyond data: {(params['tc'] - 1.0) * 365:.0f} days"""
         return viz_id
 
 def create_database_integrated_visualization(analysis_id: int, 
-                                           db_path: str = "results/demo_analysis.db") -> str:
-    """データベース統合LPPL可視化の作成"""
-    visualizer = LPPLVisualizer(db_path)
+                                           db_path: str = "results/demo_analysis.db",
+                                           save_png: bool = False) -> str:
+    """データベース統合LPPL可視化の作成（Issue I032対応: PNG保存デフォルト無効化）"""
+    visualizer = LPPLVisualizer(db_path, save_png=save_png)
     
     # 可視化作成
     fig_path = visualizer.create_comprehensive_visualization(analysis_id)
     
-    # データベース更新
+    # データベース更新（PNG保存が無効でもメタデータは記録）
     viz_id = visualizer.update_database_visualization(analysis_id, fig_path)
     
     print(f"✅ 統合可視化完了: ID={analysis_id} → 可視化ID={viz_id}")

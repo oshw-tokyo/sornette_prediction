@@ -5,17 +5,15 @@ This package contains specialized analysis tools for different types
 of market analysis and crash prediction workflows.
 
 Components:
-    market_analyzer: Comprehensive market analysis system
-    retrospective_analyzer: Historical analysis and backtesting
-    stock_analyzer: Individual stock analysis tools
-    consistency_checker: Cross-symbol analysis consistency verification
+    crash_alert_system: Comprehensive market crash prediction and alert system
+    scheduled_analyzer: Automated periodic analysis system
 
 Capabilities:
-    - Multi-market crash prediction
-    - Historical backtesting
-    - Individual stock analysis
+    - Multi-market crash prediction with catalog-based analysis
+    - Real-time crash alert generation
+    - Investment recommendation system
+    - Automated scheduled analysis
     - Cross-validation between symbols
-    - Consistency analysis across time periods
 """
 
 __package_type__ = "ANALYSIS_TOOLS"
