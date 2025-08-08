@@ -124,36 +124,39 @@ sornette_prediction/
 │
 ├── applications/                      # 【第3層】アプリケーション層
 │   ├── analysis_tools/                # 分析ツール
-│   │   ├── crash_alert_system.py      # カタログベース包括解析
-│   │   ├── market_analyzer.py         # 市場リスク分析
-│   │   └── stock_analyzer.py          # 個別株分析
+│   │   ├── crash_alert_system.py      # カタログベース包括解析・アラートシステム
+│   │   └── scheduled_analyzer.py      # 定期分析システム
 │   ├── dashboards/                    # Webインターフェース
-│   │   ├── main_dashboard.py          # メインダッシュボード
-│   │   └── symbol_dashboard.py        # 銘柄別ダッシュボード
-│   └── examples/                      # 実行例・デモ
-│       ├── basic_analysis.py          # 基本分析デモ
-│       └── simple_symbol_analysis.py  # 個別銘柄分析
+│   │   ├── main_dashboard.py          # メインダッシュボード（統合済み）
+│   │   └── dashboard_launcher.py      # ダッシュボード起動システム
+│   ├── examples/                      # 実行例・デモ
+│   │   ├── basic_analysis.py          # 基本分析デモ
+│   │   ├── simple_symbol_analysis.py  # 個別銘柄分析
+│   │   └── validation_demo.py         # 検証デモ
+│   └── schedulers/                    # スケジューラー（アーカイブ構造）
 │
 ├── infrastructure/                    # 【第4層】インフラ・サポート層
 │   ├── data_sources/                  # データ取得
 │   │   ├── unified_data_client.py     # FRED + Alpha Vantage統合
-│   │   ├── market_data_catalog.json   # 25銘柄・7カテゴリカタログ
+│   │   ├── market_data_catalog.json   # 16銘柄・多カテゴリカタログ
 │   │   ├── market_data_manager.py     # カタログベース管理
 │   │   └── api_rate_limiter.py        # API制限管理
 │   ├── database/                      # データベース（SQLite）
 │   │   ├── results_database.py        # 結果管理
 │   │   └── integration_helpers.py     # 統合ヘルパー（tc→日時変換実装済み）
 │   └── visualization/                 # 可視化ツール
-│       ├── lppl_visualizer.py         # LPPL専用可視化
-│       └── crash_prediction_visualizer.py # 予測可視化
+│       └── lppl_visualizer.py         # LPPL専用可視化（PNG無効化対応）
 │
 ├── tests/                             # テストコード
-│   └── historical_crashes/            # 論文再現（保護対象）
-│       ├── black_monday_1987_validator.py # 100/100スコア維持必須
-│       └── dotcom_bubble_2000_validator.py # 副次検証
+│   ├── historical_crashes/            # 歴史的クラッシュ検証
+│   ├── reproducibility_validation/    # 再現性検証システム（保護対象）
+│   ├── market_data/                   # 市場データテスト
+│   ├── fitting/                       # フィッティングテスト
+│   └── api_tests/                     # API接続テスト
 │
-├── results/                           # 分析結果
-│   └── analysis_results.db            # SQLiteデータベース
+├── results/                           # 分析結果（クリーンアップ済み）
+│   ├── analysis_results.db            # SQLiteデータベース
+│   └── crash_alerts/                  # アラート出力ファイル
 │
 ├── docs/                              # ドキュメント
 │   ├── progress_management/           # 進捗・Issue管理システム
@@ -170,13 +173,14 @@ sornette_prediction/
 統一エントリーポイント → インフラ層 → 科学的中核 → アプリケーション層
           ↓                ↓        ↓         ↓
    entry_points/main.py → infrastructure → core → applications
-   ├─ analyze ALL       → data_sources  → fitting → analysis_tools  
-   ├─ analyze SYMBOL    → database      → validation → dashboards
-   ├─ dashboard         → visualization → -------- → examples
-   └─ validate --crash  → ------------- → -------- → ---------
+   ├─ analyze ALL       → data_sources  → fitting → crash_alert_system  
+   ├─ analyze SYMBOL    → database      → validation → main_dashboard
+   ├─ dashboard         → visualization → -------- → scheduled_analyzer
+   ├─ validate --crash  → ------------- → -------- → examples
+   └─ scheduled-analysis → ------------- → -------- → ---------
                                 ↓
-                     SQLite Storage + Web Dashboard
-                     (results/analysis_results.db + localhost:8501)
+                     SQLite Storage + Web Dashboard + Alert System
+                     (results/analysis_results.db + crash_alerts/ + localhost:8501)
 ```
 
 ---
@@ -206,11 +210,12 @@ ALPHA_VANTAGE_KEY=your_alpha_vantage_key_here
 ## 🎯 システム機能概要
 
 ### 📊 **カタログベース市場分析システム**
-- **25銘柄・7カテゴリ** (us_indices, crypto_assets, sector_indices, REITs等)
+- **16銘柄・多カテゴリ** (us_indices, crypto_assets, sector_indices, REITs等)
 - **FRED API優先** + Alpha Vantageフォールバック
 - **4段階リスク評価** (CRITICAL/HIGH/MEDIUM/LOW)
 - **投資判断支援** (ポジションサイズ推奨付き)
 - **API制限管理** (自動待機・進捗表示)
+- **統合アラートシステム** (crash_alert_system.py)
 
 ### 🕐 **定期スケジュール分析システム** ⭐⭐⭐⭐⭐ **要件定義完了**
 - **自動スケジュール実行**: 毎週土曜日朝の定期分析（頻度設定可能）
@@ -228,6 +233,11 @@ ALPHA_VANTAGE_KEY=your_alpha_vantage_key_here
 - **1987年ブラックマンデー検証** (100/100スコア保護)
 - **2000年ドットコムバブル検証** (定性的検証)
 - **tc→datetime変換** (時間精度対応、DB保存時実行済み)
+
+### 📊 **可視化システム**
+- **Webダッシュボード**: リアルタイム・インタラクティブ可視化
+- **PNG自動保存**: デフォルト無効化（Issue I032解決済み）
+- **メモリ効率**: 不要なファイル生成を回避
 
 ### 🚀 **統一実行インターフェース**
 ```bash
