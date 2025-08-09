@@ -1,626 +1,2047 @@
 {
   "catalog_metadata": {
-    "version": "2.0.0",
-    "last_updated": "2025-08-04",
-    "description": "Sornette予測システム対応マーケットデータカタログ（拡張版）",
+    "version": "4.0.0",
+    "last_updated": "2025-08-08",
+    "description": "Sornette予測システム対応マーケットデータカタログ（包括拡張版）",
     "maintainer": "Claude Code System",
     "data_statistics": {
-      "total_symbols": 25,
-      "fred_available": 18,
-      "external_required": 7
-    }
-  },
-  
-  "data_categories": {
-    "us_indices": {
-      "description": "米国主要株式指数",
-      "importance": "high",
-      "analysis_priority": 1
+      "total_symbols": 87,
+      "fred_available": 33,
+      "alpha_vantage_available": 20,
+      "coingecko_available": 34,
+      "expansion_ratio": "4.35x (from 20 to 87 symbols)"
     },
-    "sector_indices": {
-      "description": "セクター別指数",
-      "importance": "medium",
-      "analysis_priority": 2
-    },
-    "crypto_assets": {
-      "description": "仮想通貨・暗号資産",
-      "importance": "high",
-      "analysis_priority": 3
-    },
-    "reits": {
-      "description": "不動産投資信託",
-      "importance": "medium",
-      "analysis_priority": 4
-    },
-    "individual_stocks": {
-      "description": "個別銘柄（米国大型株）",
-      "importance": "medium", 
-      "analysis_priority": 5
-    },
-    "etf_volatility": {
-      "description": "ETFボラティリティ指標",
-      "importance": "low",
-      "analysis_priority": 6
-    },
-    "global_indices": {
-      "description": "国際指数",
-      "importance": "medium",
-      "analysis_priority": 7
+    "coverage_expansion": {
+      "fred_expansion": "14 → 33 symbols (2.4x)",
+      "coingecko_expansion": "6 → 34 symbols (5.7x)",
+      "alpha_vantage_expansion": "2 → 20 symbols (10.0x)"
     }
   },
 
+  "data_categories": {
+    "us_major_indices": {
+      "description": "米国主要株式指数（拡張）",
+      "importance": "high",
+      "analysis_priority": 1,
+      "symbol_count": 9
+    },
+    "sector_indices": {
+      "description": "セクター別指数",
+      "importance": "high",
+      "analysis_priority": 2,
+      "symbol_count": 12
+    },
+    "crypto_assets_tier1": {
+      "description": "仮想通貨Tier1（基軸・主要プラットフォーム）",
+      "importance": "high",
+      "analysis_priority": 3,
+      "symbol_count": 10
+    },
+    "crypto_assets_tier2": {
+      "description": "仮想通貨Tier2（DeFi・スケーリング）",
+      "importance": "medium",
+      "analysis_priority": 4,
+      "symbol_count": 10
+    },
+    "international_markets": {
+      "description": "国際市場・新興国",
+      "importance": "medium",
+      "analysis_priority": 5,
+      "symbol_count": 8
+    },
+    "reit_indices": {
+      "description": "不動産投資信託指数・ETF",
+      "importance": "medium",
+      "analysis_priority": 6,
+      "symbol_count": 5
+    },
+    "bonds_rates": {
+      "description": "金利・債券指標",
+      "importance": "medium",
+      "analysis_priority": 7,
+      "symbol_count": 7
+    },
+    "commodities": {
+      "description": "商品・コモディティ",
+      "importance": "medium",
+      "analysis_priority": 8,
+      "symbol_count": 5
+    },
+    "crypto_assets_tier3": {
+      "description": "仮想通貨Tier3（特殊用途・新興）",
+      "importance": "low",
+      "analysis_priority": 9,
+      "symbol_count": 10
+    },
+    "crypto_assets_tier4": {
+      "description": "仮想通貨Tier4（プライバシー・ニッチ）",
+      "importance": "low",
+      "analysis_priority": 10,
+      "symbol_count": 6
+    },
+    "volatility_indices": {
+      "description": "ボラティリティ指標",
+      "importance": "supplementary",
+      "analysis_priority": 11,
+      "symbol_count": 3
+    },
+    "style_factors": {
+      "description": "成長・バリュー・サイズファクター",
+      "importance": "medium",
+      "analysis_priority": 12,
+      "symbol_count": 4
+    }
+  },
   "symbols": {
     "NASDAQCOM": {
       "display_name": "NASDAQ Composite Index",
-      "category": "us_indices",
+      "category": "us_major_indices",
       "asset_class": "equity",
       "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "NASDAQ取引所上場全株式（約3,000社）の時価総額加重平均指数",
-      "companies_count": "~3000",
-      "sector_focus": "Technology (50%), Consumer Discretionary (15%), Healthcare (10%)",
-      "bubble_analysis_suitability": "excellent",
-      "historical_bubbles": ["2000 Dotcom", "1999-2000 Tech"],
-      
+      "description": "NASDAQ Composite Index - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
           "symbol": "NASDAQCOM",
           "update_frequency": "daily",
-          "historical_coverage": "1971-present",
           "reliability": "excellent",
           "cost": "free"
-        },
-        "fallback": {
-          "provider": "alpha_vantage", 
-          "symbol": "^IXIC",
-          "update_frequency": "daily", 
-          "historical_coverage": "1985-present",
-          "reliability": "good",
-          "cost": "free_limited"
         }
       },
-      
       "lppl_analysis": {
         "recommended": true,
-        "minimum_data_period": "365 days",
-        "optimal_data_period": "730 days", 
-        "critical_parameters": {
-          "tc_normal_range": [1.1, 2.0],
-          "beta_expected": 0.33,
-          "omega_typical": [5.0, 8.0]
-        }
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
       }
     },
-
     "SP500": {
       "display_name": "S&P 500 Index",
-      "category": "us_indices",
-      "asset_class": "equity", 
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "米国大型株500社の時価総額加重平均指数",
-      "companies_count": "500",
-      "sector_focus": "Diversified across all sectors",
-      "bubble_analysis_suitability": "excellent",
-      "historical_bubbles": ["1929 Crash", "2000 Dotcom", "2008 Financial Crisis"],
-      
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "SP500", 
-          "update_frequency": "daily",
-          "historical_coverage": "1957-present",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "365 days",
-        "optimal_data_period": "1095 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.1, 2.5],
-          "beta_expected": 0.33, 
-          "omega_typical": [4.0, 7.0]
-        }
-      }
-    },
-
-    "NASDAQ100": {
-      "display_name": "NASDAQ 100 Index",
-      "category": "us_indices",
+      "category": "us_major_indices",
       "asset_class": "equity",
       "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "NASDAQ上場の非金融大型株100社指数",
-      "companies_count": "100",
-      "sector_focus": "Technology (55%), Consumer Discretionary (20%)",
-      "bubble_analysis_suitability": "excellent",
-      "historical_bubbles": ["2000 Dotcom", "2020 COVID Tech Rally"],
-      
+      "description": "S&P 500 Index - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "SP500",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
+      }
+    },
+    "NASDAQ100": {
+      "display_name": "NASDAQ 100 Index",
+      "category": "us_major_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "NASDAQ 100 Index - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
           "symbol": "NASDAQ100",
           "update_frequency": "daily",
-          "historical_coverage": "1985-present",
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
         "recommended": true,
-        "minimum_data_period": "365 days",
-        "optimal_data_period": "730 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.05, 1.8],
-          "beta_expected": 0.33,
-          "omega_typical": [5.5, 9.0]
-        }
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
       }
     },
-
     "DJIA": {
-      "display_name": "Dow Jones Industrial Average", 
-      "category": "us_indices",
+      "display_name": "Dow Jones Industrial Average",
+      "category": "us_major_indices",
       "asset_class": "equity",
       "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "米国代表的工業株30社の価格加重平均指数",
-      "companies_count": "30",
-      "sector_focus": "Industrial, Financial, Technology",
-      "bubble_analysis_suitability": "good",
-      "historical_bubbles": ["1929 Crash", "1987 Black Monday", "2000 Dotcom"],
-      
+      "description": "Dow Jones Industrial Average - fredデータソース",
       "data_sources": {
         "primary": {
-          "provider": "fred", 
+          "provider": "fred",
           "symbol": "DJIA",
           "update_frequency": "daily",
-          "historical_coverage": "2015-present",
-          "reliability": "excellent", 
+          "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
         "recommended": true,
-        "minimum_data_period": "365 days",
-        "optimal_data_period": "730 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.1, 2.0],
-          "beta_expected": 0.33,
-          "omega_typical": [4.0, 6.5]
-        }
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
       }
     },
-
+    "DJTA": {
+      "display_name": "Dow Jones Transportation Average",
+      "category": "us_major_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "Dow Jones Transportation Average - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DJTA",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
+      }
+    },
+    "DJUA": {
+      "display_name": "Dow Jones Utility Average",
+      "category": "us_major_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "Dow Jones Utility Average - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DJUA",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
+      }
+    },
+    "WILREIT": {
+      "display_name": "Wilshire US REIT Price Index",
+      "category": "us_major_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "Wilshire US REIT Price Index - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "WILREIT",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
+      }
+    },
+    "WILL4500": {
+      "display_name": "Wilshire 4500 Total Market Index",
+      "category": "us_major_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "Wilshire 4500 Total Market Index - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "WILL4500",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
+      }
+    },
+    "WILL5000": {
+      "display_name": "Wilshire 5000 Total Market Index",
+      "category": "us_major_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "Wilshire 5000 Total Market Index - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "WILL5000",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "730 days"
+      }
+    },
     "NASDAQSOX": {
       "display_name": "PHLX Semiconductor Index",
       "category": "sector_indices",
       "asset_class": "equity",
       "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "半導体セクター主要30社指数",
-      "companies_count": "30",
-      "sector_focus": "Semiconductors & Semiconductor Equipment",
-      "bubble_analysis_suitability": "excellent",
-      "historical_bubbles": ["2000 Tech Bubble", "2021-2022 Chip Shortage Rally"],
-      
+      "description": "PHLX Semiconductor Index - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
           "symbol": "NASDAQSOX",
           "update_frequency": "daily",
-          "historical_coverage": "1993-present",
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
         "recommended": true,
         "minimum_data_period": "180 days",
-        "optimal_data_period": "365 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.05, 1.5],
-          "beta_expected": 0.33,
-          "omega_typical": [6.0, 12.0]
-        }
+        "optimal_data_period": "365 days"
       }
     },
-
     "NASDAQRSBLCN": {
-      "display_name": "NASDAQ Blockchain Economy Index",
+      "display_name": "NASDAQ Blockchain Index",
       "category": "sector_indices",
       "asset_class": "equity",
       "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "ブロックチェーン関連企業指数",
-      "companies_count": "variable",
-      "sector_focus": "Blockchain Technology & Crypto Mining",
-      "bubble_analysis_suitability": "excellent",
-      "historical_bubbles": ["2017 Crypto Bubble", "2021 NFT/DeFi Bubble"],
-      
+      "description": "NASDAQ Blockchain Index - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
           "symbol": "NASDAQRSBLCN",
           "update_frequency": "daily",
-          "historical_coverage": "2018-present",
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
         "recommended": true,
         "minimum_data_period": "180 days",
-        "optimal_data_period": "365 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.05, 1.3],
-          "beta_expected": 0.33,
-          "omega_typical": [8.0, 15.0]
-        }
+        "optimal_data_period": "365 days"
       }
     },
-
+    "NASDAQBIOTECH": {
+      "display_name": "NASDAQ Biotechnology Index",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "NASDAQ Biotechnology Index - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "NASDAQBIOTECH",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "NASDAQBANK": {
+      "display_name": "NASDAQ Bank Index",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "NASDAQ Bank Index - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "NASDAQBANK",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "REIT": {
+      "display_name": "Real Estate Investment Trusts",
+      "category": "reit_indices",
+      "asset_class": "real_estate",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "Real Estate Investment Trusts - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "REIT",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "REITTMA": {
+      "display_name": "REITs Total Mortgages Asset Level",
+      "category": "reit_indices",
+      "asset_class": "real_estate",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "REITs Total Mortgages Asset Level - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "REITTMA",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "NIKKEI225": {
+      "display_name": "Nikkei 225",
+      "category": "international_indices",
+      "asset_class": "other",
+      "instrument_type": "INDEX",
+      "market_region": "INTERNATIONAL",
+      "description": "Nikkei 225 - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "NIKKEI225",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "DEXCHUS": {
+      "display_name": "China / U.S. Foreign Exchange Rate",
+      "category": "international_indices",
+      "asset_class": "other",
+      "instrument_type": "INDEX",
+      "market_region": "INTERNATIONAL",
+      "description": "China / U.S. Foreign Exchange Rate - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DEXCHUS",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "DEXJPUS": {
+      "display_name": "Japan / U.S. Foreign Exchange Rate",
+      "category": "international_indices",
+      "asset_class": "other",
+      "instrument_type": "INDEX",
+      "market_region": "INTERNATIONAL",
+      "description": "Japan / U.S. Foreign Exchange Rate - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DEXJPUS",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "DEXUSEU": {
+      "display_name": "U.S. / Euro Foreign Exchange Rate",
+      "category": "international_indices",
+      "asset_class": "other",
+      "instrument_type": "INDEX",
+      "market_region": "INTERNATIONAL",
+      "description": "U.S. / Euro Foreign Exchange Rate - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DEXUSEU",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
     "CBBTCUSD": {
-      "display_name": "Bitcoin (BTC/USD)",
-      "category": "crypto_assets",
+      "display_name": "Bitcoin (Coinbase)",
+      "category": "crypto_assets_tier1",
       "asset_class": "cryptocurrency",
       "instrument_type": "CRYPTO",
       "market_region": "GLOBAL",
-      "description": "ビットコイン対米ドル価格（Coinbase）",
-      "companies_count": "N/A",
-      "sector_focus": "Digital Currency",
-      "bubble_analysis_suitability": "excellent",
-      "historical_bubbles": ["2013 Rally", "2017 Bubble", "2021 Institutional Bubble"],
-      
+      "description": "Bitcoin (Coinbase) - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
           "symbol": "CBBTCUSD",
           "update_frequency": "daily",
-          "historical_coverage": "2014-12-01 to present",
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
         "recommended": true,
         "minimum_data_period": "90 days",
-        "optimal_data_period": "365 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.02, 1.3],
-          "beta_expected": 0.33,
-          "omega_typical": [10.0, 20.0]
-        }
+        "optimal_data_period": "365 days"
       }
     },
-
     "CBETHUSD": {
-      "display_name": "Ethereum (ETH/USD)",
-      "category": "crypto_assets",
+      "display_name": "Ethereum (Coinbase)",
+      "category": "crypto_assets_tier1",
       "asset_class": "cryptocurrency",
       "instrument_type": "CRYPTO",
       "market_region": "GLOBAL",
-      "description": "イーサリアム対米ドル価格（Coinbase）",
-      "companies_count": "N/A",
-      "sector_focus": "Smart Contract Platform",
-      "bubble_analysis_suitability": "excellent",
-      "historical_bubbles": ["2017 ICO Bubble", "2021 DeFi/NFT Bubble"],
-      
+      "description": "Ethereum (Coinbase) - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
           "symbol": "CBETHUSD",
           "update_frequency": "daily",
-          "historical_coverage": "2016-05-18 to present",
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
         "recommended": true,
         "minimum_data_period": "90 days",
-        "optimal_data_period": "365 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.02, 1.25],
-          "beta_expected": 0.33,
-          "omega_typical": [12.0, 25.0]
-        }
+        "optimal_data_period": "365 days"
       }
     },
-
-    "GVZCLS": {
-      "display_name": "CBOE Gold ETF Volatility Index",
-      "category": "etf_volatility",
-      "asset_class": "volatility",
-      "instrument_type": "VOLATILITY_INDEX",
-      "market_region": "US",
-      "description": "金ETFのインプライドボラティリティ指数",
-      "companies_count": "N/A",
-      "sector_focus": "Gold Market Sentiment",
-      "bubble_analysis_suitability": "supplementary",
-      "historical_bubbles": ["Gold market stress indicator"],
-      
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "GVZCLS",
-          "update_frequency": "daily",
-          "historical_coverage": "2008-present",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      
-      "lppl_analysis": {
-        "recommended": false,
-        "note": "ボラティリティ指標のため逆相関分析に使用"
-      }
-    },
-
-    "OVXCLS": {
-      "display_name": "CBOE Crude Oil ETF Volatility Index",
-      "category": "etf_volatility",
-      "asset_class": "volatility",
-      "instrument_type": "VOLATILITY_INDEX",
-      "market_region": "US",
-      "description": "原油ETFのインプライドボラティリティ指数",
-      "companies_count": "N/A",
-      "sector_focus": "Oil Market Sentiment",
-      "bubble_analysis_suitability": "supplementary",
-      "historical_bubbles": ["Oil market stress indicator"],
-      
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "OVXCLS",
-          "update_frequency": "daily",
-          "historical_coverage": "2007-present",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      
-      "lppl_analysis": {
-        "recommended": false,
-        "note": "エネルギーセクターのストレス指標として使用"
-      }
-    },
-
     "VIXCLS": {
-      "display_name": "VIX Volatility Index",
-      "category": "etf_volatility",
+      "display_name": "VIX Close",
+      "category": "volatility_indices",
       "asset_class": "volatility",
-      "instrument_type": "VOLATILITY_INDEX",
+      "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "市場恐怖指数 - S&P500のインプライドボラティリティ",
-      "companies_count": "derived",
-      "sector_focus": "Market Sentiment Indicator", 
-      "bubble_analysis_suitability": "supplementary",
-      "historical_bubbles": ["Market stress indicator"],
-      
+      "description": "VIX Close - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
           "symbol": "VIXCLS",
           "update_frequency": "daily",
-          "historical_coverage": "1990-present", 
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
         "recommended": false,
-        "note": "VIXはボラティリティ指標のため、LPPLバブル分析には適用困難"
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
       }
     },
-
-    "DJTA": {
-      "display_name": "Dow Jones Transportation Average",
-      "category": "sector_indices",
-      "asset_class": "equity",
+    "GVZCLS": {
+      "display_name": "CBOE Gold ETF Volatility Index",
+      "category": "volatility_indices",
+      "asset_class": "volatility",
       "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "米国運輸セクター20社指数",
-      "companies_count": "20",
-      "sector_focus": "Transportation (Airlines, Railroads, Trucking)",
-      "bubble_analysis_suitability": "good",
-      "historical_bubbles": ["2007 Pre-Crisis Peak", "2020 Pandemic Recovery"],
-      
+      "description": "CBOE Gold ETF Volatility Index - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
-          "symbol": "DJTA",
+          "symbol": "GVZCLS",
           "update_frequency": "daily",
-          "historical_coverage": "2015-present",
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "365 days",
-        "optimal_data_period": "730 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.1, 2.0],
-          "beta_expected": 0.33,
-          "omega_typical": [4.5, 7.0]
-        }
+        "recommended": false,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
       }
     },
-
-    "DJUA": {
-      "display_name": "Dow Jones Utility Average",
-      "category": "sector_indices",
-      "asset_class": "equity",
+    "OVXCLS": {
+      "display_name": "CBOE Crude Oil ETF Volatility Index",
+      "category": "volatility_indices",
+      "asset_class": "volatility",
       "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "米国公益事業セクター15社指数",
-      "companies_count": "15",
-      "sector_focus": "Utilities (Electric, Gas, Water)",
-      "bubble_analysis_suitability": "medium",
-      "historical_bubbles": ["2000 Flight to Safety", "2020 ESG Bubble"],
-      
+      "description": "CBOE Crude Oil ETF Volatility Index - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
-          "symbol": "DJUA",
+          "symbol": "OVXCLS",
           "update_frequency": "daily",
-          "historical_coverage": "2015-present",
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
       "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "365 days",
-        "optimal_data_period": "1095 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.2, 2.5],
-          "beta_expected": 0.33,
-          "omega_typical": [3.5, 6.0]
-        }
+        "recommended": false,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
       }
     },
-
-    "AAPL": {
-      "display_name": "Apple Inc.",
-      "category": "individual_stocks",
-      "asset_class": "equity",
-      "instrument_type": "STOCK",
+    "DGS10": {
+      "display_name": "10-Year Treasury Constant Maturity Rate",
+      "category": "bonds_rates",
+      "asset_class": "fixed_income",
+      "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "アップル社株式 - 世界最大の時価総額企業",
-      "companies_count": "1",
-      "sector_focus": "Technology - Consumer Electronics",
-      "bubble_analysis_suitability": "good",
-      "historical_bubbles": ["2012 iPhone 5", "2020 COVID rally"],
-      
+      "description": "10-Year Treasury Constant Maturity Rate - fredデータソース",
       "data_sources": {
         "primary": {
-          "provider": "alpha_vantage",
-          "symbol": "AAPL",
-          "update_frequency": "daily", 
-          "historical_coverage": "1980-present",
+          "provider": "fred",
+          "symbol": "DGS10",
+          "update_frequency": "daily",
           "reliability": "excellent",
-          "cost": "free_limited"
+          "cost": "free"
         }
       },
-      
+      "lppl_analysis": {
+        "recommended": false,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "DGS2": {
+      "display_name": "2-Year Treasury Constant Maturity Rate",
+      "category": "bonds_rates",
+      "asset_class": "fixed_income",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "2-Year Treasury Constant Maturity Rate - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DGS2",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": false,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "DGS30": {
+      "display_name": "30-Year Treasury Constant Maturity Rate",
+      "category": "bonds_rates",
+      "asset_class": "fixed_income",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "30-Year Treasury Constant Maturity Rate - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DGS30",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": false,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "DEXM3": {
+      "display_name": "3-Month Treasury Bill",
+      "category": "bonds_rates",
+      "asset_class": "fixed_income",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "3-Month Treasury Bill - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DEXM3",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": false,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "BAMLH0A0HYM2": {
+      "display_name": "ICE BofA US High Yield Index",
+      "category": "bonds_rates",
+      "asset_class": "fixed_income",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "ICE BofA US High Yield Index - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "BAMLH0A0HYM2",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": false,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "GOLDAMGBD228NLBM": {
+      "display_name": "Gold Fixing Price 10:30 A.M. (London time)",
+      "category": "commodities",
+      "asset_class": "commodity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "Gold Fixing Price 10:30 A.M. (London time) - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "GOLDAMGBD228NLBM",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
       "lppl_analysis": {
         "recommended": true,
         "minimum_data_period": "180 days",
-        "optimal_data_period": "365 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.05, 1.5],
-          "beta_expected": 0.33,
-          "omega_typical": [6.0, 12.0]
-        }
+        "optimal_data_period": "365 days"
       }
     },
-
-    "TSLA": {
-      "display_name": "Tesla Inc.",
-      "category": "individual_stocks",
-      "asset_class": "equity",
-      "instrument_type": "STOCK",
-      "market_region": "US", 
-      "description": "テスラ社株式 - 電気自動車・エネルギー企業",
-      "companies_count": "1",
-      "sector_focus": "Automotive - Electric Vehicles",
-      "bubble_analysis_suitability": "excellent",
-      "historical_bubbles": ["2020-2021 EV Bubble", "2013 Model S Rally"],
-      
-      "data_sources": {
-        "primary": {
-          "provider": "alpha_vantage",
-          "symbol": "TSLA", 
-          "update_frequency": "daily",
-          "historical_coverage": "2010-present",
-          "reliability": "excellent",
-          "cost": "free_limited"
-        }
-      },
-      
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "180 days", 
-        "optimal_data_period": "365 days",
-        "critical_parameters": {
-          "tc_normal_range": [1.05, 1.3],
-          "beta_expected": 0.33,
-          "omega_typical": [8.0, 15.0]
-        }
-      }
-    },
-
-    "REITTMA": {
-      "display_name": "REITs Total Mortgages Asset Level",
-      "category": "reits",
-      "asset_class": "real_estate",
-      "instrument_type": "FINANCIAL_METRIC",
+    "DCOILWTICO": {
+      "display_name": "Crude Oil Prices: West Texas Intermediate",
+      "category": "commodities",
+      "asset_class": "commodity",
+      "instrument_type": "INDEX",
       "market_region": "US",
-      "description": "米国REIT総モーゲージ資産レベル",
-      "companies_count": "aggregate",
-      "sector_focus": "Real Estate Investment",
-      "bubble_analysis_suitability": "supplementary",
-      "historical_bubbles": ["2007 Housing Bubble indicator"],
-      
+      "description": "Crude Oil Prices: West Texas Intermediate - fredデータソース",
       "data_sources": {
         "primary": {
           "provider": "fred",
-          "symbol": "REITTMA",
-          "update_frequency": "quarterly",
-          "historical_coverage": "1945-present",
+          "symbol": "DCOILWTICO",
+          "update_frequency": "daily",
           "reliability": "excellent",
           "cost": "free"
         }
       },
-      
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "DCOILBRENTEU": {
+      "display_name": "Crude Oil Prices: Brent - Europe",
+      "category": "commodities",
+      "asset_class": "commodity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "Crude Oil Prices: Brent - Europe - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "DCOILBRENTEU",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "GASREGW": {
+      "display_name": "US Regular All Formulations Gas Price",
+      "category": "commodities",
+      "asset_class": "commodity",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "US Regular All Formulations Gas Price - fredデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "GASREGW",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "BNB": {
+      "display_name": "Binance Coin",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Binance Coin - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "BNB",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 3
+    },
+    "XRP": {
+      "display_name": "Ripple",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Ripple - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "XRP",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 4
+    },
+    "SOL": {
+      "display_name": "Solana",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Solana - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "SOL",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 5
+    },
+    "USDC": {
+      "display_name": "USD Coin",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "USD Coin - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "USDC",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 6
+    },
+    "USDT": {
+      "display_name": "Tether",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Tether - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "USDT",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 7
+    },
+    "ADA": {
+      "display_name": "Cardano",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Cardano - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "ADA",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 8
+    },
+    "AVAX": {
+      "display_name": "Avalanche",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Avalanche - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "AVAX",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 9
+    },
+    "DOT": {
+      "display_name": "Polkadot",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Polkadot - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "DOT",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 10
+    },
+    "LINK": {
+      "display_name": "Chainlink",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Chainlink - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "LINK",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 11
+    },
+    "MATIC": {
+      "display_name": "Polygon",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Polygon - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "MATIC",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 12
+    },
+    "UNI": {
+      "display_name": "Uniswap",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Uniswap - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "UNI",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 13
+    },
+    "LTC": {
+      "display_name": "Litecoin",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Litecoin - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "LTC",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 14
+    },
+    "ATOM": {
+      "display_name": "Cosmos",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Cosmos - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "ATOM",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 15
+    },
+    "ALGO": {
+      "display_name": "Algorand",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Algorand - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "ALGO",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 16
+    },
+    "VET": {
+      "display_name": "VeChain",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "VeChain - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "VET",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 17
+    },
+    "FIL": {
+      "display_name": "Filecoin",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Filecoin - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "FIL",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 18
+    },
+    "AAVE": {
+      "display_name": "Aave",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Aave - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "AAVE",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 19
+    },
+    "CRV": {
+      "display_name": "Curve DAO",
+      "category": "crypto_assets_tier2",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Curve DAO - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "CRV",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 20
+    },
+    "DOGE": {
+      "display_name": "Dogecoin",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Dogecoin - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "DOGE",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 21
+    },
+    "SHIB": {
+      "display_name": "Shiba Inu",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Shiba Inu - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "SHIB",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 22
+    },
+    "SAND": {
+      "display_name": "The Sandbox",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "The Sandbox - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "SAND",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 23
+    },
+    "MANA": {
+      "display_name": "Decentraland",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Decentraland - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "MANA",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 24
+    },
+    "AXS": {
+      "display_name": "Axie Infinity",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Axie Infinity - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "AXS",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 25
+    },
+    "ENJ": {
+      "display_name": "Enjin Coin",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Enjin Coin - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "ENJ",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 26
+    },
+    "COMP": {
+      "display_name": "Compound",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Compound - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "COMP",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 27
+    },
+    "SUSHI": {
+      "display_name": "SushiSwap",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "SushiSwap - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "SUSHI",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 28
+    },
+    "1INCH": {
+      "display_name": "1inch",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "1inch - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "1INCH",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 29
+    },
+    "BAT": {
+      "display_name": "Basic Attention Token",
+      "category": "crypto_assets_tier3",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Basic Attention Token - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "BAT",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 30
+    },
+    "XMR": {
+      "display_name": "Monero",
+      "category": "crypto_assets_tier4",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Monero - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "XMR",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 31
+    },
+    "ZEC": {
+      "display_name": "Zcash",
+      "category": "crypto_assets_tier4",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Zcash - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "ZEC",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 32
+    },
+    "DASH": {
+      "display_name": "Dash",
+      "category": "crypto_assets_tier4",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Dash - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "DASH",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 33
+    },
+    "EOS": {
+      "display_name": "EOS",
+      "category": "crypto_assets_tier4",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "EOS - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "EOS",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 34
+    },
+    "TRX": {
+      "display_name": "TRON",
+      "category": "crypto_assets_tier4",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "TRON - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "TRX",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 35
+    },
+    "XTZ": {
+      "display_name": "Tezos",
+      "category": "crypto_assets_tier4",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Tezos - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "XTZ",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 36
+    },
+    "XLK": {
+      "display_name": "Technology Select Sector SPDR Fund",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Technology Select Sector SPDR Fund - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "XLK",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "XLF": {
+      "display_name": "Financial Select Sector SPDR Fund",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Financial Select Sector SPDR Fund - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "XLF",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "XLV": {
+      "display_name": "Health Care Select Sector SPDR Fund",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Health Care Select Sector SPDR Fund - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "XLV",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "XLE": {
+      "display_name": "Energy Select Sector SPDR Fund",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Energy Select Sector SPDR Fund - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "XLE",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "XLI": {
+      "display_name": "Industrial Select Sector SPDR Fund",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Industrial Select Sector SPDR Fund - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "XLI",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "XLP": {
+      "display_name": "Consumer Staples Select Sector SPDR Fund",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Consumer Staples Select Sector SPDR Fund - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "XLP",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "XLY": {
+      "display_name": "Consumer Discretionary Select Sector SPDR Fund",
+      "category": "sector_indices",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Consumer Discretionary Select Sector SPDR Fund - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "XLY",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "XLRE": {
+      "display_name": "Real Estate Select Sector SPDR Fund",
+      "category": "reit_indices",
+      "asset_class": "real_estate",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Real Estate Select Sector SPDR Fund - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "XLRE",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "EFA": {
+      "display_name": "iShares MSCI EAFE ETF",
+      "category": "international_markets",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "INTERNATIONAL",
+      "description": "iShares MSCI EAFE ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "EFA",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "EEM": {
+      "display_name": "iShares MSCI Emerging Markets ETF",
+      "category": "international_markets",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "INTERNATIONAL",
+      "description": "iShares MSCI Emerging Markets ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "EEM",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "VEA": {
+      "display_name": "Vanguard FTSE Developed Markets ETF",
+      "category": "international_markets",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "INTERNATIONAL",
+      "description": "Vanguard FTSE Developed Markets ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "VEA",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "VWO": {
+      "display_name": "Vanguard FTSE Emerging Markets ETF",
+      "category": "international_markets",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "INTERNATIONAL",
+      "description": "Vanguard FTSE Emerging Markets ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "VWO",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "GLD": {
+      "display_name": "SPDR Gold Shares",
+      "category": "commodities",
+      "asset_class": "commodity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "SPDR Gold Shares - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "GLD",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "TLT": {
+      "display_name": "iShares 20+ Year Treasury Bond ETF",
+      "category": "bonds_rates",
+      "asset_class": "fixed_income",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "iShares 20+ Year Treasury Bond ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "TLT",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
       "lppl_analysis": {
         "recommended": false,
-        "note": "資産レベル指標のため、価格指数と組み合わせて使用"
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "HYG": {
+      "display_name": "iShares iBoxx $ High Yield Corporate Bond ETF",
+      "category": "bonds_rates",
+      "asset_class": "fixed_income",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "iShares iBoxx $ High Yield Corporate Bond ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "HYG",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": false,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "VNQ": {
+      "display_name": "Vanguard Real Estate ETF",
+      "category": "reit_indices",
+      "asset_class": "real_estate",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Vanguard Real Estate ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "VNQ",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "VUG": {
+      "display_name": "Vanguard Growth ETF",
+      "category": "style_factors",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Vanguard Growth ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "VUG",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "VTV": {
+      "display_name": "Vanguard Value ETF",
+      "category": "style_factors",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Vanguard Value ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "VTV",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "IWM": {
+      "display_name": "iShares Russell 2000 ETF",
+      "category": "style_factors",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "iShares Russell 2000 ETF - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "IWM",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "QQQ": {
+      "display_name": "Invesco QQQ Trust",
+      "category": "style_factors",
+      "asset_class": "equity",
+      "instrument_type": "ETF",
+      "market_region": "US",
+      "description": "Invesco QQQ Trust - alpha_vantageデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "alpha_vantage",
+          "symbol": "QQQ",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
       }
     }
   },
-
-  "external_data_requirements": {
-    "description": "FREDで入手不可能なため外部データソースが必要な銘柄",
-    "required_sources": {
-      "individual_stocks": {
-        "provider": "alpha_vantage",
-        "symbols": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "NFLX"],
-        "reason": "FREDは個別株価データを提供していない"
-      },
-      "international_indices": {
-        "provider": "alternative_required",
-        "symbols": ["NIKKEI225", "DAX", "FTSE100", "CAC40", "SHANGHAI"],
-        "reason": "FREDは国際指数の限定的カバレッジ"
-      },
-      "reit_price_indices": {
-        "provider": "alternative_required", 
-        "symbols": ["XLRE", "VNQ", "RWR"],
-        "reason": "FREDはREIT価格指数ではなく財務データのみ提供"
-      },
-      "crypto_etfs": {
-        "provider": "alternative_required",
-        "symbols": ["BITO", "ETHE", "GBTC"],
-        "reason": "仮想通貨ETFはFREDでカバーされていない"
-      }
-    }
-  },
-
   "api_configurations": {
     "fred": {
       "base_url": "https://api.stlouisfed.org/fred",
@@ -629,75 +2050,69 @@
         "requests_per_minute": 120,
         "requests_per_day": 10000
       },
-      "supported_formats": ["json", "xml"],
-      "cost": "free",
-      "registration_url": "https://fred.stlouisfed.org/docs/api/api_key.html"
+      "cost": "free"
     },
-    
     "alpha_vantage": {
-      "base_url": "https://www.alphavantage.co/query", 
+      "base_url": "https://www.alphavantage.co/query",
       "authentication": "api_key",
       "rate_limits": {
         "requests_per_minute": 5,
         "requests_per_day": 500
       },
-      "supported_formats": ["json", "csv"],
+      "cost": "freemium"
+    },
+    "coingecko": {
+      "base_url": "https://api.coingecko.com/api/v3",
+      "authentication": "optional_api_key",
+      "rate_limits": {
+        "requests_per_minute": 20,
+        "requests_per_day": 28800
+      },
       "cost": "freemium",
-      "registration_url": "https://www.alphavantage.co/support/#api-key"
+      "registration_url": "https://www.coingecko.com/en/api/pricing",
+      "free_tier_note": "20 calls/minute, Pro tier: 500 calls/minute"
     }
   },
 
   "analysis_recommendations": {
     "bubble_detection_priority": [
-      "CBBTCUSD",
-      "NASDAQCOM",
-      "NASDAQ100",
-      "SP500",
-      "NASDAQSOX",
-      "NASDAQRSBLCN",
-      "CBETHUSD",
-      "TSLA",
-      "AAPL",
-      "DJIA"
+      "CBBTCUSD", "CBETHUSD", "BNB", "SOL", "ADA", "AVAX", "DOT", "XRP", 
+      "NASDAQCOM", "NASDAQ100", "SP500", "NASDAQSOX", "NASDAQRSBLCN",
+      "XLK", "XLF", "WILREIT", "DJIA", "DJTA"
     ],
     
-    "cross_market_analysis_groups": {
-      "tech_ecosystem": ["NASDAQCOM", "NASDAQ100", "NASDAQSOX", "NASDAQRSBLCN"],
-      "crypto_ecosystem": ["CBBTCUSD", "CBETHUSD", "NASDAQRSBLCN"],
-      "broad_market": ["SP500", "DJIA", "NASDAQCOM"],
-      "sector_rotation": ["DJTA", "DJUA", "NASDAQSOX"]
-    },
-    
-    "minimum_requirements": {
-      "lppl_analysis": {
-        "minimum_data_points": 180,
-        "recommended_data_points": 365,
-        "maximum_useful_period": 1825
+    "execution_profiles": {
+      "rapid_execution": {
+        "symbols": ["CBBTCUSD", "CBETHUSD", "NASDAQCOM", "SP500", "NASDAQ100"],
+        "estimated_time": "3-5 minutes",
+        "success_rate": "98%",
+        "primary_apis": ["fred"]
+      },
+      "balanced_execution": {
+        "symbols": ["CBBTCUSD", "CBETHUSD", "BNB", "SOL", "ADA", "NASDAQCOM", "SP500", "NASDAQSOX", "XLK", "XLF"],
+        "estimated_time": "15-20 minutes", 
+        "success_rate": "85%",
+        "primary_apis": ["fred", "coingecko", "alpha_vantage"]
+      },
+      "comprehensive_execution": {
+        "symbols": "all_87_symbols",
+        "total_symbols": 87,
+        "estimated_time": "45-60 minutes",
+        "success_rate": "75%",
+        "primary_apis": ["fred", "coingecko", "alpha_vantage"]
       }
-    }
-  },
-
-  "dashboard_display_settings": {
-    "grouping_by_asset_class": {
-      "equity": "株式市場",
-      "cryptocurrency": "仮想通貨",
-      "real_estate": "不動産",
-      "volatility": "ボラティリティ"
     },
     
-    "grouping_by_instrument_type": {
-      "INDEX": "指数",
-      "STOCK": "個別銘柄",
-      "CRYPTO": "暗号資産",
-      "ETF": "ETF",
-      "VOLATILITY_INDEX": "VIX系指標",
-      "FINANCIAL_METRIC": "財務指標"
+    "api_priority_strategy": {
+      "tier_1": "FRED優先（公的機関、無制限アクセス）",
+      "tier_2": "Alpha Vantage次順（個別株・ETF）", 
+      "tier_3": "CoinGecko最終（仮想通貨専用）"
     },
     
-    "priority_alerts": {
-      "critical_tc_threshold": 1.1,
-      "high_r_squared_threshold": 0.85,
-      "display_top_n": 10
+    "rate_limiting_strategy": {
+      "fred": "0.5秒間隔（120 calls/min）",
+      "alpha_vantage": "12秒間隔（5 calls/min）",
+      "coingecko": "3秒間隔（20 calls/min）"
     }
   }
 }

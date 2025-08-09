@@ -1745,7 +1745,7 @@ class SymbolAnalysisDashboard:
                                             )
                                         )
                                         
-                                        st.plotly_chart(individual_fig, use_container_width=True)
+                                        st.plotly_chart(individual_fig, use_container_width=True, key=f"individual_pred_{symbol}_{i}")
                                         
                                         # 個別結果の統計
                                         col1, col2, col3, col4 = st.columns(4)

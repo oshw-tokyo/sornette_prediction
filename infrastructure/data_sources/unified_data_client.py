@@ -54,25 +54,141 @@ class UnifiedDataClient:
         except Exception as e:
             print(f"⚠️ FRED 初期化失敗: {str(e)}")
         
+        # CoinGecko クライアント
+        try:
+            from coingecko_client import CoinGeckoClient
+            coingecko_client = CoinGeckoClient()
+            self.clients['coingecko'] = coingecko_client
+            self.available_sources.append('coingecko')
+            print("✅ CoinGecko クライアント初期化成功")
+        except Exception as e:
+            print(f"⚠️ CoinGecko 初期化失敗: {str(e)}")
+        
         print(f"📊 利用可能データソース: {self.available_sources}")
         
-        # 銘柄マッピング
+        # 銘柄マッピング（拡張版v4.0 - 87銘柄対応）
         self.symbol_mapping = {
-            # 共通銘柄のマッピング（FRED + Alpha Vantage対応）
-            'NASDAQ': {'fred': 'NASDAQCOM', 'alpha_vantage': '^IXIC'},
-            'SP500': {'fred': 'SP500', 'alpha_vantage': 'SPY'},
-            'DJIA': {'fred': 'DJIA', 'alpha_vantage': 'DJI'},
-            'VIX': {'fred': 'VIXCLS', 'alpha_vantage': 'VIX'},
+            # === FRED銘柄 (33銘柄) ===
+            # 米国主要指数
+            'NASDAQCOM': {'fred': 'NASDAQCOM'},
+            'SP500': {'fred': 'SP500'},
+            'NASDAQ100': {'fred': 'NASDAQ100'},
+            'DJIA': {'fred': 'DJIA'},
+            'DJTA': {'fred': 'DJTA'},
+            'DJUA': {'fred': 'DJUA'},
+            'WILREIT': {'fred': 'WILREIT'},
+            'WILL4500': {'fred': 'WILL4500'},
+            'WILL5000': {'fred': 'WILL5000'},
             
-            # 個別株（Alpha Vantageのみ - FREDは個別株をサポートしない）
-            'AAPL': {'alpha_vantage': 'AAPL'},
-            'MSFT': {'alpha_vantage': 'MSFT'},
-            'GOOGL': {'alpha_vantage': 'GOOGL'},
-            'AMZN': {'alpha_vantage': 'AMZN'},
-            'TSLA': {'alpha_vantage': 'TSLA'},
-            'NVDA': {'alpha_vantage': 'NVDA'},
-            'META': {'alpha_vantage': 'META'},
-            'NFLX': {'alpha_vantage': 'NFLX'},
+            # セクター指数
+            'NASDAQSOX': {'fred': 'NASDAQSOX'},
+            'NASDAQRSBLCN': {'fred': 'NASDAQRSBLCN'},
+            'NASDAQBIOTECH': {'fred': 'NASDAQBIOTECH'},
+            'NASDAQBANK': {'fred': 'NASDAQBANK'},
+            
+            # REIT指数
+            'REIT': {'fred': 'REIT'},
+            'REITTMA': {'fred': 'REITTMA'},
+            
+            # 国際指数・為替
+            'NIKKEI225': {'fred': 'NIKKEI225'},
+            'DEXCHUS': {'fred': 'DEXCHUS'},
+            'DEXJPUS': {'fred': 'DEXJPUS'},
+            'DEXUSEU': {'fred': 'DEXUSEU'},
+            
+            # 仮想通貨（FRED優先）
+            'CBBTCUSD': {'fred': 'CBBTCUSD', 'coingecko': 'BTC'},
+            'CBETHUSD': {'fred': 'CBETHUSD', 'coingecko': 'ETH'},
+            
+            # ボラティリティ指標
+            'VIXCLS': {'fred': 'VIXCLS'},
+            'GVZCLS': {'fred': 'GVZCLS'},
+            'OVXCLS': {'fred': 'OVXCLS'},
+            
+            # 金利・債券
+            'DGS10': {'fred': 'DGS10'},
+            'DGS2': {'fred': 'DGS2'},
+            'DGS30': {'fred': 'DGS30'},
+            'DEXM3': {'fred': 'DEXM3'},
+            'BAMLH0A0HYM2': {'fred': 'BAMLH0A0HYM2'},
+            
+            # 商品・コモディティ
+            'GOLDAMGBD228NLBM': {'fred': 'GOLDAMGBD228NLBM'},
+            'DCOILWTICO': {'fred': 'DCOILWTICO'},
+            'DCOILBRENTEU': {'fred': 'DCOILBRENTEU'},
+            'GASREGW': {'fred': 'GASREGW'},
+            
+            # === CoinGecko仮想通貨 (34銘柄) ===
+            # Tier 1: 基軸・主要プラットフォーム
+            'BNB': {'coingecko': 'BNB'},
+            'XRP': {'coingecko': 'XRP'},
+            'SOL': {'coingecko': 'SOL'},
+            'USDC': {'coingecko': 'USDC'},
+            'USDT': {'coingecko': 'USDT'},
+            'ADA': {'coingecko': 'ADA'},
+            'AVAX': {'coingecko': 'AVAX'},
+            'DOT': {'coingecko': 'DOT'},
+            
+            # Tier 2: DeFi・スケーリング
+            'LINK': {'coingecko': 'LINK'},
+            'MATIC': {'coingecko': 'MATIC'},
+            'UNI': {'coingecko': 'UNI'},
+            'LTC': {'coingecko': 'LTC'},
+            'ATOM': {'coingecko': 'ATOM'},
+            'ALGO': {'coingecko': 'ALGO'},
+            'VET': {'coingecko': 'VET'},
+            'FIL': {'coingecko': 'FIL'},
+            'AAVE': {'coingecko': 'AAVE'},
+            'CRV': {'coingecko': 'CRV'},
+            
+            # Tier 3: 特殊用途・新興
+            'DOGE': {'coingecko': 'DOGE'},
+            'SHIB': {'coingecko': 'SHIB'},
+            'SAND': {'coingecko': 'SAND'},
+            'MANA': {'coingecko': 'MANA'},
+            'AXS': {'coingecko': 'AXS'},
+            'ENJ': {'coingecko': 'ENJ'},
+            'COMP': {'coingecko': 'COMP'},
+            'SUSHI': {'coingecko': 'SUSHI'},
+            '1INCH': {'coingecko': '1INCH'},
+            'BAT': {'coingecko': 'BAT'},
+            
+            # Tier 4: プライバシー・ニッチ
+            'XMR': {'coingecko': 'XMR'},
+            'ZEC': {'coingecko': 'ZEC'},
+            'DASH': {'coingecko': 'DASH'},
+            'EOS': {'coingecko': 'EOS'},
+            'TRX': {'coingecko': 'TRX'},
+            'XTZ': {'coingecko': 'XTZ'},
+            
+            # === Alpha Vantage ETF・INDEX (20銘柄) ===
+            # セクターETF
+            'XLK': {'alpha_vantage': 'XLK'},
+            'XLF': {'alpha_vantage': 'XLF'},
+            'XLV': {'alpha_vantage': 'XLV'},
+            'XLE': {'alpha_vantage': 'XLE'},
+            'XLI': {'alpha_vantage': 'XLI'},
+            'XLP': {'alpha_vantage': 'XLP'},
+            'XLY': {'alpha_vantage': 'XLY'},
+            'XLRE': {'alpha_vantage': 'XLRE'},
+            
+            # 国際・新興国
+            'EFA': {'alpha_vantage': 'EFA'},
+            'EEM': {'alpha_vantage': 'EEM'},
+            'VEA': {'alpha_vantage': 'VEA'},
+            'VWO': {'alpha_vantage': 'VWO'},
+            
+            # 特殊資産クラス
+            'GLD': {'alpha_vantage': 'GLD'},
+            'TLT': {'alpha_vantage': 'TLT'},
+            'HYG': {'alpha_vantage': 'HYG'},
+            'VNQ': {'alpha_vantage': 'VNQ'},
+            
+            # 成長・バリュー・サイズファクター
+            'VUG': {'alpha_vantage': 'VUG'},
+            'VTV': {'alpha_vantage': 'VTV'},
+            'IWM': {'alpha_vantage': 'IWM'},
+            'QQQ': {'alpha_vantage': 'QQQ'},
         }
     
     def get_data_with_fallback(self, symbol: str, start_date: str, end_date: str,
@@ -103,18 +219,18 @@ class UnifiedDataClient:
             # 銘柄タイプによる自動優先順位設定
             symbol_mapping = self.symbol_mapping.get(symbol, {})
             
-            # 個別株の場合: Alpha Vantage を優先
-            if len(symbol_mapping) == 1 and 'alpha_vantage' in symbol_mapping:
-                if 'alpha_vantage' in self.available_sources:
-                    sources_to_try.append('alpha_vantage')
-            # 指数の場合: FRED を優先（無料で高頻度アクセス可能）
-            elif 'fred' in symbol_mapping and 'fred' in self.available_sources:
+            # 優先順位: FRED > Alpha Vantage > CoinGecko
+            # FRED優先（公的機関データ、無制限アクセス）
+            if 'fred' in symbol_mapping and 'fred' in self.available_sources:
                 sources_to_try.append('fred')
-                if 'alpha_vantage' in self.available_sources:
-                    sources_to_try.append('alpha_vantage')
-            # その他: Alpha Vantage優先
-            elif 'alpha_vantage' in self.available_sources:
+            
+            # Alpha Vantage次順（個別株メイン）
+            if 'alpha_vantage' in symbol_mapping and 'alpha_vantage' in self.available_sources:
                 sources_to_try.append('alpha_vantage')
+            
+            # CoinGecko最終（仮想通貨専用、制限厳しい）
+            if 'coingecko' in symbol_mapping and 'coingecko' in self.available_sources:
+                sources_to_try.append('coingecko')
         
         # 残りのソースを追加
         for source in self.available_sources:
@@ -196,6 +312,8 @@ class UnifiedDataClient:
                 time.sleep(12)  # Alpha Vantage: 5 calls/min → 12秒間隔
             elif source == 'fred':
                 time.sleep(0.5)  # FRED: 120 calls/min → 0.5秒間隔
+            elif source == 'coingecko':
+                time.sleep(3)   # CoinGecko: 20 calls/min → 3秒間隔
             else:
                 time.sleep(1)   # 一般的な待機
         

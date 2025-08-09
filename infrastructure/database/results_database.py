@@ -147,6 +147,7 @@ class ResultsDatabase:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_schedule_basis ON analysis_results (schedule_name, analysis_basis_date)')
             
             # 分析基準日ベースのインデックス（最重要：ダッシュボード表示最適化）
+            cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS unique_symbol_basis_date ON analysis_results (symbol, analysis_basis_date)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_symbol_basis_date ON analysis_results (symbol, analysis_basis_date DESC)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_frequency_basis ON analysis_results (analysis_frequency, analysis_basis_date DESC)')
             
@@ -181,9 +182,9 @@ class ResultsDatabase:
                 if field not in result_data:
                     raise ValueError(f"必須フィールド '{field}' が不足しています")
             
-            # データ挿入
+            # 重複防止: 同一銘柄・同一基準日は更新、新規は挿入（UPSERT）
             cursor.execute('''
-                INSERT INTO analysis_results (
+                INSERT OR REPLACE INTO analysis_results (
                     symbol, data_source, data_period_start, data_period_end, data_points,
                     tc, beta, omega, phi, A, B, C,
                     r_squared, rmse, quality, confidence, is_usable,
