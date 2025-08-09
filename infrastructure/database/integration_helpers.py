@@ -179,6 +179,72 @@ class AnalysisResultSaver:
                     criteria['selection_summary'][criteria_type.value] = candidate.r_squared
         
         return criteria
+    
+    def save_lppl_analysis_with_schedule(self, symbol: str, data: pd.DataFrame,
+                                        result: SelectionResult, data_source: str,
+                                        schedule_name: str, basis_date: str,
+                                        backfill_batch_id: Optional[str] = None) -> int:
+        """
+        Save LPPL analysis with schedule metadata
+        
+        Args:
+            symbol: Symbol
+            data: Price data
+            result: Analysis result
+            data_source: Data source
+            schedule_name: Schedule name
+            basis_date: Analysis basis date
+            backfill_batch_id: Batch ID for backfill
+            
+        Returns:
+            int: Analysis ID
+        """
+        best = result.get_selected_result()
+        if not best:
+            raise ValueError("No valid analysis result to save")
+        
+        # Calculate predicted date from tc
+        predicted_date = self._calculate_predicted_date(best.tc, pd.to_datetime(basis_date))
+        days_to_crash = (predicted_date - datetime.now()).days if predicted_date else None
+        
+        # Create database record with schedule metadata
+        result_data = {
+            'symbol': symbol,
+            'data_source': data_source,
+            'data_period_start': data.index[0].strftime('%Y-%m-%d'),
+            'data_period_end': data.index[-1].strftime('%Y-%m-%d'),
+            'data_points': len(data),
+            'tc': best.tc,
+            'beta': best.beta,
+            'omega': best.omega,
+            'phi': best.phi,
+            'A': best.A,
+            'B': best.B,
+            'C': best.C,
+            'r_squared': best.r_squared,
+            'rmse': best.rmse,
+            'quality': best.quality_assessment.quality.value if best.quality_assessment else 'unknown',
+            'confidence': best.quality_assessment.confidence if best.quality_assessment else 0.0,
+            'is_usable': best.quality_assessment.is_usable if best.quality_assessment else False,
+            'predicted_crash_date': predicted_date.strftime('%Y-%m-%d %H:%M:%S') if predicted_date else None,
+            'days_to_crash': days_to_crash,
+            'fitting_method': 'multi_criteria',
+            'window_days': len(data),
+            'total_candidates': len(result.all_candidates),
+            'successful_candidates': len([c for c in result.all_candidates if c.convergence_success]),
+            'quality_metadata': self._extract_quality_metadata(best),
+            'selection_criteria': self._extract_selection_criteria(result),
+            # Schedule metadata
+            'schedule_name': schedule_name,
+            'analysis_basis_date': basis_date,
+            'is_scheduled': True,
+            'backfill_batch_id': backfill_batch_id
+        }
+        
+        analysis_id = self.db.save_analysis_result(result_data)
+        
+        print(f"📊 {symbol} analysis saved: ID={analysis_id}, basis_date={basis_date}")
+        return analysis_id
 
 
 class DatabaseAnalysisViewer:
