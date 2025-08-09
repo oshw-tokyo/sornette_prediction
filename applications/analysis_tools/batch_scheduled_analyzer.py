@@ -557,8 +557,9 @@ class BatchScheduledAnalyzer:
             # Generate weekly periods aligned to day_of_week
             current = start_dt
             while current <= end_dt:
-                # Align to specified day of week
-                days_ahead = config.day_of_week - current.weekday()
+                # Align to specified day of week (default: Saturday = 5)
+                target_weekday = getattr(config, 'day_of_week', 5)  # Default to Saturday
+                days_ahead = target_weekday - current.weekday()
                 if days_ahead < 0:
                     days_ahead += 7
                 aligned_date = current + timedelta(days=days_ahead)
@@ -567,6 +568,11 @@ class BatchScheduledAnalyzer:
                     periods.append(aligned_date.strftime('%Y-%m-%d'))
                 
                 current = aligned_date + timedelta(days=7)
+                
+                # Safety check for infinite loop
+                if len(periods) > 1000:
+                    print("⚠️ 期間生成の無限ループを検出、中断します")
+                    break
         
         elif config.frequency == 'daily':
             # Generate daily periods
@@ -574,6 +580,11 @@ class BatchScheduledAnalyzer:
             while current <= end_dt:
                 periods.append(current.strftime('%Y-%m-%d'))
                 current += timedelta(days=1)
+        
+        # Fallback: if no periods generated, add end date
+        if not periods:
+            periods.append(end_dt.strftime('%Y-%m-%d'))
+            print(f"⚠️ 期間計算フォールバック: {end_dt.strftime('%Y-%m-%d')} を追加")
         
         return periods
     
