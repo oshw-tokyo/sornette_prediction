@@ -1,12 +1,12 @@
 {
   "catalog_metadata": {
-    "version": "4.0.0",
-    "last_updated": "2025-08-08",
-    "description": "Sornette予測システム対応マーケットデータカタログ（包括拡張版）",
+    "version": "4.1.0",
+    "last_updated": "2025-08-09",
+    "description": "Sornette予測システム対応マーケットデータカタログ（FRED廃止対応版）",
     "maintainer": "Claude Code System",
     "data_statistics": {
-      "total_symbols": 87,
-      "fred_available": 33,
+      "total_symbols": 84,
+      "fred_available": 27,
       "alpha_vantage_available": 20,
       "coingecko_available": 34,
       "expansion_ratio": "4.35x (from 20 to 87 symbols)"
@@ -15,9 +15,9 @@
       "fred_expansion": "14 → 33 symbols (2.4x)",
       "coingecko_expansion": "6 → 34 symbols (5.7x)",
       "alpha_vantage_expansion": "2 → 20 symbols (10.0x)"
-    }
+    },
+    "total_symbols": 81
   },
-
   "data_categories": {
     "us_major_indices": {
       "description": "米国主要株式指数（拡張）",
@@ -225,72 +225,6 @@
         "optimal_data_period": "730 days"
       }
     },
-    "WILREIT": {
-      "display_name": "Wilshire US REIT Price Index",
-      "category": "us_major_indices",
-      "asset_class": "equity",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "Wilshire US REIT Price Index - fredデータソース",
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "WILREIT",
-          "update_frequency": "daily",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "180 days",
-        "optimal_data_period": "730 days"
-      }
-    },
-    "WILL4500": {
-      "display_name": "Wilshire 4500 Total Market Index",
-      "category": "us_major_indices",
-      "asset_class": "equity",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "Wilshire 4500 Total Market Index - fredデータソース",
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "WILL4500",
-          "update_frequency": "daily",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "180 days",
-        "optimal_data_period": "730 days"
-      }
-    },
-    "WILL5000": {
-      "display_name": "Wilshire 5000 Total Market Index",
-      "category": "us_major_indices",
-      "asset_class": "equity",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "Wilshire 5000 Total Market Index - fredデータソース",
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "WILL5000",
-          "update_frequency": "daily",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "180 days",
-        "optimal_data_period": "730 days"
-      }
-    },
     "NASDAQSOX": {
       "display_name": "PHLX Semiconductor Index",
       "category": "sector_indices",
@@ -335,28 +269,6 @@
         "optimal_data_period": "365 days"
       }
     },
-    "NASDAQBIOTECH": {
-      "display_name": "NASDAQ Biotechnology Index",
-      "category": "sector_indices",
-      "asset_class": "equity",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "NASDAQ Biotechnology Index - fredデータソース",
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "NASDAQBIOTECH",
-          "update_frequency": "daily",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "180 days",
-        "optimal_data_period": "365 days"
-      }
-    },
     "NASDAQBANK": {
       "display_name": "NASDAQ Bank Index",
       "category": "sector_indices",
@@ -368,28 +280,6 @@
         "primary": {
           "provider": "fred",
           "symbol": "NASDAQBANK",
-          "update_frequency": "daily",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "180 days",
-        "optimal_data_period": "365 days"
-      }
-    },
-    "REIT": {
-      "display_name": "Real Estate Investment Trusts",
-      "category": "reit_indices",
-      "asset_class": "real_estate",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "Real Estate Investment Trusts - fredデータソース",
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "REIT",
           "update_frequency": "daily",
           "reliability": "excellent",
           "cost": "free"
@@ -676,28 +566,6 @@
         "primary": {
           "provider": "fred",
           "symbol": "DGS30",
-          "update_frequency": "daily",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      "lppl_analysis": {
-        "recommended": false,
-        "minimum_data_period": "180 days",
-        "optimal_data_period": "365 days"
-      }
-    },
-    "DEXM3": {
-      "display_name": "3-Month Treasury Bill",
-      "category": "bonds_rates",
-      "asset_class": "fixed_income",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "3-Month Treasury Bill - fredデータソース",
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "DEXM3",
           "update_frequency": "daily",
           "reliability": "excellent",
           "cost": "free"
@@ -2073,42 +1941,79 @@
       "free_tier_note": "20 calls/minute, Pro tier: 500 calls/minute"
     }
   },
-
   "analysis_recommendations": {
     "bubble_detection_priority": [
-      "CBBTCUSD", "CBETHUSD", "BNB", "SOL", "ADA", "AVAX", "DOT", "XRP", 
-      "NASDAQCOM", "NASDAQ100", "SP500", "NASDAQSOX", "NASDAQRSBLCN",
-      "XLK", "XLF", "WILREIT", "DJIA", "DJTA"
+      "CBBTCUSD",
+      "CBETHUSD",
+      "BNB",
+      "SOL",
+      "ADA",
+      "AVAX",
+      "DOT",
+      "XRP",
+      "NASDAQCOM",
+      "NASDAQ100",
+      "SP500",
+      "NASDAQSOX",
+      "NASDAQRSBLCN",
+      "XLK",
+      "XLF",
+      "DJIA",
+      "DJTA"
     ],
-    
     "execution_profiles": {
       "rapid_execution": {
-        "symbols": ["CBBTCUSD", "CBETHUSD", "NASDAQCOM", "SP500", "NASDAQ100"],
+        "symbols": [
+          "CBBTCUSD",
+          "CBETHUSD",
+          "NASDAQCOM",
+          "SP500",
+          "NASDAQ100"
+        ],
         "estimated_time": "3-5 minutes",
         "success_rate": "98%",
-        "primary_apis": ["fred"]
+        "primary_apis": [
+          "fred"
+        ]
       },
       "balanced_execution": {
-        "symbols": ["CBBTCUSD", "CBETHUSD", "BNB", "SOL", "ADA", "NASDAQCOM", "SP500", "NASDAQSOX", "XLK", "XLF"],
-        "estimated_time": "15-20 minutes", 
+        "symbols": [
+          "CBBTCUSD",
+          "CBETHUSD",
+          "BNB",
+          "SOL",
+          "ADA",
+          "NASDAQCOM",
+          "SP500",
+          "NASDAQSOX",
+          "XLK",
+          "XLF"
+        ],
+        "estimated_time": "15-20 minutes",
         "success_rate": "85%",
-        "primary_apis": ["fred", "coingecko", "alpha_vantage"]
+        "primary_apis": [
+          "fred",
+          "coingecko",
+          "alpha_vantage"
+        ]
       },
       "comprehensive_execution": {
-        "symbols": "all_87_symbols",
-        "total_symbols": 87,
+        "symbols": "all_84_symbols",
+        "total_symbols": 84,
         "estimated_time": "45-60 minutes",
         "success_rate": "75%",
-        "primary_apis": ["fred", "coingecko", "alpha_vantage"]
+        "primary_apis": [
+          "fred",
+          "coingecko",
+          "alpha_vantage"
+        ]
       }
     },
-    
     "api_priority_strategy": {
       "tier_1": "FRED優先（公的機関、無制限アクセス）",
-      "tier_2": "Alpha Vantage次順（個別株・ETF）", 
+      "tier_2": "Alpha Vantage次順（個別株・ETF）",
       "tier_3": "CoinGecko最終（仮想通貨専用）"
     },
-    
     "rate_limiting_strategy": {
       "fred": "0.5秒間隔（120 calls/min）",
       "alpha_vantage": "12秒間隔（5 calls/min）",

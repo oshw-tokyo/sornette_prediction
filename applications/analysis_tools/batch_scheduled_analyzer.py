@@ -50,15 +50,24 @@ class BatchDataCache:
     """
     Memory-efficient batch data cache
     Stores full period data for each symbol to avoid repeated API calls
+    Enhanced for production-scale datasets
     """
     
-    def __init__(self):
-        """Initialize cache structure"""
+    def __init__(self, max_cache_size_mb=500):
+        """
+        Initialize cache structure with memory management
+        
+        Args:
+            max_cache_size_mb: Maximum cache size in megabytes
+        """
         self.cache = {}
+        self.max_cache_size = max_cache_size_mb * 1024 * 1024  # Convert to bytes
         self.stats = {
             'api_calls': 0,
             'cache_hits': 0,
-            'cache_misses': 0
+            'cache_misses': 0,
+            'cache_evictions': 0,
+            'memory_usage_mb': 0
         }
     
     def get_or_fetch(self, symbol: str, start_date: str, end_date: str, 
@@ -114,14 +123,21 @@ class BatchDataCache:
         )
         
         if data is not None and not data.empty:
-            # Store in cache
+            # Check memory usage before storing
+            self._manage_cache_memory()
+            
+            # Store in cache with memory tracking
             self.cache[cache_key] = {
                 'data': data,
                 'source': source,
                 'fetched_at': datetime.now(),
                 'original_start': extended_start,
-                'original_end': extended_end
+                'original_end': extended_end,
+                'memory_size': self._estimate_dataframe_memory(data)
             }
+            
+            # Update memory stats
+            self._update_memory_stats()
             
             # Return requested subset
             requested_start = pd.to_datetime(start_date)
@@ -193,6 +209,7 @@ class BatchDataCache:
                                      data_client: UnifiedDataClient) -> Tuple[Optional[pd.DataFrame], str]:
         """
         Fetch CoinGecko data in 365-day chunks and combine
+        Enhanced error handling for production use
         
         Args:
             symbol: Symbol to fetch
@@ -211,6 +228,11 @@ class BatchDataCache:
         num_periods = (total_days // 365) + 1
         
         all_data = []
+        failed_periods = 0
+        max_failures = num_periods // 2  # Allow up to 50% period failures
+        
+        logger.info(f"  📊 CoinGecko multi-period fetch: {num_periods} periods")
+        logger.info(f"  🛡️ Failure tolerance: {max_failures}/{num_periods} periods")
         
         for i in range(num_periods):
             # Calculate period boundaries
@@ -223,54 +245,145 @@ class BatchDataCache:
             logger.info(f"  📅 Fetching period {i+1}/{num_periods}: "
                        f"{period_start.strftime('%Y-%m-%d')} to {period_end.strftime('%Y-%m-%d')}")
             
-            # Fetch this period
-            period_data, source = data_client.get_data_with_fallback(
-                symbol,
-                period_start.strftime('%Y-%m-%d'),
-                period_end.strftime('%Y-%m-%d'),
-                preferred_source='coingecko'
-            )
+            # Fetch with retry logic
+            max_retries = 3
+            period_data = None
             
-            if period_data is not None and not period_data.empty:
-                all_data.append(period_data)
-            else:
-                logger.warning(f"  ⚠️ Failed to fetch period {i+1} for {symbol}")
-                # Decide whether to continue or abort
-                if i == 0:
-                    # First period failed - critical
-                    logger.error(f"  ❌ Cannot fetch most recent data for {symbol}")
-                    return None, 'coingecko_failed'
+            for retry in range(max_retries):
+                try:
+                    period_data, source = data_client.get_data_with_fallback(
+                        symbol,
+                        period_start.strftime('%Y-%m-%d'),
+                        period_end.strftime('%Y-%m-%d'),
+                        preferred_source='coingecko'
+                    )
+                    
+                    if period_data is not None and not period_data.empty:
+                        all_data.append(period_data)
+                        logger.info(f"  ✅ Period {i+1} fetched: {len(period_data)} days")
+                        break
+                    else:
+                        raise ValueError(f"Empty data returned for period {i+1}")
+                        
+                except Exception as e:
+                    logger.warning(f"  ⚠️ Period {i+1} attempt {retry+1}/{max_retries}: {e}")
+                    if retry < max_retries - 1:
+                        time.sleep(5)  # Wait before retry
+                    else:
+                        failed_periods += 1
+                        logger.error(f"  ❌ Period {i+1} failed after {max_retries} attempts")
+            
+            # Check if we've exceeded failure tolerance
+            if failed_periods > max_failures:
+                logger.error(f"  🚫 Too many failures ({failed_periods}>{max_failures}), aborting")
+                return None, 'coingecko_failed'
+            
+            # Critical period check (most recent data)
+            if i == 0 and not all_data:
+                logger.error(f"  ❌ Cannot fetch most recent data for {symbol}")
+                return None, 'coingecko_failed'
             
             # Rate limiting between periods
             if i < num_periods - 1:
                 time.sleep(3)  # CoinGecko rate limit
         
         if not all_data:
+            logger.error(f"  ❌ No data fetched for {symbol}")
+            return None, 'coingecko_failed'
+        
+        # Data validation before combining
+        valid_data = []
+        for i, data in enumerate(all_data):
+            if len(data) < 10:  # Minimum days per period
+                logger.warning(f"  ⚠️ Period {i+1} has insufficient data: {len(data)} days")
+                continue
+            valid_data.append(data)
+        
+        if not valid_data:
+            logger.error(f"  ❌ No valid data periods for {symbol}")
             return None, 'coingecko_failed'
         
         # Combine all periods
-        combined_data = pd.concat(all_data, axis=0)
-        
-        # Remove duplicates (keep first occurrence)
-        combined_data = combined_data[~combined_data.index.duplicated(keep='first')]
-        
-        # Sort by date
-        combined_data = combined_data.sort_index()
-        
-        logger.info(f"✅ Combined {len(all_data)} periods for {symbol}: "
-                   f"{len(combined_data)} total days")
-        
-        return combined_data, 'coingecko'
+        try:
+            combined_data = pd.concat(valid_data, axis=0)
+            
+            # Remove duplicates (keep first occurrence)
+            combined_data = combined_data[~combined_data.index.duplicated(keep='first')]
+            
+            # Sort by date
+            combined_data = combined_data.sort_index()
+            
+            # Final data validation
+            if len(combined_data) < 100:
+                logger.warning(f"  ⚠️ Combined data insufficient for {symbol}: {len(combined_data)} days")
+                return None, 'coingecko_insufficient'
+            
+            # Memory optimization: reduce precision for large datasets
+            if len(combined_data) > 5000:
+                combined_data = combined_data.astype({'Close': 'float32'})
+                logger.info(f"  🔧 Memory optimization applied for {symbol}")
+            
+            logger.info(f"✅ Combined {len(valid_data)} periods for {symbol}: "
+                       f"{len(combined_data)} total days")
+            
+            return combined_data, 'coingecko'
+            
+        except Exception as e:
+            logger.error(f"  ❌ Error combining periods for {symbol}: {e}")
+            return None, 'coingecko_combine_failed'
     
-    def get_cache_stats(self) -> Dict[str, int]:
-        """Get cache statistics"""
+    def _estimate_dataframe_memory(self, df: pd.DataFrame) -> int:
+        """Estimate DataFrame memory usage in bytes"""
+        try:
+            return df.memory_usage(deep=True).sum()
+        except Exception:
+            # Fallback estimation
+            return len(df) * len(df.columns) * 8  # Rough estimate
+    
+    def _update_memory_stats(self):
+        """Update memory usage statistics"""
+        total_memory = sum(
+            item.get('memory_size', 0) 
+            for item in self.cache.values()
+        )
+        self.stats['memory_usage_mb'] = total_memory / (1024 * 1024)
+    
+    def _manage_cache_memory(self):
+        """Manage cache memory by evicting oldest entries if needed"""
+        while True:
+            total_memory = sum(
+                item.get('memory_size', 0) 
+                for item in self.cache.values()
+            )
+            
+            if total_memory <= self.max_cache_size or len(self.cache) == 0:
+                break
+                
+            # Find oldest entry
+            oldest_key = min(
+                self.cache.keys(),
+                key=lambda k: self.cache[k]['fetched_at']
+            )
+            
+            logger.info(f"🧹 Cache eviction: {oldest_key} "
+                       f"(memory limit: {self.max_cache_size / 1024 / 1024:.1f}MB)")
+            
+            del self.cache[oldest_key]
+            self.stats['cache_evictions'] += 1
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get comprehensive cache statistics"""
+        self._update_memory_stats()
         return {
             **self.stats,
             'symbols_cached': len(self.cache),
             'cache_efficiency': (
                 self.stats['cache_hits'] / 
                 max(1, self.stats['cache_hits'] + self.stats['cache_misses'])
-            ) * 100
+            ) * 100,
+            'avg_memory_per_symbol_mb': (
+                self.stats['memory_usage_mb'] / max(1, len(self.cache))
+            )
         }
 
 
@@ -280,12 +393,14 @@ class BatchScheduledAnalyzer:
     Optimized for multi-period analysis with minimal API calls
     """
     
-    def __init__(self, db_path: str = "results/analysis_results.db"):
+    def __init__(self, db_path: str = "results/analysis_results.db", 
+                 cache_size_mb: int = 500):
         """
-        Initialize batch analyzer
+        Initialize batch analyzer with production-ready configuration
         
         Args:
             db_path: Database path
+            cache_size_mb: Maximum cache memory usage in MB
         """
         self.db_path = db_path
         self.schedule_manager = ScheduleManager(db_path)
@@ -296,15 +411,17 @@ class BatchScheduledAnalyzer:
         self.db_saver = AnalysisResultSaver(db_path)
         self.visualizer = LPPLVisualizer(db_path)
         
-        # Batch data cache
-        self.batch_cache = BatchDataCache()
+        # Batch data cache with memory management
+        self.batch_cache = BatchDataCache(max_cache_size_mb=cache_size_mb)
         
-        # Statistics
+        # Statistics with enhanced tracking
         self.stats = {
             'total_analyses': 0,
             'successful_analyses': 0,
             'failed_analyses': 0,
-            'skipped_duplicates': 0
+            'skipped_duplicates': 0,
+            'memory_peak_mb': 0,
+            'processing_times': []
         }
     
     def run_batch_backfill(self, start_date: str, end_date: Optional[str] = None,
@@ -354,11 +471,30 @@ class BatchScheduledAnalyzer:
         }
         
         for symbol_idx, symbol in enumerate(config.symbols, 1):
+            symbol_start_time = datetime.now()
             print(f"\n📊 Processing {symbol} ({symbol_idx}/{len(config.symbols)})")
+            
+            # Progress estimation
+            if symbol_idx > 1:
+                elapsed = (datetime.now() - start_time).total_seconds()
+                avg_time_per_symbol = elapsed / (symbol_idx - 1)
+                remaining_symbols = len(config.symbols) - symbol_idx + 1
+                eta_seconds = remaining_symbols * avg_time_per_symbol
+                eta_minutes = eta_seconds / 60
+                print(f"   📈 Progress: {((symbol_idx-1)/len(config.symbols)*100):.1f}% complete")
+                print(f"   ⏳ ETA: {eta_minutes:.1f} minutes remaining")
             
             symbol_results = self._process_symbol_batch(
                 symbol, periods, schedule_name, dry_run
             )
+            
+            # Track processing time
+            symbol_duration = (datetime.now() - symbol_start_time).total_seconds()
+            self.stats['processing_times'].append(symbol_duration)
+            
+            # Update memory peak tracking
+            current_memory = self.batch_cache.get_cache_stats()['memory_usage_mb']
+            self.stats['memory_peak_mb'] = max(self.stats['memory_peak_mb'], current_memory)
             
             if symbol_results['success_count'] > 0:
                 results['successful'].extend(symbol_results['successful_analyses'])
@@ -382,6 +518,17 @@ class BatchScheduledAnalyzer:
         print(f"   - Actual API calls: {cache_stats['api_calls']}")
         print(f"   - Reduction: {(1 - cache_stats['api_calls'] / max(1, len(periods) * len(config.symbols))) * 100:.1f}%")
         print(f"💾 Cache efficiency: {cache_stats['cache_efficiency']:.1f}%")
+        print(f"🧠 Memory usage: {cache_stats['memory_usage_mb']:.1f}MB")
+        print(f"🗑️ Cache evictions: {cache_stats['cache_evictions']}")
+        if cache_stats['cache_evictions'] > 0:
+            print(f"   Average memory per symbol: {cache_stats['avg_memory_per_symbol_mb']:.1f}MB")
+        
+        # Performance metrics
+        if self.stats['processing_times']:
+            avg_time = sum(self.stats['processing_times']) / len(self.stats['processing_times'])
+            print(f"⚡ Performance:")
+            print(f"   - Average time per symbol: {avg_time:.1f}s")
+            print(f"   - Peak memory usage: {self.stats['memory_peak_mb']:.1f}MB")
         
         results['duration'] = duration
         results['cache_stats'] = cache_stats

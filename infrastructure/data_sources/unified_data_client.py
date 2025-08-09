@@ -66,130 +66,69 @@ class UnifiedDataClient:
         
         print(f"📊 利用可能データソース: {self.available_sources}")
         
-        # 銘柄マッピング（拡張版v4.0 - 87銘柄対応）
-        self.symbol_mapping = {
-            # === FRED銘柄 (33銘柄) ===
-            # 米国主要指数
-            'NASDAQCOM': {'fred': 'NASDAQCOM'},
-            'SP500': {'fred': 'SP500'},
-            'NASDAQ100': {'fred': 'NASDAQ100'},
-            'DJIA': {'fred': 'DJIA'},
-            'DJTA': {'fred': 'DJTA'},
-            'DJUA': {'fred': 'DJUA'},
-            'WILREIT': {'fred': 'WILREIT'},
-            'WILL4500': {'fred': 'WILL4500'},
-            'WILL5000': {'fred': 'WILL5000'},
+        # 銘柄マッピング（カタログから動的読み込み）
+        self.symbol_mapping = self._load_symbol_mapping_from_catalog()
+        
+        # 統合データログ出力
+        symbol_count = len(self.symbol_mapping)
+        print(f"📊 統合データクライアントから{symbol_count}銘柄を読み込み（FRED+Alpha Vantage+CoinGecko）")
+    
+    def _load_symbol_mapping_from_catalog(self) -> dict:
+        """
+        カタログからシンボルマッピングを動的読み込み
+        
+        Returns:
+            dict: シンボルマッピング辞書
+        """
+        import json
+        import os
+        from pathlib import Path
+        
+        try:
+            # プロジェクトルートからカタログパスを構築
+            current_dir = Path(__file__).parent
+            catalog_path = current_dir / "market_data_catalog.json"
             
-            # セクター指数
-            'NASDAQSOX': {'fred': 'NASDAQSOX'},
-            'NASDAQRSBLCN': {'fred': 'NASDAQRSBLCN'},
-            'NASDAQBIOTECH': {'fred': 'NASDAQBIOTECH'},
-            'NASDAQBANK': {'fred': 'NASDAQBANK'},
+            if not catalog_path.exists():
+                print(f"⚠️ カタログファイルが見つかりません: {catalog_path}")
+                return {}
             
-            # REIT指数
-            'REIT': {'fred': 'REIT'},
-            'REITTMA': {'fred': 'REITTMA'},
+            with open(catalog_path, 'r', encoding='utf-8') as f:
+                catalog = json.load(f)
             
-            # 国際指数・為替
-            'NIKKEI225': {'fred': 'NIKKEI225'},
-            'DEXCHUS': {'fred': 'DEXCHUS'},
-            'DEXJPUS': {'fred': 'DEXJPUS'},
-            'DEXUSEU': {'fred': 'DEXUSEU'},
+            mapping = {}
             
-            # 仮想通貨（FRED優先）
-            'CBBTCUSD': {'fred': 'CBBTCUSD', 'coingecko': 'BTC'},
-            'CBETHUSD': {'fred': 'CBETHUSD', 'coingecko': 'ETH'},
+            # カタログの各シンボルからマッピング構築
+            for symbol, data in catalog.get('symbols', {}).items():
+                sources = data.get('data_sources', {})
+                
+                symbol_mapping = {}
+                
+                # primary sourceを取得
+                primary = sources.get('primary', {})
+                if primary and 'provider' in primary:
+                    provider = primary['provider']
+                    provider_symbol = primary.get('symbol', symbol)
+                    symbol_mapping[provider] = provider_symbol
+                
+                # fallback sourcesも処理
+                fallbacks = sources.get('fallbacks', [])
+                for fallback in fallbacks:
+                    if isinstance(fallback, dict) and 'provider' in fallback:
+                        provider = fallback['provider']
+                        provider_symbol = fallback.get('symbol', symbol)
+                        symbol_mapping[provider] = provider_symbol
+                
+                if symbol_mapping:
+                    mapping[symbol] = symbol_mapping
             
-            # ボラティリティ指標
-            'VIXCLS': {'fred': 'VIXCLS'},
-            'GVZCLS': {'fred': 'GVZCLS'},
-            'OVXCLS': {'fred': 'OVXCLS'},
+            print(f"✅ カタログから{len(mapping)}銘柄のマッピング読み込み完了")
+            return mapping
             
-            # 金利・債券
-            'DGS10': {'fred': 'DGS10'},
-            'DGS2': {'fred': 'DGS2'},
-            'DGS30': {'fred': 'DGS30'},
-            'DEXM3': {'fred': 'DEXM3'},
-            'BAMLH0A0HYM2': {'fred': 'BAMLH0A0HYM2'},
-            
-            # 商品・コモディティ
-            'GOLDAMGBD228NLBM': {'fred': 'GOLDAMGBD228NLBM'},
-            'DCOILWTICO': {'fred': 'DCOILWTICO'},
-            'DCOILBRENTEU': {'fred': 'DCOILBRENTEU'},
-            'GASREGW': {'fred': 'GASREGW'},
-            
-            # === CoinGecko仮想通貨 (34銘柄) ===
-            # Tier 1: 基軸・主要プラットフォーム
-            'BNB': {'coingecko': 'BNB'},
-            'XRP': {'coingecko': 'XRP'},
-            'SOL': {'coingecko': 'SOL'},
-            'USDC': {'coingecko': 'USDC'},
-            'USDT': {'coingecko': 'USDT'},
-            'ADA': {'coingecko': 'ADA'},
-            'AVAX': {'coingecko': 'AVAX'},
-            'DOT': {'coingecko': 'DOT'},
-            
-            # Tier 2: DeFi・スケーリング
-            'LINK': {'coingecko': 'LINK'},
-            'MATIC': {'coingecko': 'MATIC'},
-            'UNI': {'coingecko': 'UNI'},
-            'LTC': {'coingecko': 'LTC'},
-            'ATOM': {'coingecko': 'ATOM'},
-            'ALGO': {'coingecko': 'ALGO'},
-            'VET': {'coingecko': 'VET'},
-            'FIL': {'coingecko': 'FIL'},
-            'AAVE': {'coingecko': 'AAVE'},
-            'CRV': {'coingecko': 'CRV'},
-            
-            # Tier 3: 特殊用途・新興
-            'DOGE': {'coingecko': 'DOGE'},
-            'SHIB': {'coingecko': 'SHIB'},
-            'SAND': {'coingecko': 'SAND'},
-            'MANA': {'coingecko': 'MANA'},
-            'AXS': {'coingecko': 'AXS'},
-            'ENJ': {'coingecko': 'ENJ'},
-            'COMP': {'coingecko': 'COMP'},
-            'SUSHI': {'coingecko': 'SUSHI'},
-            '1INCH': {'coingecko': '1INCH'},
-            'BAT': {'coingecko': 'BAT'},
-            
-            # Tier 4: プライバシー・ニッチ
-            'XMR': {'coingecko': 'XMR'},
-            'ZEC': {'coingecko': 'ZEC'},
-            'DASH': {'coingecko': 'DASH'},
-            'EOS': {'coingecko': 'EOS'},
-            'TRX': {'coingecko': 'TRX'},
-            'XTZ': {'coingecko': 'XTZ'},
-            
-            # === Alpha Vantage ETF・INDEX (20銘柄) ===
-            # セクターETF
-            'XLK': {'alpha_vantage': 'XLK'},
-            'XLF': {'alpha_vantage': 'XLF'},
-            'XLV': {'alpha_vantage': 'XLV'},
-            'XLE': {'alpha_vantage': 'XLE'},
-            'XLI': {'alpha_vantage': 'XLI'},
-            'XLP': {'alpha_vantage': 'XLP'},
-            'XLY': {'alpha_vantage': 'XLY'},
-            'XLRE': {'alpha_vantage': 'XLRE'},
-            
-            # 国際・新興国
-            'EFA': {'alpha_vantage': 'EFA'},
-            'EEM': {'alpha_vantage': 'EEM'},
-            'VEA': {'alpha_vantage': 'VEA'},
-            'VWO': {'alpha_vantage': 'VWO'},
-            
-            # 特殊資産クラス
-            'GLD': {'alpha_vantage': 'GLD'},
-            'TLT': {'alpha_vantage': 'TLT'},
-            'HYG': {'alpha_vantage': 'HYG'},
-            'VNQ': {'alpha_vantage': 'VNQ'},
-            
-            # 成長・バリュー・サイズファクター
-            'VUG': {'alpha_vantage': 'VUG'},
-            'VTV': {'alpha_vantage': 'VTV'},
-            'IWM': {'alpha_vantage': 'IWM'},
-            'QQQ': {'alpha_vantage': 'QQQ'},
-        }
+        except Exception as e:
+            print(f"❌ カタログ読み込みエラー: {e}")
+            print("  フォールバック: 空のマッピングを使用")
+            return {}
     
     def get_data_with_fallback(self, symbol: str, start_date: str, end_date: str,
                               preferred_source: Optional[str] = None) -> Tuple[Optional[pd.DataFrame], str]:
