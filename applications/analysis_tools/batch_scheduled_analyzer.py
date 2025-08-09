@@ -13,10 +13,14 @@ Key Features:
 import sys
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
+
+# Load environment variables
+load_dotenv()
 
 import time
 import pandas as pd
@@ -151,6 +155,10 @@ class BatchDataCache:
         
         # Check symbol mapping to determine source
         symbol_mapping = data_client.symbol_mapping.get(symbol, {})
+        
+        # Debug: Check if symbol_mapping is properly loaded
+        if not symbol_mapping:
+            logger.debug(f"Symbol {symbol} not found in mapping, available: {list(data_client.symbol_mapping.keys())[:5]}")
         
         # Try FRED first (no limits)
         if 'fred' in symbol_mapping:

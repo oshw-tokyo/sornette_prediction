@@ -219,6 +219,50 @@ head -20 results/retrospective_analysis/nasdaq_retrospective_data_*.csv
 
 ---
 
+## 📊 定期解析システム
+
+### 1. スケジュール解析実行
+```bash
+# 通常の定期解析実行
+python entry_points/main.py scheduled-analysis run
+
+# バックフィル実行（従来版）
+python entry_points/main.py scheduled-analysis backfill --start 2025-01-01 --end 2025-08-01
+
+# 🆕 バックフィル実行（高効率版 v2）
+python entry_points/main.py scheduled-analysis backfill-v2 --start 2025-01-01 --end 2025-08-01
+
+# ドライラン（実行シミュレーション）
+python entry_points/main.py scheduled-analysis backfill-v2 --start 2025-01-01 --end 2025-08-01 --dry-run
+```
+
+### 2. Backfill v2の特徴
+
+**API効率化**:
+- **従来版**: N期間 × M銘柄 = N×M回のAPIコール
+- **v2版**: M銘柄 = M回のAPIコール（N倍効率化）
+- **実測例**: 3期間×3銘柄で66.7%のAPI呼び出し削減
+
+**対応データソース**:
+- **FRED**: 制限なし、最大期間一括取得
+- **Alpha Vantage**: 20年以上の履歴を一括取得
+- **CoinGecko**: 365日制限を自動分割して取得・結合
+
+**使用例**:
+```bash
+# 過去1年間の週次データを効率的にバックフィル
+python entry_points/main.py scheduled-analysis backfill-v2 \
+  --start 2024-08-01 --end 2025-08-01 \
+  --schedule fred_weekly
+
+# テスト実行（DB保存なし）
+python entry_points/main.py scheduled-analysis backfill-v2 \
+  --start 2025-07-01 --end 2025-08-01 \
+  --dry-run
+```
+
+---
+
 ## 🎛️ UIダッシュボード
 
 ### 1. Streamlitダッシュボードの起動
