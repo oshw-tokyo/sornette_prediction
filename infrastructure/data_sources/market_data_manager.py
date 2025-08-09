@@ -206,12 +206,8 @@ class MarketDataManager:
             if provider == 'fred':
                 return client.get_series_data(symbol, start_date, end_date)
             elif provider == 'alpha_vantage':
-                data = client.get_stock_data(symbol)
-                if data is not None:
-                    # 期間でフィルタ
-                    start_dt = pd.to_datetime(start_date)
-                    end_dt = pd.to_datetime(end_date)
-                    return data[(data.index >= start_dt) & (data.index <= end_dt)]
+                # Alpha Vantage 클라이언트는 get_series_data 메서드 사용
+                return client.get_series_data(symbol, start_date, end_date)
             else:
                 print(f"❌ 未対応プロバイダ: {provider}")
                 return None

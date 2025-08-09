@@ -48,7 +48,7 @@ class ScheduleManager:
         symbols = self._load_symbols_from_catalog(catalog_path)
         
         # デフォルト設定を挿入（存在しない場合のみ）
-        # ⚠️ CRITICAL: 標準は週次解析
+        # ⚠️ CRITICAL: 標準は週次解析（全カタログ銘柄対応）
         default_config = {
             'schedule_name': 'fred_weekly',
             'frequency': 'weekly',
@@ -56,7 +56,7 @@ class ScheduleManager:
             'hour': 9,
             'minute': 0,
             'timezone': 'UTC',
-            'symbols': json.dumps(['NASDAQCOM', 'SP500', 'DJI']),  # 標準的な経済指標
+            'symbols': json.dumps(symbols),  # カタログ全銘柄(87銘柄)使用
             'enabled': 1,
             'auto_backfill_limit': 30
         }
@@ -89,18 +89,18 @@ class ScheduleManager:
                 print(f"✅ デフォルトスケジュール設定を作成: {default_config['schedule_name']}")
     
     def _load_symbols_from_catalog(self, catalog_path: Path) -> List[str]:
-        """カタログから銘柄リストを読み込み"""
+        """統合データクライアントから全対応銘柄リストを読み込み"""
         try:
-            with open(catalog_path, 'r', encoding='utf-8') as f:
-                catalog = json.load(f)
-            
-            symbols = list(catalog.get('symbols', {}).keys())
-            print(f"📊 カタログから{len(symbols)}銘柄を読み込み")
+            # unified_data_clientのsymbol_mappingから全銘柄を取得
+            from ..data_sources.unified_data_client import UnifiedDataClient
+            client = UnifiedDataClient()
+            symbols = list(client.symbol_mapping.keys())
+            print(f"📊 統合データクライアントから{len(symbols)}銘柄を読み込み（FRED+Alpha Vantage+CoinGecko）")
             return symbols
         except Exception as e:
-            print(f"⚠️ カタログ読み込み失敗: {e}")
+            print(f"⚠️ 統合データクライアント読み込み失敗: {e}")
             # フォールバック: 主要指数のみ
-            return ['NASDAQCOM', 'SP500', 'NASDAQ100']
+            return ['NASDAQCOM', 'SP500', 'DJIA']
     
     def get_schedule_config(self, schedule_name: str) -> Optional[ScheduleConfig]:
         """スケジュール設定の取得"""

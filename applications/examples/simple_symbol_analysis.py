@@ -64,10 +64,11 @@ def analyze_symbol(symbol: str, period: str = '1y') -> dict:
     else:
         # Alpha Vantage銘柄の場合
         av_client = AlphaVantageClient()
-        data = av_client.get_stock_data(symbol.upper())
-        if data is not None:
-            # 期間でフィルタ
-            data = data[data.index >= start_date]
+        data = av_client.get_series_data(
+            symbol.upper(),
+            start_date.strftime('%Y-%m-%d'),
+            end_date.strftime('%Y-%m-%d')
+        )
         source = "Alpha Vantage"
     
     if data is None or len(data) == 0:
