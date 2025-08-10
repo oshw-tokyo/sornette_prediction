@@ -19,7 +19,21 @@ python entry_points/main.py validate --crash 1987
 
 **目的**: Sornette対数周期パワー法則（LPPL）モデルを用いて金融市場のクラッシュを事前に予測し、実際の取引で収益を上げるシステムの構築
 
-**現在のステータス**: バックフィルバッチ実行中（78銘柄・2.6年間のLPPL分析データ蓄積）
+**現在のステータス**: 安定版v1.0（80銘柄・FRED優先原則+Twelve Data補完・論文再現保護）
+
+### 🎯 安定版v1.0 データソース戦略
+
+**基本原則**: FRED最優先 + Twelve Data補完による高品質データ取得
+
+#### データソース配分
+- **FRED**: 24銘柄（経済指標14 + 株式指数10）- 制限なし・最高品質
+- **Twelve Data**: 56銘柄（仮想通貨36 + 個別株式20）- 800req/日制限管理
+- **重複銘柄**: CBBTCUSD（FRED優先）vs BTC（Twelve Data）
+
+#### 優先順位設計
+1. **FRED継続**: SP500, NASDAQCOM, CBBTCUSD等は既存維持
+2. **Twelve Data拡張**: 新規仮想通貨・個別株式を追加
+3. **品質保証**: 論文再現（1987年）100/100スコア維持
 
 ## 📊 進捗管理とClaude Codeとの協働
 
@@ -57,7 +71,7 @@ sornette_prediction/
 │   └── examples/                 # 実行例・デモ
 │
 ├── infrastructure/               # インフラ層
-│   ├── data_sources/             # データ取得（78銘柄カタログ）
+│   ├── data_sources/             # データ取得（80銘柄・FRED+Twelve Data）
 │   ├── database/                 # SQLite結果管理
 │   └── visualization/            # 可視化ツール
 │
@@ -137,7 +151,7 @@ sornette_prediction/
 │   └── examples/                      # 実行例・デモ
 │
 ├── infrastructure/                    # インフラ層
-│   ├── data_sources/                  # データ取得（FRED/Alpha Vantage）
+│   ├── data_sources/                  # データ取得（80銘柄・FRED優先+Twelve Data補完）
 │   ├── database/                      # SQLite結果管理
 │   └── visualization/                 # 可視化ツール
 │

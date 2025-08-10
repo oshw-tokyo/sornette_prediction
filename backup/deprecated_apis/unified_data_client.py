@@ -64,39 +64,14 @@ class UnifiedDataClient:
         except Exception as e:
             print(f"⚠️ CoinGecko 初期化失敗: {str(e)}")
         
-        # Twelve Data クライアント
-        try:
-            from twelvedata_client import TwelveDataClient
-            twelvedata_client = TwelveDataClient()
-            self.clients['twelvedata'] = twelvedata_client
-            self.available_sources.append('twelvedata')
-            print("✅ Twelve Data クライアント初期化成功")
-        except Exception as e:
-            print(f"⚠️ Twelve Data 初期化失敗: {str(e)}")
-        
-        # Finnhub クライアント (時系列データ制限のため無効化)
-        # Issue I051: 無料プランでは時系列データ取得不可（403エラー）
-        # LPPL分析には過去365日データが必須のため利用不可
-        # try:
-        #     from finnhub_client import FinnhubClient
-        #     finnhub_client = FinnhubClient()
-        #     self.clients['finnhub'] = finnhub_client
-        #     self.available_sources.append('finnhub')
-        #     print("✅ Finnhub クライアント初期化成功")
-        # except Exception as e:
-        #     print(f"⚠️ Finnhub 初期化失敗: {str(e)}")
-        print("ℹ️ Finnhub: 時系列データ制限により無効化（Issue I051）")
-        
         print(f"📊 利用可能データソース: {self.available_sources}")
         
         # 銘柄マッピング（カタログから動的読み込み）
         self.symbol_mapping = self._load_symbol_mapping_from_catalog()
         
-        # 統合データログ出力（安定版v1.0対応）
+        # 統合データログ出力
         symbol_count = len(self.symbol_mapping)
-        print(f"📊 統合データクライアント初期化完了（安定版v1.0）")
-        print(f"   対象銘柄: {symbol_count}銘柄（FRED優先→Twelve Data補完原則）")
-        print(f"   利用可能API: {', '.join(self.available_sources)}")
+        print(f"📊 統合データクライアントから{symbol_count}銘柄を読み込み（FRED+Alpha Vantage+CoinGecko）")
     
     def _load_symbol_mapping_from_catalog(self) -> dict:
         """
