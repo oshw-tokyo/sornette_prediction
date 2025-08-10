@@ -43,6 +43,12 @@ class SymbolAnalysisDashboard:
         self.market_catalog = self.load_market_catalog()
         self.data_client = UnifiedDataClient()
         
+        # 🔧 API効率化: 価格データキャッシュ（セッション内有効）
+        if 'price_data_cache' not in st.session_state:
+            st.session_state.price_data_cache = {}
+        if 'cache_metadata' not in st.session_state:
+            st.session_state.cache_metadata = {}
+        
         # Page configuration
         st.set_page_config(
             page_title="Symbol Analysis Dashboard",
@@ -651,15 +657,26 @@ class SymbolAnalysisDashboard:
             return selected_symbol, period_selection, priority_filter
     
     def get_symbol_price_data(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
-        """Get symbol price data from unified data client"""
+        """Get symbol price data with caching for API efficiency"""
         try:
+            # 🔧 API効率化: キャッシュキーを生成
+            cache_key = f"{symbol}_{start_date}_{end_date}"
+            
+            # キャッシュから取得を試行
+            if cache_key in st.session_state.price_data_cache:
+                cached_data = st.session_state.price_data_cache[cache_key]
+                cache_info = st.session_state.cache_metadata.get(cache_key, {})
+                print(f"🔄 キャッシュからデータ取得: {symbol} ({cache_info.get('source', 'unknown')}) - {len(cached_data)}日分")
+                return cached_data
+            
             # データベースから最新の分析結果を取得してデータソースを特定
             latest_analysis = self.db.get_recent_analyses(symbol=symbol, limit=1)
             preferred_source = None
             if not latest_analysis.empty:
                 data_source = latest_analysis.iloc[0].get('data_source')
                 if data_source:
-                    preferred_source = 'fred' if data_source == 'fred' else 'alpha_vantage'
+                    # 安定版v1.0: FRED優先 → Twelve Data補完
+                    preferred_source = 'fred' if data_source == 'fred' else 'twelvedata'
             
             # 統合データクライアントからフォールバック付きでデータ取得
             data, source_used = self.data_client.get_data_with_fallback(
@@ -667,7 +684,14 @@ class SymbolAnalysisDashboard:
             )
             
             if data is not None and len(data) > 0:
-                print(f"✅ ダッシュボード用データ取得成功: {symbol} ({source_used}) - {len(data)}日分")
+                # 🔧 API効率化: データをキャッシュに保存
+                st.session_state.price_data_cache[cache_key] = data
+                st.session_state.cache_metadata[cache_key] = {
+                    'source': source_used,
+                    'cached_at': pd.Timestamp.now(),
+                    'size': len(data)
+                }
+                print(f"✅ API取得成功・キャッシュ保存: {symbol} ({source_used}) - {len(data)}日分")
                 return data
             else:
                 print(f"❌ データ取得失敗: {symbol}")
@@ -864,10 +888,21 @@ class SymbolAnalysisDashboard:
             data_start = latest['data_period_start']
             data_end = latest['data_period_end']
             
-            # Number of Resultsから逆算して十分な期間のデータを取得
-            # 複数の分析結果の予測日まで含めるため、期間を拡張
+            # 表示数を事前に定義
+            display_count = len(analysis_data)
+            
+            # 🔧 API効率化改善: 全ての分析期間をカバーする完全な期間を計算
+            # Individual Analysis で必要な全期間を事前に把握
+            min_data_start = data_start
             max_pred_date = data_end
-            for _, row in analysis_data.head(min(len(analysis_data), 10)).iterrows():
+            
+            for _, row in analysis_data.head(display_count).iterrows():
+                # 各分析の開始日を含める
+                row_start = row.get('data_period_start')
+                if row_start and row_start < min_data_start:
+                    min_data_start = row_start
+                    
+                # 各分析の予測日を含める
                 if pd.notna(row.get('tc')):
                     row_start = row.get('data_period_start', data_start)
                     row_end = row.get('data_period_end', data_end)
@@ -875,6 +910,10 @@ class SymbolAnalysisDashboard:
                         pred_date = self.convert_tc_to_real_date(row.get('tc'), row_start, row_end)
                         if pred_date > pd.to_datetime(max_pred_date):
                             max_pred_date = pred_date.strftime('%Y-%m-%d')
+            
+            # 最小開始日を使用（全期間をカバー）
+            data_start = min_data_start
+            print(f"🔧 全期間カバー範囲: {data_start} to {max_pred_date} (全{display_count}件対応)")
             
             # Future Period表示のためにさらに期間を拡張（予測日+60日）
             # 🔧 レート制限対応: 極端に遠い予測日を制限
@@ -1629,8 +1668,32 @@ class SymbolAnalysisDashboard:
                                 st.markdown(f"---")
                                 st.markdown(f"**Analysis #{i+1} - Fitting Basis: {fitting_basis_dt.strftime('%Y-%m-%d')}**")
                                 
-                                # フィッティング用データを取得（既存データ流用）
-                                individual_data = self.get_symbol_price_data(symbol, ind_start, ind_end)
+                                # 🔧 API効率化: 既に取得済みの拡張データから必要期間を抽出
+                                if price_data is not None and not price_data.empty:
+                                    # 拡張データから該当期間を抽出
+                                    ind_start_dt = pd.to_datetime(ind_start)
+                                    ind_end_dt = pd.to_datetime(ind_end)
+                                    
+                                    # 既存データの範囲内であることを確認（多少の余裕を持って判定）
+                                    data_start_dt = price_data.index.min()
+                                    data_end_dt = price_data.index.max()
+                                    
+                                    # 🔧 API効率化改善: 少しでも重複があれば既存データを使用
+                                    available_data_in_range = price_data.loc[
+                                        (price_data.index >= ind_start_dt) & (price_data.index <= ind_end_dt)
+                                    ]
+                                    
+                                    if len(available_data_in_range) >= 30:  # 最低30日のデータがあれば使用
+                                        # 既存データから期間抽出（API呼び出し不要）
+                                        individual_data = available_data_in_range.copy()
+                                        print(f"🔄 既存データから期間抽出: {symbol} {ind_start} to {ind_end} - {len(individual_data)}日分")
+                                    else:
+                                        # データが不足している場合のみAPI呼び出し
+                                        individual_data = self.get_symbol_price_data(symbol, ind_start, ind_end)
+                                        print(f"⚠️ データ不足のためAPI呼び出し: {symbol} (既存:{len(available_data_in_range)}日 < 30日)")
+                                else:
+                                    # フォールバック: 拡張データ取得失敗時のみAPI呼び出し
+                                    individual_data = self.get_symbol_price_data(symbol, ind_start, ind_end)
                                 
                                 if individual_data is not None and not individual_data.empty and 'Close' in individual_data.columns:
                                     # LPPLパラメータを抽出
