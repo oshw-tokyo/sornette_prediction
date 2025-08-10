@@ -450,38 +450,56 @@ class BatchScheduledAnalyzer:
         if not config:
             raise ValueError(f"Schedule not found: {schedule_name}")
         
+        # Filter valid symbols (only symbols available in data client)
+        valid_symbols = []
+        deprecated_symbols = []
+        
+        for symbol in config.symbols:
+            if symbol in self.data_client.symbol_mapping:
+                valid_symbols.append(symbol)
+            else:
+                deprecated_symbols.append(symbol)
+        
+        if deprecated_symbols:
+            print(f"⚠️ Deprecated symbols (skipping): {len(deprecated_symbols)}")
+            for dep_symbol in deprecated_symbols[:5]:  # Show first 5
+                print(f"   - {dep_symbol}")
+            if len(deprecated_symbols) > 5:
+                print(f"   ... and {len(deprecated_symbols) - 5} more")
+        
         # Calculate periods to analyze
         periods = self._generate_analysis_periods(start_date, end_date, config)
         print(f"📅 Analysis periods: {len(periods)}")
-        print(f"🎯 Target symbols: {len(config.symbols)}")
-        print(f"📊 Traditional API calls: {len(periods) * len(config.symbols)}")
-        print(f"⚡ Optimized API calls: ~{len(config.symbols)} (estimated)")
+        print(f"🎯 Valid symbols: {len(valid_symbols)} (filtered from {len(config.symbols)})")
+        print(f"📊 Traditional API calls: {len(periods) * len(valid_symbols)}")
+        print(f"⚡ Optimized API calls: ~{len(valid_symbols)} (estimated)")
         
         if dry_run:
             print("\n⚠️ DRY RUN MODE - No data will be saved")
         
-        # Process each symbol with batch data
+        # Process each valid symbol with batch data
         results = {
             'periods': periods,
-            'symbols': config.symbols,
+            'symbols': valid_symbols,
+            'deprecated_symbols': deprecated_symbols,
             'successful': [],
             'failed': [],
             'api_stats': {},
             'cache_stats': {}
         }
         
-        for symbol_idx, symbol in enumerate(config.symbols, 1):
+        for symbol_idx, symbol in enumerate(valid_symbols, 1):
             symbol_start_time = datetime.now()
-            print(f"\n📊 Processing {symbol} ({symbol_idx}/{len(config.symbols)})")
+            print(f"\n📊 Processing {symbol} ({symbol_idx}/{len(valid_symbols)})")
             
             # Progress estimation
             if symbol_idx > 1:
                 elapsed = (datetime.now() - start_time).total_seconds()
                 avg_time_per_symbol = elapsed / (symbol_idx - 1)
-                remaining_symbols = len(config.symbols) - symbol_idx + 1
+                remaining_symbols = len(valid_symbols) - symbol_idx + 1
                 eta_seconds = remaining_symbols * avg_time_per_symbol
                 eta_minutes = eta_seconds / 60
-                print(f"   📈 Progress: {((symbol_idx-1)/len(config.symbols)*100):.1f}% complete")
+                print(f"   📈 Progress: {((symbol_idx-1)/len(valid_symbols)*100):.1f}% complete")
                 print(f"   ⏳ ETA: {eta_minutes:.1f} minutes remaining")
             
             symbol_results = self._process_symbol_batch(
@@ -513,10 +531,12 @@ class BatchScheduledAnalyzer:
         print(f"⏱️ Total time: {duration:.1f} seconds")
         print(f"✅ Successful analyses: {len(results['successful'])}")
         print(f"❌ Failed analyses: {len(results['failed'])}")
+        if deprecated_symbols:
+            print(f"⚠️ Deprecated symbols skipped: {len(deprecated_symbols)}")
         print(f"📈 API efficiency:")
-        print(f"   - Traditional calls: {len(periods) * len(config.symbols)}")
+        print(f"   - Traditional calls: {len(periods) * len(valid_symbols)}")
         print(f"   - Actual API calls: {cache_stats['api_calls']}")
-        print(f"   - Reduction: {(1 - cache_stats['api_calls'] / max(1, len(periods) * len(config.symbols))) * 100:.1f}%")
+        print(f"   - Reduction: {(1 - cache_stats['api_calls'] / max(1, len(periods) * len(valid_symbols))) * 100:.1f}%")
         print(f"💾 Cache efficiency: {cache_stats['cache_efficiency']:.1f}%")
         print(f"🧠 Memory usage: {cache_stats['memory_usage_mb']:.1f}MB")
         print(f"🗑️ Cache evictions: {cache_stats['cache_evictions']}")

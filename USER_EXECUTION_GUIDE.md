@@ -229,18 +229,18 @@ python entry_points/main.py scheduled-analysis run
 # バックフィル実行（従来版）
 python entry_points/main.py scheduled-analysis backfill --start 2025-01-01 --end 2025-08-01
 
-# 🆕 バックフィル実行（高効率版 v2）
-python entry_points/main.py scheduled-analysis backfill-v2 --start 2025-01-01 --end 2025-08-01
+# 🆕 バックフィル実行（高効率バッチ版）
+python entry_points/main.py scheduled-analysis backfillbatch --start 2025-01-01 --end 2025-08-01
 
 # ドライラン（実行シミュレーション）
-python entry_points/main.py scheduled-analysis backfill-v2 --start 2025-01-01 --end 2025-08-01 --dry-run
+python entry_points/main.py scheduled-analysis backfillbatch --start 2025-01-01 --end 2025-08-01 --dry-run
 ```
 
-### 2. Backfill v2の特徴
+### 2. Backfill Batchの特徴
 
 **API効率化**:
 - **従来版**: N期間 × M銘柄 = N×M回のAPIコール
-- **v2版**: M銘柄 = M回のAPIコール（N倍効率化）
+- **バッチ版**: M銘柄 = M回のAPIコール（N倍効率化）
 - **実測例**: 3期間×3銘柄で66.7%のAPI呼び出し削減
 
 **対応データソース**:
@@ -251,12 +251,12 @@ python entry_points/main.py scheduled-analysis backfill-v2 --start 2025-01-01 --
 **使用例**:
 ```bash
 # 過去1年間の週次データを効率的にバックフィル
-python entry_points/main.py scheduled-analysis backfill-v2 \
+python entry_points/main.py scheduled-analysis backfill_v2 \
   --start 2024-08-01 --end 2025-08-01 \
   --schedule fred_weekly
 
 # テスト実行（DB保存なし）
-python entry_points/main.py scheduled-analysis backfill-v2 \
+python entry_points/main.py scheduled-analysis backfill_v2 \
   --start 2025-07-01 --end 2025-08-01 \
   --dry-run
 ```

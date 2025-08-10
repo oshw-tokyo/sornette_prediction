@@ -1,14 +1,14 @@
 {
   "catalog_metadata": {
-    "version": "4.1.0",
-    "last_updated": "2025-08-09",
-    "description": "Sornette予測システム対応マーケットデータカタログ（FRED廃止対応版）",
+    "version": "4.2.0",
+    "last_updated": "2025-08-10",
+    "description": "Sornette予測システム対応マーケットデータカタログ（追加廃止対応版） (CoinGecko IDマッピング修正済み)",
     "maintainer": "Claude Code System",
     "data_statistics": {
-      "total_symbols": 84,
-      "fred_available": 27,
+      "total_symbols": 80,
+      "fred_available": 24,
       "alpha_vantage_available": 20,
-      "coingecko_available": 34,
+      "coingecko_available": 36,
       "expansion_ratio": "4.35x (from 20 to 87 symbols)"
     },
     "coverage_expansion": {
@@ -280,28 +280,6 @@
         "primary": {
           "provider": "fred",
           "symbol": "NASDAQBANK",
-          "update_frequency": "daily",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "180 days",
-        "optimal_data_period": "365 days"
-      }
-    },
-    "REITTMA": {
-      "display_name": "REITs Total Mortgages Asset Level",
-      "category": "reit_indices",
-      "asset_class": "real_estate",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "REITs Total Mortgages Asset Level - fredデータソース",
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "REITTMA",
           "update_frequency": "daily",
           "reliability": "excellent",
           "cost": "free"
@@ -599,28 +577,6 @@
         "optimal_data_period": "365 days"
       }
     },
-    "GOLDAMGBD228NLBM": {
-      "display_name": "Gold Fixing Price 10:30 A.M. (London time)",
-      "category": "commodities",
-      "asset_class": "commodity",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "Gold Fixing Price 10:30 A.M. (London time) - fredデータソース",
-      "data_sources": {
-        "primary": {
-          "provider": "fred",
-          "symbol": "GOLDAMGBD228NLBM",
-          "update_frequency": "daily",
-          "reliability": "excellent",
-          "cost": "free"
-        }
-      },
-      "lppl_analysis": {
-        "recommended": true,
-        "minimum_data_period": "180 days",
-        "optimal_data_period": "365 days"
-      }
-    },
     "DCOILWTICO": {
       "display_name": "Crude Oil Prices: West Texas Intermediate",
       "category": "commodities",
@@ -665,27 +621,51 @@
         "optimal_data_period": "365 days"
       }
     },
-    "GASREGW": {
-      "display_name": "US Regular All Formulations Gas Price",
-      "category": "commodities",
-      "asset_class": "commodity",
-      "instrument_type": "INDEX",
-      "market_region": "US",
-      "description": "US Regular All Formulations Gas Price - fredデータソース",
+    "BTC": {
+      "display_name": "Bitcoin",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Bitcoin - coingeckoデータソース",
       "data_sources": {
         "primary": {
-          "provider": "fred",
-          "symbol": "GASREGW",
+          "provider": "coingecko",
+          "symbol": "bitcoin",
           "update_frequency": "daily",
           "reliability": "excellent",
-          "cost": "free"
+          "cost": "free_limited"
         }
       },
       "lppl_analysis": {
         "recommended": true,
-        "minimum_data_period": "180 days",
+        "minimum_data_period": "90 days",
         "optimal_data_period": "365 days"
-      }
+      },
+      "market_cap_rank": 1
+    },
+    "ETH": {
+      "display_name": "Ethereum",
+      "category": "crypto_assets_tier1",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Ethereum - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "ethereum",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 2
     },
     "BNB": {
       "display_name": "Binance Coin",
@@ -697,7 +677,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "BNB",
+          "symbol": "binancecoin",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -720,7 +700,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "XRP",
+          "symbol": "ripple",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -743,7 +723,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "SOL",
+          "symbol": "solana",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -766,7 +746,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "USDC",
+          "symbol": "usd-coin",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -789,7 +769,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "USDT",
+          "symbol": "tether",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -812,7 +792,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "ADA",
+          "symbol": "cardano",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -835,7 +815,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "AVAX",
+          "symbol": "avalanche-2",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -858,7 +838,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "DOT",
+          "symbol": "polkadot",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -881,7 +861,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "LINK",
+          "symbol": "chainlink",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -904,7 +884,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "MATIC",
+          "symbol": "matic-network",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -927,7 +907,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "UNI",
+          "symbol": "uniswap",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -950,7 +930,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "LTC",
+          "symbol": "litecoin",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -973,7 +953,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "ATOM",
+          "symbol": "cosmos",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -996,7 +976,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "ALGO",
+          "symbol": "algorand",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1019,7 +999,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "VET",
+          "symbol": "vechain",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1042,7 +1022,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "FIL",
+          "symbol": "filecoin",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1065,7 +1045,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "AAVE",
+          "symbol": "aave",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1088,7 +1068,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "CRV",
+          "symbol": "curve-dao-token",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1111,7 +1091,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "DOGE",
+          "symbol": "dogecoin",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1134,7 +1114,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "SHIB",
+          "symbol": "shiba-inu",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1157,7 +1137,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "SAND",
+          "symbol": "the-sandbox",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1180,7 +1160,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "MANA",
+          "symbol": "decentraland",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1203,7 +1183,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "AXS",
+          "symbol": "axie-infinity",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1226,7 +1206,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "ENJ",
+          "symbol": "enjincoin",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1249,7 +1229,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "COMP",
+          "symbol": "compound-governance-token",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1272,7 +1252,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "SUSHI",
+          "symbol": "sushi",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1295,7 +1275,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "1INCH",
+          "symbol": "1inch",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1318,7 +1298,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "BAT",
+          "symbol": "basic-attention-token",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1341,7 +1321,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "XMR",
+          "symbol": "monero",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1364,7 +1344,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "ZEC",
+          "symbol": "zcash",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1387,7 +1367,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "DASH",
+          "symbol": "dash",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1410,7 +1390,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "EOS",
+          "symbol": "eos",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1433,7 +1413,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "TRX",
+          "symbol": "tron",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1456,7 +1436,7 @@
       "data_sources": {
         "primary": {
           "provider": "coingecko",
-          "symbol": "XTZ",
+          "symbol": "tezos",
           "update_frequency": "daily",
           "reliability": "good",
           "cost": "free_limited"
@@ -1468,6 +1448,29 @@
         "optimal_data_period": "365 days"
       },
       "market_cap_rank": 36
+    },
+    "FLR": {
+      "display_name": "Flare (Spark)",
+      "category": "crypto_assets_tier4",
+      "asset_class": "cryptocurrency",
+      "instrument_type": "CRYPTO",
+      "market_region": "GLOBAL",
+      "description": "Flare (Spark Token) - coingeckoデータソース",
+      "data_sources": {
+        "primary": {
+          "provider": "coingecko",
+          "symbol": "flare-network",
+          "update_frequency": "daily",
+          "reliability": "good",
+          "cost": "free_limited"
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "90 days",
+        "optimal_data_period": "365 days"
+      },
+      "market_cap_rank": 81
     },
     "XLK": {
       "display_name": "Technology Select Sector SPDR Fund",

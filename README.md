@@ -19,7 +19,7 @@ python entry_points/main.py validate --crash 1987
 
 **目的**: Sornette対数周期パワー法則（LPPL）モデルを用いて金融市場のクラッシュを事前に予測し、実際の取引で収益を上げるシステムの構築
 
-**現在のステータス**: 実装改善フェーズ（論文再現性の確立）
+**現在のステータス**: バックフィルバッチ実行中（78銘柄・2.6年間のLPPL分析データ蓄積）
 
 ## 📊 進捗管理とClaude Codeとの協働
 
@@ -28,7 +28,7 @@ python entry_points/main.py validate --crash 1987
 ### 🎯 中核ドキュメント（必須参照）
 - **[Claude Code指示書](./CLAUDE.md)** - AIが最初に読むべきファイル
 - **[現在の進捗状況](./docs/progress_management/CURRENT_PROGRESS.md)** - タスクの進行状況
-- **[アクティブなIssue](./docs/progress_management/CURRENT_ISSUES.md)** - 現在の問題と対策
+- **[アクティブなIssue](./docs/progress_management/CURRENT_ISSUES.md)** - 現在の問題と対策（Issue I044: ドキュメント整合性）
 - **[数学的基礎](./docs/mathematical_foundation.md)** - LPPLモデルの理論と数式
 
 ### 📁 プロジェクト構造（2025-08-02更新）
@@ -46,12 +46,23 @@ sornette_prediction/
 │   ├── analysis/                 # 分析結果（統合済み）
 │   └── validation_results/       # 検証結果
 │
-├── src/                          # ソースコード
-│   ├── main.py                   # エントリポイント
-│   ├── fitting/                  # LPPLフィッティング
-│   ├── data_sources/             # データ取得（FRED/Alpha Vantage）
-│   ├── visualization/            # 可視化
-│   └── analysis/                 # 分析モジュール
+├── core/                          # 科学的中核（保護対象）
+│   ├── fitting/                  # LPPLフィッティング（論文再現）
+│   ├── sornette_theory/          # 理論実装
+│   └── validation/               # 歴史的検証（100/100スコア保護）
+│
+├── applications/                 # アプリケーション層
+│   ├── analysis_tools/           # 分析ツール（crash_alert_system等）
+│   ├── dashboards/               # Webダッシュボード
+│   └── examples/                 # 実行例・デモ
+│
+├── infrastructure/               # インフラ層
+│   ├── data_sources/             # データ取得（78銘柄カタログ）
+│   ├── database/                 # SQLite結果管理
+│   └── visualization/            # 可視化ツール
+│
+├── entry_points/                 # 統一エントリーポイント
+│   └── main.py                   # 中央コマンドインターフェース
 │
 ├── tests/                        # テストコード
 ├── results/                      # 実行結果

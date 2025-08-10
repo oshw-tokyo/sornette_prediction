@@ -35,15 +35,15 @@ class CoinGeckoClient:
         self.base_url = "https://api.coingecko.com/api/v3"
         self.session = requests.Session()
         
-        # レート制限設定（実測値ベース）
+        # レート制限設定（実測値ベース + 2025-08-10 安全マージン追加）
         if self.api_key:
             # Pro版: より緩い制限
-            self.rate_limit_delay = 0.2  # 300 calls/minute → 0.2秒間隔
-            print("✅ CoinGecko Pro API 初期化")
+            self.rate_limit_delay = 1.0  # 安全マージンで1秒間隔に調整
+            print("✅ CoinGecko Pro API 初期化（レート制限強化）")
         else:
-            # 無料版: 厳しい制限（実測値）
-            self.rate_limit_delay = 3.0  # 20 calls/minute → 3秒間隔
-            print("⚠️ CoinGecko 無料API 初期化（制限あり）")
+            # 無料版: より厳しい制限（ユーザーログに基づく調整）
+            self.rate_limit_delay = 8.0  # 10回/分 → 8秒間隔（安全マージン）
+            print("⚠️ CoinGecko 無料API 初期化（レート制限強化）")
         
         self.last_request_time = 0
         self.max_retries = 3
@@ -51,8 +51,11 @@ class CoinGeckoClient:
         # ログ設定
         self.logger = logging.getLogger(__name__)
         
-        # 主要仮想通貨マッピング
+        # 主要仮想通貨マッピング（CoinGecko API調査結果に基づく正確なマッピング）
+        # 注意：カタログから直接CoinGecko IDが渡される場合もあるため、
+        # シンボル→ID変換とID→ID変換の両方をサポート
         self.symbol_mapping = {
+            # 標準シンボル → CoinGecko ID マッピング
             'BTC': 'bitcoin',
             'ETH': 'ethereum',
             'BNB': 'binancecoin',
@@ -65,14 +68,42 @@ class CoinGeckoClient:
             'SHIB': 'shiba-inu',
             'LINK': 'chainlink',
             'TRX': 'tron',
-            'MATIC': 'polygon',
+            'MATIC': 'matic-network',  # polygon → matic-network に修正
             'UNI': 'uniswap',
             'ALGO': 'algorand',
             'VET': 'vechain',
             'ATOM': 'cosmos',
             'LTC': 'litecoin',
             'BCH': 'bitcoin-cash',
-            'XLM': 'stellar'
+            'XLM': 'stellar',
+            'FLR': 'flare-networks',
+            'USDC': 'usd-coin',       # 新規追加: メインのUSD Coin
+            'USDT': 'tether',         # 新規追加: Tether
+            
+            # カタログが直接CoinGecko IDを渡す場合の対応（ID → ID マッピング）
+            'bitcoin': 'bitcoin',
+            'ethereum': 'ethereum', 
+            'binancecoin': 'binancecoin',
+            'cardano': 'cardano',
+            'solana': 'solana',
+            'ripple': 'ripple',
+            'polkadot': 'polkadot',
+            'dogecoin': 'dogecoin',
+            'avalanche-2': 'avalanche-2',
+            'shiba-inu': 'shiba-inu',
+            'chainlink': 'chainlink',
+            'tron': 'tron',
+            'matic-network': 'matic-network',
+            'uniswap': 'uniswap',
+            'algorand': 'algorand',
+            'vechain': 'vechain',
+            'cosmos': 'cosmos',
+            'litecoin': 'litecoin',
+            'bitcoin-cash': 'bitcoin-cash',
+            'stellar': 'stellar',
+            'flare-networks': 'flare-networks',
+            'usd-coin': 'usd-coin',
+            'tether': 'tether'
         }
         
         # 逆マッピング
@@ -165,11 +196,15 @@ class CoinGeckoClient:
         Returns:
             DataFrame: FRED互換形式のデータ（Close価格メイン）
         """
-        # シンボルをCoinGecko IDに変換
-        coin_id = self.symbol_mapping.get(symbol.upper())
+        # シンボルをCoinGecko IDに変換（統合マッピングで両形式をサポート）
+        coin_id = self.symbol_mapping.get(symbol.upper()) or self.symbol_mapping.get(symbol.lower())
+        
         if not coin_id:
             print(f"❌ 未対応シンボル: {symbol}")
+            print(f"   サポート形式例: BTC, SOL, solana, bitcoin等")
             return None
+        
+        print(f"📋 CoinGecko マッピング: {symbol} -> {coin_id}")
         
         # 日数計算
         start_dt = pd.to_datetime(start_date)

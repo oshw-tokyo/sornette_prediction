@@ -13,7 +13,7 @@ Sornette論文のLPPLモデル実装は本システムの科学的根幹であ�
 ### 必須検証プロトコル
 **すべての変更前後で以下を実行**:
 ```bash
-python tests/historical_crashes/black_monday_1987_validator.py
+python entry_points/main.py validate --crash 1987
 ```
 - **期待結果**: 予測可能性スコア 100/100
 - **破損時**: 即座にgit revertで変更を巻き戻し
@@ -34,6 +34,7 @@ Didier Sornetteの対数周期パワー法則モデルを実装し、金融市�
 2. **段階的実装** - 動く最小実装から始めて機能拡張
 3. **自動化システム** - ローカルサーバーでの継続的監視
 4. **収益化重視** - 予測精度向上と実際のトレーディング戦略構築
+5. **排他的API設計** - 銘柄ごとに最適なAPIプロバイダーを排他的に割り当て（[詳細: API割り当て戦略](api_assignment_strategy.md)）
 
 ## 技術的実装方針
 

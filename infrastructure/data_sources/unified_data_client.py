@@ -98,29 +98,20 @@ class UnifiedDataClient:
             
             mapping = {}
             
-            # カタログの各シンボルからマッピング構築
+            # カタログの各シンボルからPRIMARYマッピングのみ構築
             for symbol, data in catalog.get('symbols', {}).items():
                 sources = data.get('data_sources', {})
                 
-                symbol_mapping = {}
-                
-                # primary sourceを取得
+                # PRIMARY sourceのみを取得（fallbackは無視）
                 primary = sources.get('primary', {})
                 if primary and 'provider' in primary:
                     provider = primary['provider']
                     provider_symbol = primary.get('symbol', symbol)
-                    symbol_mapping[provider] = provider_symbol
-                
-                # fallback sourcesも処理
-                fallbacks = sources.get('fallbacks', [])
-                for fallback in fallbacks:
-                    if isinstance(fallback, dict) and 'provider' in fallback:
-                        provider = fallback['provider']
-                        provider_symbol = fallback.get('symbol', symbol)
-                        symbol_mapping[provider] = provider_symbol
-                
-                if symbol_mapping:
-                    mapping[symbol] = symbol_mapping
+                    
+                    mapping[symbol] = {
+                        'provider': provider,
+                        'symbol': provider_symbol
+                    }
             
             print(f"✅ カタログから{len(mapping)}銘柄のマッピング読み込み完了")
             return mapping
@@ -133,13 +124,13 @@ class UnifiedDataClient:
     def get_data_with_fallback(self, symbol: str, start_date: str, end_date: str,
                               preferred_source: Optional[str] = None) -> Tuple[Optional[pd.DataFrame], str]:
         """
-        フォールバック機能付きデータ取得
+        排他的データ取得（PRIMARY PROVIDER ONLY）
         
         Args:
             symbol: 銘柄シンボル
             start_date: 開始日
             end_date: 終了日
-            preferred_source: 優先データソース
+            preferred_source: 使用されません（後方互換性のため保持）
             
         Returns:
             (DataFrame, source_name): データと取得元ソース名
@@ -149,79 +140,61 @@ class UnifiedDataClient:
             print("❌ 利用可能なデータソースがありません")
             return None, "none"
         
-        # 試行順序の決定
-        sources_to_try = []
+        # カタログからPRIMARYプロバイダーを特定
+        if symbol not in self.symbol_mapping:
+            print(f"❌ {symbol} はカタログに登録されていません")
+            return None, "not_in_catalog"
         
-        if preferred_source and preferred_source in self.available_sources:
-            sources_to_try.append(preferred_source)
-        else:
-            # 銘柄タイプによる自動優先順位設定
-            symbol_mapping = self.symbol_mapping.get(symbol, {})
+        symbol_config = self.symbol_mapping[symbol]
+        primary_provider = symbol_config['provider']
+        mapped_symbol = symbol_config['symbol']
+        
+        print(f"🎯 {symbol} → {primary_provider} (as {mapped_symbol}) - 排他的取得")
+        
+        # 指定されたプロバイダーが利用可能かチェック
+        if primary_provider not in self.available_sources:
+            print(f"❌ {primary_provider} クライアントが初期化されていません")
+            return None, "provider_unavailable"
+        
+        # プロバイダーが利用不可の場合は即座に失敗
+        if primary_provider not in self.clients:
+            print(f"❌ {primary_provider} クライアントが存在しません")
+            return None, "client_missing"
+        
+        try:
+            print(f"   🔄 {primary_provider} で取得中...")
             
-            # 優先順位: FRED > Alpha Vantage > CoinGecko
-            # FRED優先（公的機関データ、無制限アクセス）
-            if 'fred' in symbol_mapping and 'fred' in self.available_sources:
-                sources_to_try.append('fred')
+            # データ取得
+            client = self.clients[primary_provider]
             
-            # Alpha Vantage次順（個別株メイン）
-            if 'alpha_vantage' in symbol_mapping and 'alpha_vantage' in self.available_sources:
-                sources_to_try.append('alpha_vantage')
+            if hasattr(client, 'get_series_data'):
+                data = client.get_series_data(mapped_symbol, start_date, end_date)
+            else:
+                print(f"      ❌ {primary_provider} クライアントが get_series_data をサポートしていません")
+                return None, "unsupported_method"
             
-            # CoinGecko最終（仮想通貨専用、制限厳しい）
-            if 'coingecko' in symbol_mapping and 'coingecko' in self.available_sources:
-                sources_to_try.append('coingecko')
-        
-        # 残りのソースを追加
-        for source in self.available_sources:
-            if source not in sources_to_try:
-                sources_to_try.append(source)
-        
-        print(f"🔍 {symbol} データ取得試行順序: {sources_to_try}")
-        
-        # 各ソースで試行
-        for source in sources_to_try:
-            try:
-                print(f"   🔄 {source} で試行中...")
+            if data is not None and len(data) > 0:
+                print(f"   ✅ {primary_provider} でデータ取得成功: {len(data)}日分")
+                return data, primary_provider
+            else:
+                print(f"   ❌ {primary_provider} でデータ取得失敗（空のデータ）")
+                return None, "empty_data"
                 
-                # 銘柄マッピング
-                mapped_symbol = self._map_symbol(symbol, source)
-                if not mapped_symbol:
-                    print(f"      ⚠️ {source} では {symbol} をサポートしていません")
-                    continue
-                
-                # データ取得
-                client = self.clients[source]
-                
-                if hasattr(client, 'get_series_data'):
-                    data = client.get_series_data(mapped_symbol, start_date, end_date)
-                else:
-                    print(f"      ❌ {source} クライアントが get_series_data をサポートしていません")
-                    continue
-                
-                if data is not None and len(data) > 0:
-                    print(f"   ✅ {source} でデータ取得成功: {len(data)}日分")
-                    return data, source
-                else:
-                    print(f"      ❌ {source} でデータ取得失敗")
-                    
-            except Exception as e:
-                print(f"      ❌ {source} エラー: {str(e)}")
-                continue
-        
-        print(f"❌ 全てのソースで {symbol} データ取得に失敗")
-        return None, "none"
+        except Exception as e:
+            print(f"   ❌ {primary_provider} でエラー: {str(e)}")
+            return None, "api_error"
     
     def _map_symbol(self, symbol: str, source: str) -> Optional[str]:
-        """銘柄シンボルのマッピング"""
+        """銘柄シンボルのマッピング（排他的設計用）"""
         
-        # 直接マッピングがある場合
+        # 排他的設計：指定されたsourceが銘柄のprimaryプロバイダーと一致する場合のみマッピング
         if symbol in self.symbol_mapping:
-            mapping = self.symbol_mapping[symbol]
-            if source in mapping:
-                return mapping[source]
+            symbol_config = self.symbol_mapping[symbol]
+            if symbol_config['provider'] == source:
+                return symbol_config['symbol']
         
-        # マッピングがない場合、そのまま使用
-        return symbol
+        # 一致しない場合は None を返す（サポート外）
+        return None
     
     def get_multiple_symbols(self, symbols: list, start_date: str, end_date: str) -> dict:
         """
@@ -246,13 +219,13 @@ class UnifiedDataClient:
             data, source = self.get_data_with_fallback(symbol, start_date, end_date)
             results[symbol] = (data, source)
             
-            # レート制限対策
+            # レート制限対策（2025-08-10 安全マージン強化）
             if source == 'alpha_vantage':
                 time.sleep(12)  # Alpha Vantage: 5 calls/min → 12秒間隔
             elif source == 'fred':
                 time.sleep(0.5)  # FRED: 120 calls/min → 0.5秒間隔
             elif source == 'coingecko':
-                time.sleep(3)   # CoinGecko: 20 calls/min → 3秒間隔
+                time.sleep(8)   # CoinGecko: 10 calls/min → 8秒間隔（強化）
             else:
                 time.sleep(1)   # 一般的な待機
         
@@ -264,7 +237,7 @@ class UnifiedDataClient:
     
     def get_supported_symbols(self, source: Optional[str] = None) -> dict:
         """
-        サポートされている銘柄の一覧取得
+        サポートされている銘柄の一覧取得（排他的設計）
         
         Args:
             source: 特定ソースのみ取得する場合
@@ -278,18 +251,18 @@ class UnifiedDataClient:
                 return {}
             
             symbols = []
-            for symbol, mapping in self.symbol_mapping.items():
-                if source in mapping:
+            for symbol, symbol_config in self.symbol_mapping.items():
+                if symbol_config['provider'] == source:
                     symbols.append(symbol)
             
             return {source: symbols}
         
-        # 全ソースの銘柄
+        # 全ソースの銘柄（排他的割り当て）
         result = {}
         for source in self.available_sources:
             symbols = []
-            for symbol, mapping in self.symbol_mapping.items():
-                if source in mapping:
+            for symbol, symbol_config in self.symbol_mapping.items():
+                if symbol_config['provider'] == source:
                     symbols.append(symbol)
             result[source] = symbols
         

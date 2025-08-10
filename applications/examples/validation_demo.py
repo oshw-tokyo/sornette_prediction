@@ -18,16 +18,17 @@ load_dotenv()
 sys.path.append('.')
 
 from core.sornette_theory.lppl_model import logarithm_periodic_func
-from infrastructure.data_sources.fred_data_client import FREDDataClient
+from infrastructure.data_sources.unified_data_client import UnifiedDataClient
 from scipy.optimize import curve_fit
 
 def main():
     print("🎯 Quick NASDAQ 1987 LPPL Validation\n")
     
-    # 1. Get NASDAQ data
+    # 1. Get NASDAQ data (統合データクライアント使用)
     print("📊 Getting NASDAQ data...")
-    client = FREDDataClient()
-    data = client.get_series_data('NASDAQCOM', '1985-01-01', '1987-10-31')
+    unified_client = UnifiedDataClient()
+    data, source = unified_client.get_data_with_fallback('NASDAQCOM', '1985-01-01', '1987-10-31')
+    print(f"   データソース: {source}")
     
     if data is None:
         print("❌ Failed to get data")

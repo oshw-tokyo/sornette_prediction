@@ -20,8 +20,7 @@ load_dotenv()
 sys.path.append('.')
 
 from core.sornette_theory.lppl_model import logarithm_periodic_func
-from infrastructure.data_sources.fred_data_client import FREDDataClient
-from infrastructure.data_sources.alpha_vantage_client import AlphaVantageClient
+from infrastructure.data_sources.unified_data_client import UnifiedDataClient
 from scipy.optimize import curve_fit
 
 def analyze_symbol(symbol: str, period: str = '1y') -> dict:
@@ -45,31 +44,15 @@ def analyze_symbol(symbol: str, period: str = '1y') -> dict:
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
     
-    # データ取得
+    # データ取得（統合データクライアント - 排他的設計）
     print(f"📊 {symbol} データ取得中... (期間: {period})")
     
-    data = None
-    source = None
-    
-    # FRED銘柄の場合
-    fred_symbols = ['NASDAQCOM', 'SP500', 'DJIA', 'NASDAQ', 'DGS10']
-    if symbol.upper() in fred_symbols:
-        fred_client = FREDDataClient()
-        data = fred_client.get_series_data(
-            symbol.upper(), 
-            start_date.strftime('%Y-%m-%d'),
-            end_date.strftime('%Y-%m-%d')
-        )
-        source = "FRED"
-    else:
-        # Alpha Vantage銘柄の場合
-        av_client = AlphaVantageClient()
-        data = av_client.get_series_data(
-            symbol.upper(),
-            start_date.strftime('%Y-%m-%d'),
-            end_date.strftime('%Y-%m-%d')
-        )
-        source = "Alpha Vantage"
+    unified_client = UnifiedDataClient()
+    data, source = unified_client.get_data_with_fallback(
+        symbol.upper(),
+        start_date.strftime('%Y-%m-%d'),
+        end_date.strftime('%Y-%m-%d')
+    )
     
     if data is None or len(data) == 0:
         return {

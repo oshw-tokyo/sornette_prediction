@@ -877,7 +877,14 @@ class SymbolAnalysisDashboard:
                             max_pred_date = pred_date.strftime('%Y-%m-%d')
             
             # Future Period表示のためにさらに期間を拡張（予測日+60日）
+            # 🔧 レート制限対応: 極端に遠い予測日を制限
             max_pred_dt = pd.to_datetime(max_pred_date)
+            max_allowed_dt = datetime.now() + timedelta(days=365)  # 最大1年先まで制限
+            
+            if max_pred_dt > max_allowed_dt:
+                print(f"⚠️ 予測日制限: {max_pred_dt.date()} → {max_allowed_dt.date()} (レート制限対応)")
+                max_pred_dt = max_allowed_dt
+            
             extended_end = (max_pred_dt + timedelta(days=60)).strftime('%Y-%m-%d')
             print(f"🔍 Getting extended price data for {symbol}: {data_start} to {extended_end}")
             

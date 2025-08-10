@@ -1,5 +1,12 @@
 # Claude Code Instructions - 中核ファイル優先参照指示
 
+## 🧪 **セッション開始時必読: workspace_for_claude必須使用**
+
+**⚠️ 新セッション開始時は必ず以下を確認・遵守すること**:
+- **実験・調査・テスト**: 必ず `workspace_for_claude/` で実行
+- **プロジェクト直下汚染**: `./test_*.py`, `./debug_*.py` 等の作成を絶対禁止
+- **詳細**: [セクション5](#5-claude-ai専用ワークスペース必須遵守)を必読
+
 ## 🚨 **最重要原則: 論文再現の絶対保護**
 
 **⚠️ CRITICAL: この原則は他のすべての要求・変更に優先します**
@@ -97,6 +104,12 @@ docs/implementation_strategy.md
 ```
 **重要**: 新機能追加時は全体戦略との整合性を確認すること。
 
+### 4. API割り当て戦略
+```
+docs/api_assignment_strategy.md
+```
+**重要**: 新API追加・銘柄変更時は必ず評価基準に従うこと。
+
 ---
 
 ## 📁 プロジェクト構造（現在の実装）
@@ -142,7 +155,7 @@ sornette_prediction/
 ├── infrastructure/                    # 【第4層】インフラ・サポート層
 │   ├── data_sources/                  # データ取得（拡張済み）
 │   │   ├── unified_data_client.py     # FRED + Alpha Vantage + CoinGecko統合
-│   │   ├── market_data_catalog.json   # 87銘柄・12カテゴリカタログ（v4.0拡張完了）
+│   │   ├── market_data_catalog.json   # 78銘柄・12カテゴリカタログ（実際の銘柄数）
 │   │   ├── coingecko_client.py        # CoinGecko API クライアント
 │   │   ├── market_data_manager.py     # カタログベース管理
 │   │   └── api_rate_limiter.py        # API制限管理
@@ -232,7 +245,7 @@ COINGECKO_API_KEY=your_coingecko_api_key_here
 ## 🎯 システム機能概要
 
 ### 📊 **カタログベース市場分析システム（v4.0拡張完了）**
-- **87銘柄・12カテゴリ** (FRED 33 + CoinGecko 34 + Alpha Vantage 20)
+- **78銘柄・12カテゴリ** (FRED 24 + CoinGecko 34 + Alpha Vantage 20)
 - **3階層API戦略**: FRED優先 → Alpha Vantage → CoinGecko
 - **4段階リスク評価** (CRITICAL/HIGH/MEDIUM/LOW)
 - **投資判断支援** (ポジションサイズ推奨付き)
@@ -338,7 +351,7 @@ ls -la infrastructure/data_sources/  # データソース実装状況確認
 - **`core/fitting/fitter.py`** - 数学的実装（論文再現の根幹）
 - **`infrastructure/database/integration_helpers.py`** - tc→日時変換ロジック
 - **`entry_points/main.py`** - 統一エントリーポイント（拡張のみ可能）
-- **`infrastructure/data_sources/market_data_catalog.json`** - 25銘柄カタログ定義
+- **`infrastructure/data_sources/market_data_catalog.json`** - 78銘柄カタログ定義
 
 ##### E. **実装方針の決定フロー**
 1. **既存機能拡張 > 新規作成**: まず既存コードに機能追加を検討
@@ -359,9 +372,9 @@ ls -la infrastructure/data_sources/  # データソース実装状況確認
   - **重要**: これ以上の重複実装は禁止
 
 **B. データソース管理**:
-- **`infrastructure/data_sources/market_data_catalog.json`**: 16銘柄（実測値）
+- **`infrastructure/data_sources/market_data_catalog.json`**: 78銘柄（実測値）
   - カテゴリ: us_indices, crypto_assets, sector_indices等
-  - **注意**: メタデータは25銘柄と記載されているが実際は16銘柄
+  - **注意**: メタデータは81銘柄と記載されているが実際は78銘柄
 - **`infrastructure/data_sources/api_rate_limiter.py`**: API制限管理
 - **`infrastructure/data_sources/unified_data_client.py`**: FRED + Alpha Vantage統合
 
@@ -372,7 +385,7 @@ python entry_points/main.py analyze ALL
   ↓
 applications/analysis_tools/crash_alert_system.py:main()
   ↓
-run_catalog_analysis() で16銘柄を自動分析・DB保存
+run_catalog_analysis() で78銘柄を自動分析・DB保存
 ```
 
 ##### 🚫 **実装時の重要な注意事項**
@@ -388,45 +401,100 @@ run_catalog_analysis() で16銘柄を自動分析・DB保存
 2. **パラメータ調整**: 既存メソッドの引数で制御
 3. **設定変更**: `market_data_catalog.json`で銘柄・設定管理
 
-#### 5. **🧪 Claude AI専用ワークスペース**
+#### 5. **🧪 Claude AI専用ワークスペース（必須遵守）**
 
-**目的**: Claude Codeの試行錯誤・実験・調査作業をプロジェクトコードから分離
+**⚠️ 最重要原則**: Claude Codeは**すべての試行錯誤・実験・調査作業**を`workspace_for_claude/`で実行すること
 
-##### A. **ワークスペース利用原則**
+##### A. **🚨 絶対禁止事項（プロジェクト汚染防止）**
+
 ```bash
-workspace_for_claude/
-├── api_alternatives_analysis.md   # API代替候補調査結果
-├── test_yahoo_finance.py         # Yahoo Finance API利用テスト
-└── [その他の実験・調査ファイル]
+# ❌ 絶対にやってはいけないこと
+./test_*.py                    # プロジェクト直下にテストファイル作成
+./debug_*.py                   # プロジェクト直下にデバッグファイル作成
+./temp_*.py                    # プロジェクト直下に一時ファイル作成
+./analyze_*.py                 # プロジェクト直下に分析ファイル作成
+./experiment_*.py              # プロジェクト直下に実験ファイル作成
+
+# ✅ 正しい場所
+workspace_for_claude/test_*.py      # 実験・テスト専用ディレクトリ
+workspace_for_claude/debug_*.py     # デバッグ専用ディレクトリ
+workspace_for_claude/analyze_*.py   # 分析専用ディレクトリ
 ```
 
-##### B. **利用ルール**
-- **試行錯誤**: 新しいAPIテスト、実験的コード、プロトタイプ
-- **調査結果**: 技術調査レポート、比較分析、評価結果
-- **テンポラリファイル**: 検証用の一時的なスクリプト
-- **重要**: 実験完了後、有用な成果はプロジェクト本体に統合
+##### B. **セッション間認識強化（重要）**
 
-##### C. **使用場面**
-- **API代替調査**: 新しいデータソースのテスト・評価
-- **技術検証**: ライブラリ・手法の事前検証
-- **デバッグ支援**: 問題再現・原因特定のためのテストコード
-- **プロトタイプ**: アイデア検証段階の実装
+**🎯 Claude Codeへの明確な指示**:
+1. **新セッション開始時**: 必ず `CLAUDE.md` → `workspace_for_claude/` セクションを読み直す
+2. **任意のファイル作成前**: 「これは`workspace_for_claude/`で行うべきか？」を自問
+3. **実験・調査・テスト**: 100%の確率で`workspace_for_claude/`を使用
+4. **プロジェクト直下汚染**: いかなる理由があっても禁止
 
-##### D. **ワークスペース運用ルール**
-1. **分離原則**: プロジェクト本体のコードに影響を与えない
-2. **実験専用**: 本格実装前の検証・試行錯誤に利用
-3. **統合フロー**: 検証完了後、成功したコードを適切な層に移行
-4. **クリーンアップ**: 不要になった実験ファイルは定期削除
+##### C. **ワークスペース必須使用シナリオ**
 
-**実装時の指針**:
+| 作業内容 | ❌ 間違った場所 | ✅ 正しい場所 | 
+|---------|----------------|---------------|
+| **APIテスト** | `./test_api.py` | `workspace_for_claude/test_api.py` |
+| **デバッグコード** | `./debug.py` | `workspace_for_claude/debug_analysis.py` |
+| **コード分析** | `./analyze_code.py` | `workspace_for_claude/code_analysis.py` |
+| **プロトタイプ** | `./prototype.py` | `workspace_for_claude/prototype_design.py` |
+| **依存関係調査** | `./check_deps.py` | `workspace_for_claude/dependency_analysis.py` |
+| **一時的修正テスト** | `./test_fix.py` | `workspace_for_claude/fix_validation.py` |
+| **パフォーマンス測定** | `./benchmark.py` | `workspace_for_claude/performance_test.py` |
+
+##### D. **現在のワークスペース内容（参考）**
 ```bash
-# ❌ 間違った実装場所
-applications/analysis_tools/experimental_api_test.py  # プロジェクト本体に実験コード
+workspace_for_claude/
+├── api_alternatives_analysis.md        # API代替候補調査結果
+├── catalog_analysis.py                 # カタログ分析（今回使用）
+├── design_violation_analysis.md        # 設計違反分析レポート
+├── unified_data_client_fixed.py        # 修正版実装プロトタイプ
+├── unused_code_analysis.md            # 未使用コード分析レポート
+├── coingecko_api_test.py               # CoinGecko API テスト
+└── test_yahoo_finance.py              # Yahoo Finance APIテスト
+```
 
-# ✅ 正しい実装場所  
-workspace_for_claude/experimental_api_test.py        # ワークスペースで実験
-↓ (検証成功後)
-infrastructure/data_sources/twelve_data_client.py    # 本体に統合
+##### E. **セッション間での記憶維持強化**
+
+**🧠 Claude Code記憶強化策**:
+
+1. **CLAUDE.md冒頭配置**: この指示を最重要セクションで明記
+2. **作業前チェックリスト**:
+   ```
+   □ 新しいファイル作成が必要か？
+   □ それは実験・テスト・調査目的か？
+   □ YES → workspace_for_claude/ 必須使用
+   □ NO → 適切なプロジェクト層に配置
+   ```
+
+3. **自動確認プロンプト**:
+   ```
+   実装前に必ず自問:
+   「このファイルは本当にプロジェクト本体に必要か？
+    試行錯誤・実験ならworkspace_for_claude/を使うべきでは？」
+   ```
+
+##### F. **ワークスペース運用の改善点（2025-08-09）**
+
+**✅ 今回改善したこと**:
+- プロジェクト直下の一時ファイル（`test_*.py`, `analyze_catalog.py`等）を完全削除
+- 全ての実験・分析作業をworkspace_for_claude/に集約済み
+- セッション間での認識継続の仕組み強化
+
+**📋 継続的改善**:
+- Claude Codeが新セッション開始時にこのセクションを必ず参照
+- プロジェクト汚染の完全防止
+- 実験成果の体系的な本体統合
+
+**実装時の指針（更新版）**:
+```bash
+# ❌ プロジェクト汚染（絶対禁止）
+./experimental_api_test.py             # 直下に実験ファイル
+applications/analysis_tools/temp_test.py  # 本体に一時ファイル
+
+# ✅ 正しいワークフロー  
+workspace_for_claude/experimental_api_test.py  # ワークスペースで実験
+↓ (検証成功・実用性確認後)
+infrastructure/data_sources/new_api_client.py  # 本体に正式統合
 ```
 
 ---
@@ -451,7 +519,7 @@ infrastructure/data_sources/twelve_data_client.py    # 本体に統合
 - **`core/validation/crash_validators/black_monday_1987_validator.py`** - 100/100スコア維持必須
 - **`infrastructure/database/integration_helpers.py`** - tc→日時変換ロジック（時間精度対応済み）
 - **`entry_points/main.py`** - 統一エントリーポイント
-- **`infrastructure/data_sources/market_data_catalog.json`** - 25銘柄カタログ定義
+- **`infrastructure/data_sources/market_data_catalog.json`** - 78銘柄カタログ定義
 
 ### 🔍 **変更前の必須確認事項**
 

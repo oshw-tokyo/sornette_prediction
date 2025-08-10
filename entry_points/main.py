@@ -346,8 +346,8 @@ def run_scheduled_analysis(args):
             
             return result['total_successful'] > 0
         
-        elif args.scheduled_action == 'backfill-v2':
-            print(f"🚀 Batch Backfill v2 実行: {args.start} から")
+        elif args.scheduled_action == 'backfillbatch':
+            print(f"🚀 Batch Backfill 実行: {args.start} から")
             print("⚡ API効率化バージョン: 一括データ取得で高速化")
             
             # Import batch analyzer
@@ -458,12 +458,12 @@ Examples:
     backfill_parser.add_argument('--end', help='終了日 (YYYY-MM-DD、省略時は昨日)')
     backfill_parser.add_argument('--schedule', default='fred_weekly', help='スケジュール名')
     
-    # backfill-v2 subcommand (batch efficient version)
-    backfill_v2_parser = scheduled_subparsers.add_parser('backfill-v2', help='効率的バッチバックフィル（API最適化版）')
-    backfill_v2_parser.add_argument('--start', required=True, help='開始日 (YYYY-MM-DD)')
-    backfill_v2_parser.add_argument('--end', help='終了日 (YYYY-MM-DD、省略時は昨日)')
-    backfill_v2_parser.add_argument('--schedule', default='fred_weekly', help='スケジュール名')
-    backfill_v2_parser.add_argument('--dry-run', action='store_true', help='実行シミュレーション（DB保存なし）')
+    # backfillbatch subcommand (batch efficient version)
+    backfillbatch_parser = scheduled_subparsers.add_parser('backfillbatch', help='効率的バッチバックフィル（API最適化版）')
+    backfillbatch_parser.add_argument('--start', required=True, help='開始日 (YYYY-MM-DD)')
+    backfillbatch_parser.add_argument('--end', help='終了日 (YYYY-MM-DD、省略時は昨日)')
+    backfillbatch_parser.add_argument('--schedule', default='fred_weekly', help='スケジュール名')
+    backfillbatch_parser.add_argument('--dry-run', action='store_true', help='実行シミュレーション（DB保存なし）')
     
     # errors subcommand
     errors_parser = scheduled_subparsers.add_parser('errors', help='エラー解析・監視')
