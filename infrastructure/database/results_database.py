@@ -182,6 +182,9 @@ class ResultsDatabase:
                 if field not in result_data:
                     raise ValueError(f"必須フィールド '{field}' が不足しています")
             
+            # 🔧 Issue I048修正: analysis_basis_date を自動設定（data_period_end を使用）
+            analysis_basis_date = result_data.get('analysis_basis_date') or result_data.get('data_period_end')
+            
             # 重複防止: 同一銘柄・同一基準日は更新、新規は挿入（UPSERT）
             cursor.execute('''
                 INSERT OR REPLACE INTO analysis_results (
@@ -190,8 +193,8 @@ class ResultsDatabase:
                     r_squared, rmse, quality, confidence, is_usable,
                     predicted_crash_date, days_to_crash,
                     fitting_method, window_days, total_candidates, successful_candidates,
-                    quality_metadata, selection_criteria
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    quality_metadata, selection_criteria, analysis_basis_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 result_data['symbol'],
                 result_data.get('data_source', 'unknown'),
@@ -217,7 +220,8 @@ class ResultsDatabase:
                 result_data.get('total_candidates', 0),
                 result_data.get('successful_candidates', 0),
                 json.dumps(result_data.get('quality_metadata', {})),
-                json.dumps(result_data.get('selection_criteria', {}))
+                json.dumps(result_data.get('selection_criteria', {})),
+                analysis_basis_date
             ))
             
             analysis_id = cursor.lastrowid

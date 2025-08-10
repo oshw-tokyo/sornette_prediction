@@ -2,21 +2,21 @@
   "catalog_metadata": {
     "version": "1.0-stable",
     "last_updated": "2025-08-10",
-    "description": "安定版v1.0 - FRED優先原則+Twelve Data補完による80銘柄構成",
+    "description": "安定版v1.0 - FRED優先原則+Twelve Data補完による81銘柄構成",
     "maintainer": "Claude Code System",
     "stable_version_policy": {
       "data_source_priority": "FRED最優先 → Twelve Data補完",
-      "total_symbols": 80,
-      "fred_symbols": 24,
+      "total_symbols": 81,
+      "fred_symbols": 25,
       "twelvedata_symbols": 56,
       "deprecated_apis": ["coingecko", "alpha_vantage", "finnhub"],
       "implementation_date": "2025-08-10"
     },
     "data_statistics": {
-      "total_symbols": 80,
-      "fred_available": 24,
+      "total_symbols": 81,
+      "fred_available": 25,
       "twelvedata_available": 56,
-      "coverage_ratio": "100% (80/80 symbols)",
+      "coverage_ratio": "100% (81/81 symbols)",
       "api_efficiency": "大幅改善（制限緩和）"
     }
   },
@@ -39,7 +39,7 @@
       "description": "経済指標（FRED）",
       "importance": "high",
       "analysis_priority": 3,
-      "symbol_count": 14,
+      "symbol_count": 15,
       "data_source": "fred"
     },
     "crypto_assets_tier1": {
@@ -603,6 +603,29 @@
         "primary": {
           "provider": "fred",
           "symbol": "GOLDAMGBD228NLBM",
+          "update_frequency": "daily",
+          "reliability": "excellent",
+          "cost": "free",
+          "evaluation_score": 95
+        }
+      },
+      "lppl_analysis": {
+        "recommended": true,
+        "minimum_data_period": "180 days",
+        "optimal_data_period": "365 days"
+      }
+    },
+    "BAMLH0A0HYM2": {
+      "display_name": "ICE BofA US High Yield Index",
+      "category": "economic_indicators",
+      "asset_class": "fixed_income",
+      "instrument_type": "INDEX",
+      "market_region": "US",
+      "description": "ICE BofA US High Yield Index - FRED公式データ（高利回り債券インデックス）",
+      "data_sources": {
+        "primary": {
+          "provider": "fred",
+          "symbol": "BAMLH0A0HYM2",
           "update_frequency": "daily",
           "reliability": "excellent",
           "cost": "free",
@@ -1978,7 +2001,7 @@
           "SP500", "NASDAQCOM", "DJIA",
           "CBBTCUSD", "BTC", "ETH", "BNB", "SOL", 
           "AAPL", "MSFT", "GOOGL", "NVDA",
-          "DCOILWTICO", "GOLDAMGBD228NLBM"
+          "DCOILWTICO", "GOLDAMGBD228NLBM", "BAMLH0A0HYM2"
         ],
         "estimated_time": "8-10 minutes",
         "success_rate": "95%",
