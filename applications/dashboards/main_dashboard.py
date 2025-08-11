@@ -49,6 +49,59 @@ class SymbolAnalysisDashboard:
         if 'cache_metadata' not in st.session_state:
             st.session_state.cache_metadata = {}
         
+        # 🚀 パフォーマンス最適化: フィルタープリセットをキャッシュ（2025-08-11追加）
+        if 'filter_presets_cache' not in st.session_state:
+            st.session_state.filter_presets_cache = self.db.get_filter_presets()
+    
+    def _convert_date_columns_for_display(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        ダッシュボード表示専用の安全な日付変換
+        🔒 バックエンド保護: 変換されたデータは外部に渡さず、表示のみに使用
+        文字列として保存された日付をTimestamp型に変換（2025-08-11追加）
+        """
+        date_columns = [
+            'predicted_crash_date', 'analysis_basis_date', 'data_period_start', 
+            'data_period_end', 'analysis_date'
+        ]
+        
+        # 🔒 重要: 元データを変更せず、コピーで変換（バックエンド保護）
+        df_converted = df.copy()
+        
+        for col in date_columns:
+            if col in df_converted.columns:
+                try:
+                    # 文字列日付をTimestamp型に変換（errors='coerce'で無効な値はNaTに）
+                    df_converted[col] = pd.to_datetime(df_converted[col], errors='coerce')
+                    # 静音モード: バックエンドに影響しないよう、ログ出力を削除
+                except Exception as e:
+                    # エラーは静音処理（バックエンドへの影響を回避）
+                    pass
+                    
+        return df_converted
+
+    def _ensure_date_string(self, date_value) -> str:
+        """
+        API呼び出し用にTimestamp/datetime オブジェクトを YYYY-MM-DD 文字列に安全変換
+        🔧 FRED API修正: observation_start/end の文字列フォーマット保証
+        """
+        if pd.isna(date_value):
+            return None
+        
+        if isinstance(date_value, str):
+            # 既に文字列の場合（データベースから直接）
+            if len(date_value) >= 10:  # YYYY-MM-DD形式確認
+                return date_value[:10]  # 時間部分があれば除去
+            return date_value
+        
+        if hasattr(date_value, 'strftime'):
+            # Timestamp/datetime オブジェクトの場合
+            return date_value.strftime('%Y-%m-%d')
+        
+        # その他の場合（予期しない型）
+        return str(date_value)[:10] if str(date_value) else None
+    
+    def __post_init__(self):
+        """Initialize Streamlit configuration after object creation"""
         # Page configuration
         st.set_page_config(
             page_title="Symbol Analysis Dashboard",
@@ -330,7 +383,7 @@ class SymbolAnalysisDashboard:
                     colorbar=dict(title="R² Score", x=1.02)
                 ),
                 name='Predictions',
-                text=[f"R²: {r2:.3f}<br>Quality: {q}<br>Days to crash: {(cd - datetime.now()).days}" 
+                text=[f"R²: {r2:.3f}<br>Quality: {q}<br>Days to crash: {(pd.to_datetime(cd) - datetime.now()).days if pd.notna(cd) else 'N/A'}" 
                       for cd, r2, q in zip(crash_dates, r_squared_values, quality_values)],
                 hovertemplate='Fitting Date: %{x}<br>Predicted Crash: %{y}<br>%{text}<extra></extra>'
             ))
@@ -453,6 +506,9 @@ class SymbolAnalysisDashboard:
             if analyses.empty:
                 return pd.DataFrame()
             
+            # 🔧 表示専用の日付カラム変換（バックエンド保護）
+            analyses = self._convert_date_columns_for_display(analyses)
+            
             # Apply period filtering based on analysis basis date
             if period_selection:
                 start_date = period_selection.get('start_date')
@@ -518,25 +574,204 @@ class SymbolAnalysisDashboard:
         """Render symbol selection sidebar with categorization"""
         
         with st.sidebar:
-            st.title("🎛️ Symbol Selection")
+            st.title("🔍 Analysis Controls")
             
-            # Get available symbols from database
-            try:
-                all_analyses = self.db.get_recent_analyses(limit=1000)
-                if all_analyses.empty:
-                    st.warning("No analysis data available")
-                    return None
+            # 🆕 フィルタリング機能を最上部に配置（2025-08-11改善）
+            st.subheader("🎛️ Data Filters")
+            
+            # フィルタープリセット（キャッシュから高速取得）
+            filter_presets = st.session_state.filter_presets_cache
+            preset_options = ["User Defined"] + list(filter_presets.keys())
+            selected_preset = st.selectbox(
+                "Filter Presets",
+                preset_options,
+                help="Pre-defined filter configurations for common use cases"
+            )
+            
+            # プリセット設定の詳細表示＆カスタム設定
+            custom_filters = {}
+            preset_config = None
+            
+            if selected_preset != "User Defined":
+                # プリセット選択時：設定内容を表示（編集不可）
+                preset_config = filter_presets[selected_preset].copy()
+                preset_config.pop('description', None)  # 説明文を除去
                 
-                available_symbols = sorted(all_analyses['symbol'].unique().tolist())
-            except Exception:
-                st.error("Failed to load analysis data")
+                st.info(f"**Applied Settings**: {filter_presets[selected_preset].get('description', '')}")
+                
+                # プリセット設定の詳細を展開表示（グレーアウト）
+                with st.expander("📋 Current Filter Settings (Applied)", expanded=False):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if 'min_r_squared' in preset_config:
+                            st.text_input("Min R²", value=f"{preset_config['min_r_squared']:.2f}", disabled=True)
+                        if 'min_confidence' in preset_config:
+                            st.text_input("Min Confidence", value=f"{preset_config['min_confidence']:.2f}", disabled=True)
+                        if 'predicted_crash_from' in preset_config:
+                            st.text_input("Crash Date From", value=preset_config['predicted_crash_from'], disabled=True)
+                    
+                    with col2:
+                        if 'is_usable' in preset_config:
+                            st.checkbox("Usable Only", value=preset_config['is_usable'], disabled=True)
+                        if 'limit' in preset_config:
+                            st.text_input("Result Limit", value=str(preset_config['limit']), disabled=True)
+                        if 'predicted_crash_to' in preset_config:
+                            st.text_input("Crash Date To", value=preset_config['predicted_crash_to'], disabled=True)
+                        if 'basis_date_from' in preset_config:
+                            st.text_input("Analysis From", value=preset_config['basis_date_from'], disabled=True)
+            else:
+                # カスタム設定時：フル機能提供
+                with st.expander("🎛️ Quality Filters", expanded=True):
+                    # R²フィルター
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        min_r_squared = st.number_input(
+                            "Min R²", min_value=0.0, max_value=1.0, 
+                            step=0.01, format="%.2f", help="Minimum R-squared value threshold"
+                        )
+                        if min_r_squared > 0:
+                            custom_filters['min_r_squared'] = min_r_squared
+                    
+                    with col2:
+                        max_r_squared = st.number_input(
+                            "Max R²", min_value=0.0, max_value=1.0, 
+                            value=1.0, step=0.01, format="%.2f"
+                        )
+                        if max_r_squared < 1.0:
+                            custom_filters['max_r_squared'] = max_r_squared
+                    
+                    # 信頼度フィルター
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        min_confidence = st.number_input(
+                            "Min Confidence", min_value=0.0, max_value=1.0,
+                            step=0.01, format="%.2f"
+                        )
+                        if min_confidence > 0:
+                            custom_filters['min_confidence'] = min_confidence
+                    
+                    with col2:
+                        max_confidence = st.number_input(
+                            "Max Confidence", min_value=0.0, max_value=1.0,
+                            value=1.0, step=0.01, format="%.2f"
+                        )
+                        if max_confidence < 1.0:
+                            custom_filters['max_confidence'] = max_confidence
+                    
+                    # 使用可能性フィルター
+                    usable_only = st.checkbox("Usable Only", help="Show only analyses marked as usable")
+                    if usable_only:
+                        custom_filters['is_usable'] = True
+                
+                with st.expander("📅 Date Range Filters", expanded=False):
+                    # 予測日範囲フィルター（デフォルト値設定・改善版）
+                    st.markdown("**Predicted Crash Date Range**")
+                    
+                    # デフォルト値設定（1年前〜2年先）
+                    default_crash_from = (datetime.now() - timedelta(days=365)).date()  # 1年前
+                    default_crash_to = (datetime.now() + timedelta(days=730)).date()    # 2年先
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        crash_from = st.date_input(
+                            "Crash From", 
+                            value=default_crash_from,
+                            help="Show analyses predicting crashes after this date"
+                        )
+                        if crash_from:
+                            custom_filters['predicted_crash_from'] = crash_from.strftime('%Y-%m-%d')
+                    
+                    with col2:
+                        crash_to = st.date_input(
+                            "Crash To",
+                            value=default_crash_to,
+                            help="Show analyses predicting crashes before this date"
+                        )
+                        if crash_to:
+                            custom_filters['predicted_crash_to'] = crash_to.strftime('%Y-%m-%d')
+                
+                with st.expander("🔢 Sort Options", expanded=False):
+                    # ソート設定（R²優先、順序変更）
+                    sort_options = {
+                        'r_squared': 'R² Value',
+                        'confidence': 'Confidence', 
+                        'predicted_crash_date': 'Predicted Crash Date',
+                        'analysis_basis_date': 'Analysis Date',
+                        'symbol': 'Symbol Name'
+                    }
+                    sort_by = st.selectbox(
+                        "Sort By", options=list(sort_options.keys()),
+                        format_func=lambda x: sort_options[x],
+                        index=0  # R²がデフォルト選択（リストの最初）
+                    )
+                    custom_filters['sort_by'] = sort_by
+                    
+                    # ソート順序（改善版）
+                    sort_order_options = {
+                        'DESC': 'Highest First (High to Low)',
+                        'ASC': 'Lowest First (Low to High)'
+                    }
+                    sort_order = st.selectbox(
+                        "Sort Order", 
+                        options=list(sort_order_options.keys()),
+                        format_func=lambda x: sort_order_options[x],
+                        index=0
+                    )
+                    custom_filters['sort_order'] = sort_order
+                    
+                    # 結果件数制限（最後に配置）
+                    result_limit = st.number_input(
+                        "Result Limit", min_value=10, max_value=1000, 
+                        value=500, step=50, help="Maximum number of results to display"
+                    )
+                    custom_filters['limit'] = result_limit
+            
+            # Get available symbols from database (フィルター考慮・改善版)
+            try:
+                if selected_preset != "User Defined":
+                    # プリセット適用時：フィルター済みデータから銘柄取得
+                    filtered_data = self.db.apply_filter_preset(selected_preset)
+                    if not filtered_data.empty:
+                        available_symbols = sorted(filtered_data['symbol'].unique().tolist())
+                    else:
+                        available_symbols = []
+                elif custom_filters and any(
+                    v is not None and v != "" and v != 0 and v is not False 
+                    for k, v in custom_filters.items() 
+                    if k not in ['limit', 'sort_by', 'sort_order']  # デフォルト値は除外
+                ):
+                    # カスタムフィルター適用時（実際にフィルター設定がある場合のみ）
+                    filtered_data = self.db.get_filtered_analyses(**custom_filters)
+                    if not filtered_data.empty:
+                        available_symbols = sorted(filtered_data['symbol'].unique().tolist())
+                    else:
+                        available_symbols = []
+                else:
+                    # フィルターなし（初期状態またはカスタムだが設定なし）
+                    # 🚀 パフォーマンス最適化: 銘柄リストのみ取得（全データ不要）
+                    if 'available_symbols_cache' not in st.session_state:
+                        # 初回のみ：銘柄リストをキャッシュ
+                        all_analyses = self.db.get_recent_analyses(limit=100)  # 最小限のデータ
+                        if all_analyses.empty:
+                            st.warning("No analysis data available")
+                            return None
+                        st.session_state.available_symbols_cache = sorted(all_analyses['symbol'].unique().tolist())
+                    available_symbols = st.session_state.available_symbols_cache
+                    
+            except Exception as e:
+                st.error(f"Failed to load analysis data: {str(e)}")
+                return None
+            
+            if not available_symbols:
+                st.warning("No symbols match current filter criteria")
                 return None
             
             # Get categorized symbols
             categorized_symbols = self.get_symbols_by_category()
             
             # Symbol selection with categories
-            st.subheader("📈 Select Symbol by Category")
+            st.subheader("📈 Select Symbol")
             
             # Create category options
             category_options = ["All Symbols"] + list(categorized_symbols.keys())
@@ -582,12 +817,13 @@ class SymbolAnalysisDashboard:
                     with st.expander("ℹ️ Description"):
                         st.write(symbol_info['description'])
             
-            # Display settings
-            st.subheader("⚙️ Display Settings")
+            # 表示期間設定（改善版）
+            st.subheader("📅 Displaying Period")
             
             # 分析基準日の範囲を取得
             try:
-                all_analyses = self.db.get_recent_analyses(symbol=selected_symbol, limit=1000)
+                # 🚀 パフォーマンス最適化: 必要最小限のデータ取得
+                all_analyses = self.db.get_recent_analyses(symbol=selected_symbol, limit=100)
                 if not all_analyses.empty:
                     # 分析基準日の取得（優先順位: analysis_basis_date > data_period_end）
                     basis_dates = []
@@ -606,27 +842,28 @@ class SymbolAnalysisDashboard:
                         default_end = max_date
                         default_start = max(min_date, max_date - timedelta(days=120))  # 4ヶ月前
                         
-                        # 期間選択UI
-                        st.markdown("**📅 Analysis Period Selection**")
+                        # 期間選択UI（改善版）
                         col1, col2 = st.columns(2)
                         
                         with col1:
                             start_date = st.date_input(
-                                "From (Fitting Basis Date)",
+                                "From",
                                 value=default_start,
                                 min_value=min_date,
                                 max_value=max_date,
                                 help="Start date for analysis period (oldest fitting basis date to include)"
                             )
+                            st.caption("*Start of analysis basis date range*")
                         
                         with col2:
                             end_date = st.date_input(
-                                "To (Fitting Basis Date)",
+                                "To",
                                 value=default_end,
                                 min_value=min_date,
                                 max_value=max_date,
                                 help="End date for analysis period (newest fitting basis date to include)"
                             )
+                            st.caption("*End of analysis basis date range*")
                         
                         # 日付範囲の妥当性チェック
                         if start_date > end_date:
@@ -647,14 +884,15 @@ class SymbolAnalysisDashboard:
                 st.error(f"Error loading period data: {str(e)}")
                 period_selection = None
             
-            # Priority filtering
-            priority_filter = st.selectbox(
-                "Priority Filter",
-                ["All", "High Priority (≤90 days)", "Medium Priority (≤180 days)", "Critical Only (≤30 days)"],
-                index=0
-            )
+            # フィルター設定をまとめて返却（Legacy Priority Filter削除）
+            filter_settings = {
+                'preset': preset_config,
+                'preset_name': selected_preset if selected_preset != "User Defined" else None,
+                'custom': custom_filters if selected_preset == "User Defined" else {},
+                'legacy_priority': None  # 廃止済み
+            }
             
-            return selected_symbol, period_selection, priority_filter
+            return selected_symbol, period_selection, filter_settings
     
     def get_symbol_price_data(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """Get symbol price data with caching for API efficiency"""
@@ -885,8 +1123,9 @@ class SymbolAnalysisDashboard:
         
         # 最新のフィッティングデータを使って生データを取得
         if pd.notna(latest.get('data_period_start')) and pd.notna(latest.get('data_period_end')):
-            data_start = latest['data_period_start']
-            data_end = latest['data_period_end']
+            # 🔧 FRED API修正: Timestamp オブジェクトを文字列に安全変換
+            data_start = self._ensure_date_string(latest['data_period_start'])
+            data_end = self._ensure_date_string(latest['data_period_end'])
             
             # 表示数を事前に定義
             display_count = len(analysis_data)
@@ -898,14 +1137,15 @@ class SymbolAnalysisDashboard:
             
             for _, row in analysis_data.head(display_count).iterrows():
                 # 各分析の開始日を含める
-                row_start = row.get('data_period_start')
+                row_start = self._ensure_date_string(row.get('data_period_start'))
                 if row_start and row_start < min_data_start:
                     min_data_start = row_start
                     
                 # 各分析の予測日を含める
                 if pd.notna(row.get('tc')):
-                    row_start = row.get('data_period_start', data_start)
-                    row_end = row.get('data_period_end', data_end)
+                    # 🔧 FRED API修正: 日付変換関数適用
+                    row_start = self._ensure_date_string(row.get('data_period_start', data_start))
+                    row_end = self._ensure_date_string(row.get('data_period_end', data_end))
                     if row_start and row_end:
                         pred_date = self.convert_tc_to_real_date(row.get('tc'), row_start, row_end)
                         if pred_date > pd.to_datetime(max_pred_date):
@@ -1166,8 +1406,9 @@ class SymbolAnalysisDashboard:
                     latest_fig = go.Figure()
                     
                     # 絶対最新データ用のパラメータと予測日を計算
-                    absolute_latest_data_start = absolute_latest.get('data_period_start')
-                    absolute_latest_data_end = absolute_latest.get('data_period_end')
+                    # 🔧 FRED API修正: Timestamp オブジェクトを文字列に安全変換
+                    absolute_latest_data_start = self._ensure_date_string(absolute_latest.get('data_period_start'))
+                    absolute_latest_data_end = self._ensure_date_string(absolute_latest.get('data_period_end'))
                     absolute_latest_fitting_basis = absolute_latest.get('analysis_basis_date', absolute_latest_data_end)
                     absolute_latest_fitting_basis_dt = pd.to_datetime(absolute_latest_fitting_basis)
                     
@@ -1582,6 +1823,9 @@ class SymbolAnalysisDashboard:
                             
                             if pred_start and pred_end:
                                 pred_date = self.convert_tc_to_real_date(pred_tc, pred_start, pred_end)
+                                # 安全な日付比較（pred_dateがすでにdatetime型のため修正不要だが念のため確認）
+                                if isinstance(pred_date, str):
+                                    pred_date = pd.to_datetime(pred_date)
                                 days_from_today = (pred_date - datetime.now()).days
                                 
                                 # フィッティング基準日を表示
@@ -1657,8 +1901,9 @@ class SymbolAnalysisDashboard:
                     for i, (_, individual) in enumerate(analysis_data.head(individual_display_count).iterrows()):
                         if pd.notna(individual.get('tc')):
                             ind_tc = individual['tc']
-                            ind_start = individual.get('data_period_start')
-                            ind_end = individual.get('data_period_end')
+                            # 🔧 FRED API修正: Timestamp オブジェクトを文字列に安全変換
+                            ind_start = self._ensure_date_string(individual.get('data_period_start'))
+                            ind_end = self._ensure_date_string(individual.get('data_period_end'))
                             
                             if ind_start and ind_end:
                                 # フィッティング基準日を取得
@@ -1926,26 +2171,57 @@ class SymbolAnalysisDashboard:
         
         plot_data['fitting_basis_date'] = fitting_basis_dates
         
-        # Convert predicted crash dates
+        # Convert predicted crash dates（安全な変換・エラーハンドリング追加）
         crash_dates = []
         for date in plot_data['predicted_crash_date']:
-            if hasattr(date, 'to_pydatetime'):
-                crash_dates.append(date.to_pydatetime())
-            else:
-                crash_dates.append(date)
+            try:
+                if pd.isna(date) or date is None:
+                    crash_dates.append(None)
+                elif hasattr(date, 'to_pydatetime'):
+                    crash_dates.append(date.to_pydatetime())
+                else:
+                    # 文字列や他の形式を安全にTimestampに変換
+                    converted_date = pd.to_datetime(date)
+                    if hasattr(converted_date, 'to_pydatetime'):
+                        crash_dates.append(converted_date.to_pydatetime())
+                    else:
+                        crash_dates.append(converted_date)
+            except (ValueError, TypeError, pd.errors.OutOfBoundsDatetime):
+                # 変換できない場合はNoneを設定
+                crash_dates.append(None)
+        
         plot_data['crash_date_converted'] = crash_dates
         
-        # フィッティング基準日から予測クラッシュ日までの日数を計算
+        # フィッティング基準日から予測クラッシュ日までの日数を計算（安全な処理）
         hover_texts = []
         for _, row in plot_data.iterrows():
             fitting_basis_date = row['fitting_basis_date']
             crash_date = row['crash_date_converted']
             
-            # 基準日からクラッシュ予想日までの日数を計算
-            days_to_crash = (crash_date - fitting_basis_date).days
+            try:
+                # 基準日からクラッシュ予想日までの日数を計算（安全な処理）
+                if crash_date is None or pd.isna(crash_date):
+                    days_to_crash = "N/A"
+                else:
+                    # 両方の日付を確実にTimestamp/datetimeオブジェクトに変換
+                    if isinstance(fitting_basis_date, str):
+                        fitting_basis_date = pd.to_datetime(fitting_basis_date)
+                    if isinstance(crash_date, str):
+                        crash_date = pd.to_datetime(crash_date)
+                    
+                    days_to_crash = (crash_date - fitting_basis_date).days
+            except (ValueError, TypeError, AttributeError) as e:
+                st.warning(f"日数計算エラー (行{_}): {str(e)}")
+                days_to_crash = "Error"
             
-            hover_text = (f"Days to Crash: {days_to_crash} days<br>"
-                         f"R²: {row['r_squared']:.3f}<br>"
+            # hover_text作成（days_to_crashのタイプに応じて適切に表示）
+            if isinstance(days_to_crash, (int, float)):
+                days_text = f"Days to Crash: {days_to_crash} days<br>"
+            else:
+                days_text = f"Days to Crash: {days_to_crash}<br>"
+            
+            hover_text = (days_text +
+                         f"R²: {row['r_squared']:.3f}<br>" +
                          f"Quality: {row['quality']}")
             hover_texts.append(hover_text)
         
@@ -2240,24 +2516,47 @@ class SymbolAnalysisDashboard:
         # Prepare detailed parameter table
         display_df = analysis_data.copy()
         
-        # Add formatted predicted crash date
+        # Add formatted predicted crash date（安全な日付変換）
         if 'predicted_crash_date' in display_df.columns:
-            display_df['predicted_crash_date_formatted'] = display_df['predicted_crash_date'].apply(
-                lambda x: x.strftime('%Y-%m-%d %H:%M') if pd.notna(x) else 'N/A'
-            )
+            def safe_format_date(x):
+                if pd.isna(x) or x is None:
+                    return 'N/A'
+                try:
+                    # 文字列の場合はTimestampに変換
+                    if isinstance(x, str):
+                        x = pd.to_datetime(x)
+                    # strftimeメソッドが使える形式に変換
+                    if hasattr(x, 'strftime'):
+                        return x.strftime('%Y-%m-%d %H:%M')
+                    else:
+                        # それでも使えない場合は文字列で返す
+                        return str(x)
+                except (ValueError, TypeError, AttributeError):
+                    return str(x) if x is not None else 'N/A'
+            
+            display_df['predicted_crash_date_formatted'] = display_df['predicted_crash_date'].apply(safe_format_date)
         else:
             display_df['predicted_crash_date_formatted'] = 'N/A'
         
-        # Add fitting basis date (フィッティング基準日) - most important date
+        # Add fitting basis date (フィッティング基準日) - most important date（安全な変換）
+        def safe_format_date_simple(x):
+            if pd.isna(x) or x is None:
+                return 'N/A'
+            try:
+                if isinstance(x, str):
+                    x = pd.to_datetime(x)
+                if hasattr(x, 'strftime'):
+                    return x.strftime('%Y-%m-%d')
+                else:
+                    return str(x)
+            except (ValueError, TypeError, AttributeError):
+                return str(x) if x is not None else 'N/A'
+        
         if 'analysis_basis_date' in display_df.columns:
-            display_df['fitting_basis_date_formatted'] = display_df['analysis_basis_date'].apply(
-                lambda x: pd.to_datetime(x).strftime('%Y-%m-%d') if pd.notna(x) else 'N/A'
-            )
+            display_df['fitting_basis_date_formatted'] = display_df['analysis_basis_date'].apply(safe_format_date_simple)
         elif 'data_period_end' in display_df.columns:
             # Fallback to data period end
-            display_df['fitting_basis_date_formatted'] = display_df['data_period_end'].apply(
-                lambda x: pd.to_datetime(x).strftime('%Y-%m-%d') if pd.notna(x) else 'N/A'
-            )
+            display_df['fitting_basis_date_formatted'] = display_df['data_period_end'].apply(safe_format_date_simple)
         else:
             display_df['fitting_basis_date_formatted'] = 'N/A'
         
@@ -2417,10 +2716,18 @@ class SymbolAnalysisDashboard:
         
         with col5:
             if 'predicted_crash_date' in analysis_data.columns:
-                future_predictions = len(analysis_data[
-                    analysis_data['predicted_crash_date'] > datetime.now()
-                ])
-                st.metric("Future Predictions", future_predictions)
+                # 安全な日付比較（文字列→Timestamp変換）
+                try:
+                    now = datetime.now()
+                    # 文字列日付をTimestampに変換してから比較
+                    crash_dates_converted = pd.to_datetime(analysis_data['predicted_crash_date'], errors='coerce')
+                    future_predictions = len(crash_dates_converted[crash_dates_converted > now])
+                    st.metric("Future Predictions", future_predictions)
+                except Exception as e:
+                    st.metric("Future Predictions", "Error")
+                    st.caption(f"⚠️ Date comparison error: {str(e)}")
+            else:
+                st.metric("Future Predictions", "N/A")
         
         # Reference information from Sornette paper reproduction
         st.subheader("📚 Reference: Sornette Paper Reproduction")
@@ -2511,45 +2818,35 @@ class SymbolAnalysisDashboard:
             st.info("Please select a symbol from the sidebar to view analysis results.")
             return
         
-        selected_symbol, period_selection, priority_filter = sidebar_result
+        selected_symbol, period_selection, filter_settings = sidebar_result
         
-        # Determine display limit based on period selection
-        # If period selection is applied, we don't need a limit since filtering is done by date
-        display_limit = 1000 if period_selection else 50
-        
-        # Get analysis data
+        # 🆕 高度フィルタリング適用（2025-08-11追加・Legacy Priority Filter廃止）
         with st.spinner(f"Loading analysis data for {selected_symbol}..."):
-            analysis_data = self.get_symbol_analysis_data(selected_symbol, display_limit, period_selection)
+            if filter_settings['preset_name']:
+                # プリセットフィルター適用
+                analysis_data = self.db.apply_filter_preset(filter_settings['preset_name'])
+                # 選択された銘柄でさらにフィルタリング
+                if not analysis_data.empty:
+                    analysis_data = analysis_data[analysis_data['symbol'] == selected_symbol]
+                # 🔧 表示専用日付カラム変換（バックエンド保護）
+                analysis_data = self._convert_date_columns_for_display(analysis_data)
+            elif filter_settings['custom']:
+                # カスタムフィルター適用
+                custom_filters = filter_settings['custom'].copy()
+                custom_filters['symbol'] = selected_symbol  # 銘柄フィルターを追加
+                analysis_data = self.db.get_filtered_analyses(**custom_filters)
+                # 🔧 表示専用日付カラム変換（バックエンド保護）
+                analysis_data = self._convert_date_columns_for_display(analysis_data)
+            else:
+                # デフォルト方式（フィルターなし）- get_symbol_analysis_data内で既に変換済み
+                display_limit = 1000 if period_selection else 50
+                analysis_data = self.get_symbol_analysis_data(selected_symbol, display_limit, period_selection)
         
         if analysis_data.empty:
-            st.warning(f"No analysis data found for {selected_symbol}")
+            st.warning(f"No analysis data found for {selected_symbol} with current filters")
             return
         
-        # Apply priority filter based on days to crash
-        if priority_filter != "All" and 'predicted_crash_date' in analysis_data.columns:
-            now = datetime.now()
-            if priority_filter == "Critical Only (≤30 days)":
-                analysis_data = analysis_data[
-                    analysis_data['predicted_crash_date'].apply(
-                        lambda x: (x - now).days <= 30 if pd.notna(x) else False
-                    )
-                ]
-            elif priority_filter == "High Priority (≤90 days)":
-                analysis_data = analysis_data[
-                    analysis_data['predicted_crash_date'].apply(
-                        lambda x: (x - now).days <= 90 if pd.notna(x) else False
-                    )
-                ]
-            elif priority_filter == "Medium Priority (≤180 days)":
-                analysis_data = analysis_data[
-                    analysis_data['predicted_crash_date'].apply(
-                        lambda x: (x - now).days <= 180 if pd.notna(x) else False
-                    )
-                ]
-        
-        if analysis_data.empty:
-            st.warning("No data matches the selected priority filter")
-            return
+        # 🎯 フィルタリング完了 - 新システムで全て処理済み
         
         # Main content tabs - updated tab names for clarity
         tab1, tab2, tab3 = st.tabs([

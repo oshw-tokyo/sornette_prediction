@@ -60,7 +60,7 @@
 | I018 | データフロー・形式標準化未実装 | データ形式・フロー定義が分散・変更リスク・トラブル原因 | 2025-08-04 | システム安定性 | 設計段階 |
 | I025 | 新マーケットデータカタログシステムのダッシュボード統合未実装 | v2.0カタログ・レート制限・クラッシュ警告システムがダッシュボードに未反映・過去データ形式変更でエラー多発リスク | 2025-08-04 | ダッシュボード機能・UX | 慎重対応必要 |
 | I032 | カタログベース分析時のPNGファイル自動保存機能の排除必要 | カタログに沿ったフィッティング実行時に大量のPNGファイルが自動保存される問題・プロット内容が不正確・データ容量の無駄な増大を招く | 2025-08-08 | ストレージ効率・システム品質 | 対応必要 |
-| I033 | ダッシュボード Price&Prediction タブの包括的UI改善必要 | Individual Fitting ResultsのFuture Period未表示・縦線ホバー機能不具合・Number of Results仕様誤解・期間選択機能不備・プロット数制限未実装 | 2025-08-08 | ダッシュボードUX・機能性 | ✅ 解決済 |
+| I033 | ダッシュボード表示幅問題 | LPPL Market Analysis Dashboard全体とタブの表示幅が狭くなり、ウィンドウ幅に合わせた以前の表示に戻らない問題・layout="wide"設定は正しいがStreamlit動作に問題の可能性・ブラウザズーム設定の確認必要 | 2025-08-11 | ダッシュボードUX・表示品質 | 🔄 調査中 |
 | I034 | ダッシュボード Display Settings datetime.date エラー | Display Settings で期間データ処理時に 'datetime.date' object has no attribute 'date' エラーが発生・日時型変換処理の不具合 | 2025-08-08 | ダッシュボード機能性 | ✅ 解決済 |
 | I035 | 統合プロット Future Period 表示不完全・Individual Results Future Period未実装 | Market Data統合プロットでLPPL Fit(Future Period)が右端まで表示されない・フィッティングと生データの日付ずれ・Individual Fitting ResultsでのFuture Period未実装 | 2025-08-08 | ダッシュボードUX・予測表示機能 | ✅ 解決済 |
 | I036 | ダッシュボード表示数不一致・プロット配置改善必要 | Individual Fitting Results表示数がAnalysis Period Selection数と不一致・統合プロットでLPPL Future Periodとtc縦線位置ずれ・通常プロット配置改善要求 | 2025-08-08 | ダッシュボードUX・表示整合性 | ✅ 解決済 |

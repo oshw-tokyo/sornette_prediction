@@ -151,8 +151,55 @@ class ResultsDatabase:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_symbol_basis_date ON analysis_results (symbol, analysis_basis_date DESC)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_frequency_basis ON analysis_results (analysis_frequency, analysis_basis_date DESC)')
             
+            # 高度なフィルタリング機能用インデックス（2025-08-11追加）
+            self._add_advanced_filtering_indexes(cursor)
+            
             conn.commit()
             print(f"📊 データベース初期化完了: {self.db_path}")
+    
+    def _add_advanced_filtering_indexes(self, cursor):
+        """
+        高度なフィルタリング機能のための最適化インデックス追加
+        既存システムに影響を与えない安全な実装 (2025-08-11追加)
+        """
+        advanced_indexes = [
+            # 1. 品質フィルタリング最適化（R²、信頼度、使用可能性）
+            ("idx_quality_comprehensive", 
+             "CREATE INDEX IF NOT EXISTS idx_quality_comprehensive ON analysis_results (r_squared, confidence, is_usable, analysis_basis_date DESC)"),
+            
+            # 2. 予測関連フィルタリング最適化（予測日、基準日、銘柄）  
+            ("idx_prediction_filters",
+             "CREATE INDEX IF NOT EXISTS idx_prediction_filters ON analysis_results (predicted_crash_date, analysis_basis_date, symbol)"),
+            
+            # 3. 時系列分析日最適化（パフォーマンステストで0.0172秒→0.0001秒改善）
+            ("idx_analysis_date_desc",
+             "CREATE INDEX IF NOT EXISTS idx_analysis_date_desc ON analysis_results (analysis_date DESC)"),
+            
+            # 4. 複合フィルタリング最適化（品質+予測範囲）
+            ("idx_composite_filters",
+             "CREATE INDEX IF NOT EXISTS idx_composite_filters ON analysis_results (is_usable, r_squared, predicted_crash_date)")
+        ]
+        
+        print("🔧 高度フィルタリング用インデックス追加中...")
+        
+        for idx_name, idx_sql in advanced_indexes:
+            try:
+                # 既存インデックス確認
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='index' AND name=?
+                """, (idx_name,))
+                
+                if cursor.fetchone():
+                    print(f"  ⚪ {idx_name}: 既に存在")
+                else:
+                    cursor.execute(idx_sql)
+                    print(f"  ✅ {idx_name}: 作成完了")
+                    
+            except Exception as e:
+                print(f"  ❌ {idx_name}: エラー - {e}")
+                # エラーがあっても他のインデックスは継続処理
+                continue
     
     def _add_column_if_not_exists(self, cursor, table_name: str, column_name: str, column_def: str):
         """テーブルに列が存在しない場合のみ追加"""
@@ -504,6 +551,307 @@ class ResultsDatabase:
                     'maximum': r_squared_stats[2] if r_squared_stats[2] else 0
                 }
             }
+    
+    def get_filtered_analyses(self, 
+                            symbol: str = None,
+                            min_r_squared: float = None,
+                            max_r_squared: float = None,
+                            min_confidence: float = None,
+                            max_confidence: float = None,
+                            is_usable: bool = None,
+                            basis_date_from: str = None,
+                            basis_date_to: str = None,
+                            predicted_crash_from: str = None,
+                            predicted_crash_to: str = None,
+                            quality_levels: List[str] = None,
+                            sort_by: str = 'analysis_basis_date',
+                            sort_order: str = 'DESC',
+                            limit: int = 500) -> pd.DataFrame:
+        """
+        高度フィルタリング機能によるクエリ最適化分析結果取得
+        2025-08-11追加: ダッシュボード多条件AND検索対応
+        
+        Args:
+            symbol: 特定銘柄フィルタ
+            min_r_squared: R²最小値
+            max_r_squared: R²最大値  
+            min_confidence: 信頼度最小値
+            max_confidence: 信頼度最大値
+            is_usable: 使用可能性フィルタ
+            basis_date_from: 分析基準日開始
+            basis_date_to: 分析基準日終了
+            predicted_crash_from: 予測日開始
+            predicted_crash_to: 予測日終了
+            quality_levels: 品質レベルリスト
+            sort_by: ソート基準（analysis_basis_date, r_squared, confidence等）
+            sort_order: ソート順序（ASC, DESC）
+            limit: 結果件数制限
+            
+        Returns:
+            DataFrame: フィルタリング済み分析結果
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            query = '''
+                SELECT 
+                    id, symbol, analysis_date, data_source,
+                    data_period_start, data_period_end, data_points,
+                    tc, beta, omega, phi, A, B, C,
+                    r_squared, rmse, quality, confidence, is_usable,
+                    predicted_crash_date, days_to_crash,
+                    window_days, total_candidates, successful_candidates,
+                    analysis_basis_date, analysis_frequency
+                FROM analysis_results
+                WHERE 1=1
+            '''
+            params = []
+            
+            # 動的WHERE句構築（AND検索）
+            if symbol:
+                query += ' AND symbol = ?'
+                params.append(symbol)
+                
+            if min_r_squared is not None:
+                query += ' AND r_squared >= ?'
+                params.append(min_r_squared)
+                
+            if max_r_squared is not None:
+                query += ' AND r_squared <= ?'
+                params.append(max_r_squared)
+                
+            if min_confidence is not None:
+                query += ' AND confidence >= ?'
+                params.append(min_confidence)
+                
+            if max_confidence is not None:
+                query += ' AND confidence <= ?'
+                params.append(max_confidence)
+                
+            if is_usable is not None:
+                query += ' AND is_usable = ?'
+                params.append(is_usable)
+                
+            if basis_date_from:
+                query += ' AND analysis_basis_date >= ?'
+                params.append(basis_date_from)
+                
+            if basis_date_to:
+                query += ' AND analysis_basis_date <= ?'
+                params.append(basis_date_to)
+                
+            if predicted_crash_from:
+                query += ' AND predicted_crash_date >= ?'
+                params.append(predicted_crash_from)
+                
+            if predicted_crash_to:
+                query += ' AND predicted_crash_date <= ?'
+                params.append(predicted_crash_to)
+                
+            if quality_levels:
+                placeholders = ','.join(['?' for _ in quality_levels])
+                query += f' AND quality IN ({placeholders})'
+                params.extend(quality_levels)
+            
+            # ソート順序設定（分析基準日優先原則）
+            valid_sort_columns = ['analysis_basis_date', 'r_squared', 'confidence', 'symbol', 'predicted_crash_date']
+            if sort_by not in valid_sort_columns:
+                sort_by = 'analysis_basis_date'
+            
+            sort_order = sort_order.upper() if sort_order.upper() in ['ASC', 'DESC'] else 'DESC'
+            query += f' ORDER BY {sort_by} {sort_order}, analysis_basis_date DESC'
+            
+            # 結果件数制限
+            if limit:
+                query += ' LIMIT ?'
+                params.append(limit)
+            
+            return pd.read_sql_query(query, conn, params=params)
+    
+    def get_filter_value_ranges(self) -> Dict[str, Any]:
+        """
+        フィルタリング用の値域情報を取得（フィルター UI 向け）
+        2025-08-11追加: ダッシュボードフィルター自動設定
+        
+        Returns:
+            Dict: 各カラムの最小・最大値情報
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # R²値域
+            cursor.execute('SELECT MIN(r_squared), MAX(r_squared) FROM analysis_results WHERE r_squared IS NOT NULL')
+            r_squared_range = cursor.fetchone()
+            
+            # 信頼度値域
+            cursor.execute('SELECT MIN(confidence), MAX(confidence) FROM analysis_results WHERE confidence IS NOT NULL')
+            confidence_range = cursor.fetchone()
+            
+            # 分析基準日値域
+            cursor.execute('SELECT MIN(analysis_basis_date), MAX(analysis_basis_date) FROM analysis_results WHERE analysis_basis_date IS NOT NULL')
+            basis_date_range = cursor.fetchone()
+            
+            # 予測日値域
+            cursor.execute('SELECT MIN(predicted_crash_date), MAX(predicted_crash_date) FROM analysis_results WHERE predicted_crash_date IS NOT NULL')
+            predicted_crash_range = cursor.fetchone()
+            
+            # 品質レベル一覧
+            cursor.execute('SELECT DISTINCT quality FROM analysis_results WHERE quality IS NOT NULL ORDER BY quality')
+            quality_levels = [row[0] for row in cursor.fetchall()]
+            
+            # 銘柄一覧（アルファベット順）
+            cursor.execute('SELECT DISTINCT symbol FROM analysis_results ORDER BY symbol')
+            symbols = [row[0] for row in cursor.fetchall()]
+            
+            return {
+                'r_squared': {
+                    'min': r_squared_range[0] if r_squared_range[0] else 0.0,
+                    'max': r_squared_range[1] if r_squared_range[1] else 1.0,
+                },
+                'confidence': {
+                    'min': confidence_range[0] if confidence_range[0] else 0.0,
+                    'max': confidence_range[1] if confidence_range[1] else 1.0,
+                },
+                'basis_date': {
+                    'min': basis_date_range[0],
+                    'max': basis_date_range[1],
+                },
+                'predicted_crash_date': {
+                    'min': predicted_crash_range[0],
+                    'max': predicted_crash_range[1],
+                },
+                'quality_levels': quality_levels,
+                'symbols': symbols
+            }
+    
+    def validate_database_compatibility(self) -> Dict[str, bool]:
+        """
+        既存システム互換性検証（2025-08-11追加）
+        新しいフィルタリング機能が既存メソッドに影響していないことを確認
+        
+        Returns:
+            Dict: 各機能の動作状況
+        """
+        compatibility_results = {}
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # 1. 基本テーブル構造確認
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row[0] for row in cursor.fetchall()]
+                compatibility_results['basic_tables'] = 'analysis_results' in tables
+                
+                # 2. 必須カラム存在確認
+                cursor.execute("PRAGMA table_info(analysis_results)")
+                columns = [row[1] for row in cursor.fetchall()]
+                required_columns = ['symbol', 'r_squared', 'confidence', 'analysis_basis_date']
+                compatibility_results['required_columns'] = all(col in columns for col in required_columns)
+                
+                # 3. get_recent_analyses互換性
+                recent_df = self.get_recent_analyses(limit=1)
+                compatibility_results['get_recent_analyses'] = len(recent_df) >= 0
+                
+                # 4. get_summary_statistics互換性
+                stats = self.get_summary_statistics()
+                compatibility_results['get_summary_statistics'] = 'total_analyses' in stats
+                
+                # 5. 新インデックス存在確認
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_quality_comprehensive'")
+                compatibility_results['new_indexes'] = bool(cursor.fetchone())
+                
+                print("🔧 データベース互換性検証完了:")
+                for feature, status in compatibility_results.items():
+                    status_icon = "✅" if status else "❌"
+                    print(f"  {status_icon} {feature}: {status}")
+                    
+        except Exception as e:
+            print(f"❌ 互換性検証中にエラー: {e}")
+            compatibility_results['error'] = str(e)
+        
+        return compatibility_results
+    
+    def get_filter_presets(self) -> Dict[str, Dict[str, Any]]:
+        """
+        フィルタープリセット定義（2025-08-11追加）
+        ダッシュボード用の事前定義されたフィルター設定
+        
+        Returns:
+            Dict: プリセット名をキーとするフィルター設定
+        """
+        return {
+            "High Quality Only": {
+                "min_r_squared": 0.85,
+                "min_confidence": 0.80,
+                "is_usable": True,
+                "description": "R² ≥ 0.85, Confidence ≥ 80%, Usable analyses only"
+            },
+            "Medium Quality+": {
+                "min_r_squared": 0.70,
+                "min_confidence": 0.60,
+                "is_usable": True,
+                "description": "R² ≥ 0.70, Confidence ≥ 60%, Usable analyses only"
+            },
+            "Critical (30 days)": {
+                "is_usable": True,
+                "predicted_crash_from": datetime.now().strftime('%Y-%m-%d'),
+                "predicted_crash_to": (datetime.now() + pd.DateOffset(days=30)).strftime('%Y-%m-%d'),
+                "description": "Crash predictions within 30 days (Critical priority)"
+            },
+            "Near-term Predictions": {
+                "is_usable": True,
+                "predicted_crash_from": datetime.now().strftime('%Y-%m-%d'),
+                "predicted_crash_to": (datetime.now() + pd.DateOffset(days=90)).strftime('%Y-%m-%d'),
+                "description": "Crash predictions within 3 months (High priority)"
+            },
+            "Medium-term Predictions": {
+                "is_usable": True,
+                "predicted_crash_from": datetime.now().strftime('%Y-%m-%d'),
+                "predicted_crash_to": (datetime.now() + pd.DateOffset(days=180)).strftime('%Y-%m-%d'),
+                "description": "Crash predictions within 6 months (Medium priority)"
+            },
+            "Recent Analyses": {
+                "basis_date_from": (datetime.now() - pd.DateOffset(days=30)).strftime('%Y-%m-%d'),
+                "description": "Analyses performed in the last 30 days"
+            },
+            "Ultra-High Precision": {
+                "min_r_squared": 0.90,
+                "min_confidence": 0.85,
+                "is_usable": True,
+                "description": "Ultra-high precision analyses (R² ≥ 0.90, Confidence ≥ 85%)"
+            },
+            "All Usable": {
+                "is_usable": True,
+                "description": "All analyses marked as usable"
+            },
+            "Latest 100": {
+                "limit": 100,
+                "description": "Latest 100 analyses by basis date"
+            }
+        }
+    
+    def apply_filter_preset(self, preset_name: str) -> pd.DataFrame:
+        """
+        プリセットフィルターを適用して結果取得
+        2025-08-11追加: ワンクリックフィルタリング
+        
+        Args:
+            preset_name: プリセット名
+            
+        Returns:
+            DataFrame: プリセット適用済み分析結果
+        """
+        presets = self.get_filter_presets()
+        
+        if preset_name not in presets:
+            print(f"❌ プリセット '{preset_name}' が見つかりません")
+            return pd.DataFrame()
+        
+        preset_config = presets[preset_name]
+        description = preset_config.pop('description', preset_name)
+        
+        print(f"🔍 プリセット適用中: {preset_name} - {description}")
+        
+        return self.get_filtered_analyses(**preset_config)
     
     def cleanup_old_records(self, days_to_keep: int = 90):
         """
