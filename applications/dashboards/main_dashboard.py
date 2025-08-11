@@ -499,9 +499,14 @@ class SymbolAnalysisDashboard:
     
     def get_symbol_analysis_data(self, symbol: str, limit: int = 50, 
                                  period_selection: Optional[Dict] = None) -> pd.DataFrame:
-        """Get analysis data for specific symbol with predicted crash dates"""
+        """
+        Get analysis data for specific symbol with predicted crash dates
+        
+        v2更新（2025-08-11）: Symbol選択後は全データ取得し、Displaying Periodのみでフィルタ
+        """
         try:
-            analyses = self.db.get_recent_analyses(symbol=symbol, limit=limit)
+            # 選択銘柄の全データ取得（Symbol Filters影響なし）
+            analyses = self.db.get_recent_analyses(symbol=symbol, limit=None)
             
             if analyses.empty:
                 return pd.DataFrame()
@@ -570,16 +575,37 @@ class SymbolAnalysisDashboard:
             st.error(f"Error retrieving analysis data: {str(e)}")
             return pd.DataFrame()
     
-    def render_sidebar(self):
-        """Render symbol selection sidebar with categorization"""
-        
+    def render_sidebar_v2(self):
+        """
+        新しいサイドバー実装（2025-08-11）
+        - Symbol Filters: 銘柄選択リストのみ影響
+        - Displaying Period: プロット範囲のみ制御
+        - Apply ボタン: 明示的更新制御
+        """
         with st.sidebar:
             st.title("🔍 Analysis Controls")
             
-            # 🆕 フィルタリング機能を最上部に配置（2025-08-11改善）
-            st.subheader("🎛️ Data Filters")
+            # === 1. Symbol Filters ===
+            st.subheader("🎛️ Symbol Filters")
             
-            # フィルタープリセット（キャッシュから高速取得）
+            # Get categorized symbols
+            categorized_symbols = self.get_symbols_by_category()
+            
+            # Asset Category (最上段・独立セクション)
+            st.markdown("#### 🏷️ Asset Category")
+            selected_category = st.selectbox(
+                "Select Asset Category",
+                ["All Symbols"] + list(categorized_symbols.keys()),
+                format_func=lambda x: "All Symbols" if x == "All Symbols" 
+                else categorized_symbols[x]["display_name"] if x in categorized_symbols 
+                else x,
+                help="Filter symbols by asset category"
+            )
+            
+            # Filter Conditions (プリセット/カスタム)
+            st.markdown("#### 🔍 Filter Conditions")
+            
+            # フィルタープリセット
             filter_presets = st.session_state.filter_presets_cache
             preset_options = ["User Defined"] + list(filter_presets.keys())
             selected_preset = st.selectbox(
@@ -588,9 +614,239 @@ class SymbolAnalysisDashboard:
                 help="Pre-defined filter configurations for common use cases"
             )
             
-            # プリセット設定の詳細表示＆カスタム設定
+            # フィルター設定の収集
             custom_filters = {}
             preset_config = None
+            
+            if selected_preset != "User Defined":
+                # プリセット選択時
+                preset_config = filter_presets[selected_preset].copy()
+                preset_config.pop('description', None)
+                st.info(f"**Applied**: {filter_presets[selected_preset].get('description', '')}")
+            else:
+                # カスタム設定時
+                with st.expander("🎛️ Custom Filters", expanded=True):
+                    # R²フィルター
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        min_r_squared = st.number_input("Min R²", 0.0, 1.0, 0.0, 0.01, format="%.2f")
+                        if min_r_squared > 0:
+                            custom_filters['min_r_squared'] = min_r_squared
+                    with col2:
+                        max_r_squared = st.number_input("Max R²", 0.0, 1.0, 1.0, 0.01, format="%.2f")
+                        if max_r_squared < 1.0:
+                            custom_filters['max_r_squared'] = max_r_squared
+                    
+                    # 信頼度フィルター
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        min_confidence = st.number_input("Min Confidence", 0.0, 1.0, 0.0, 0.01, format="%.2f")
+                        if min_confidence > 0:
+                            custom_filters['min_confidence'] = min_confidence
+                    with col2:
+                        max_confidence = st.number_input("Max Confidence", 0.0, 1.0, 1.0, 0.01, format="%.2f")
+                        if max_confidence < 1.0:
+                            custom_filters['max_confidence'] = max_confidence
+                    
+                    # 使用可能性
+                    usable_only = st.checkbox("Usable Only", help="Show only usable analyses")
+                    if usable_only:
+                        custom_filters['is_usable'] = True
+                    
+                    # 予測日範囲
+                    st.markdown("**Predicted Crash Date Range**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        crash_from = st.date_input(
+                            "From",
+                            value=(datetime.now() - timedelta(days=365)).date(),
+                            help="Crash predictions after this date"
+                        )
+                        if crash_from:
+                            custom_filters['predicted_crash_from'] = crash_from.strftime('%Y-%m-%d')
+                    with col2:
+                        crash_to = st.date_input(
+                            "To",
+                            value=(datetime.now() + timedelta(days=730)).date(),
+                            help="Crash predictions before this date"
+                        )
+                        if crash_to:
+                            custom_filters['predicted_crash_to'] = crash_to.strftime('%Y-%m-%d')
+            
+            # === 2. Symbol Selection (リアルタイム更新) ===
+            st.subheader("📈 Select Symbol")
+            
+            # フィルター適用して利用可能な銘柄を取得
+            try:
+                available_symbols = self._get_filtered_symbols(
+                    selected_category, selected_preset, preset_config, custom_filters
+                )
+                
+                if not available_symbols:
+                    st.warning("No symbols match current filters")
+                    return None
+                
+                # Symbol選択
+                selected_symbol = st.selectbox(
+                    "Choose Symbol",
+                    available_symbols,
+                    help="Select a symbol from filtered results"
+                )
+                
+            except Exception as e:
+                st.error(f"Failed to load symbols: {str(e)}")
+                return None
+            
+            # === 3. Currently Selected Symbol ===
+            st.markdown("#### 🎯 Currently Selected")
+            if 'current_symbol' in st.session_state:
+                st.info(f"**{st.session_state.current_symbol}**")
+            else:
+                st.info("*No symbol selected yet*")
+            
+            # === 4. Displaying Period ===
+            st.subheader("📅 Displaying Period")
+            period_selection = self._get_period_selection(selected_symbol)
+            
+            # === 5. Apply Button ===
+            st.markdown("---")
+            if st.button("🔄 **Apply Filters**", type="primary", use_container_width=True):
+                # 選択された銘柄を記憶
+                st.session_state.current_symbol = selected_symbol
+                st.session_state.apply_clicked = True
+            
+            # 返却値
+            if 'current_symbol' in st.session_state and st.session_state.get('apply_clicked', False):
+                return st.session_state.current_symbol, period_selection, {}
+            else:
+                return None
+    
+    def _get_filtered_symbols(self, category, preset, preset_config, custom_filters):
+        """Symbol Filters適用して利用可能な銘柄リストを取得"""
+        # カテゴリフィルター
+        if category != "All Symbols":
+            categorized_symbols = self.get_symbols_by_category()
+            category_symbols = [
+                s["symbol"] for s in categorized_symbols.get(category, {}).get("symbols", [])
+            ]
+        else:
+            category_symbols = None
+        
+        # プリセット/カスタムフィルター
+        if preset != "User Defined" and preset_config:
+            filtered_data = self.db.apply_filter_preset(preset)
+        elif custom_filters:
+            filtered_data = self.db.get_filtered_analyses(**custom_filters)
+        else:
+            # フィルターなし
+            all_analyses = self.db.get_recent_analyses(limit=100)
+            filtered_data = all_analyses
+        
+        if filtered_data.empty:
+            return []
+        
+        # 銘柄リスト取得
+        available_symbols = sorted(filtered_data['symbol'].unique().tolist())
+        
+        # カテゴリでさらに絞り込み
+        if category_symbols:
+            available_symbols = [s for s in available_symbols if s in category_symbols]
+        
+        return available_symbols
+    
+    def _get_period_selection(self, symbol):
+        """Displaying Period設定を取得"""
+        if not symbol:
+            return None
+            
+        try:
+            # 選択銘柄の全データ取得（Symbol Filters無視）
+            all_analyses = self.db.get_recent_analyses(symbol=symbol, limit=None)
+            if all_analyses.empty:
+                return None
+            
+            # 基準日範囲を計算
+            basis_dates = []
+            for _, row in all_analyses.iterrows():
+                if pd.notna(row.get('analysis_basis_date')):
+                    basis_dates.append(pd.to_datetime(row['analysis_basis_date']))
+                elif pd.notna(row.get('data_period_end')):
+                    basis_dates.append(pd.to_datetime(row['data_period_end']))
+            
+            if not basis_dates:
+                return None
+            
+            basis_dates = sorted(basis_dates)
+            min_date = basis_dates[0].date()
+            max_date = basis_dates[-1].date()
+            
+            # デフォルト値
+            default_end = max_date
+            default_start = max(min_date, max_date - timedelta(days=120))
+            
+            # 期間選択UI
+            col1, col2 = st.columns(2)
+            with col1:
+                start_date = st.date_input(
+                    "From", value=default_start,
+                    min_value=min_date, max_value=max_date,
+                    help="Start of analysis period"
+                )
+            with col2:
+                end_date = st.date_input(
+                    "To", value=default_end,
+                    min_value=min_date, max_value=max_date,
+                    help="End of analysis period"
+                )
+            
+            if start_date > end_date:
+                st.error("Start date must be earlier than end date")
+                return None
+            
+            return {'start_date': start_date, 'end_date': end_date}
+            
+        except Exception as e:
+            st.error(f"Error loading period data: {str(e)}")
+            return None
+    
+    def render_sidebar(self):
+        """Render symbol selection sidebar with categorization"""
+        
+        with st.sidebar:
+            st.title("🔍 Analysis Controls")
+            
+            # 🆕 フィルタリング機能を最上部に配置（2025-08-11改善: Symbol Filtersに改名）
+            st.subheader("🎛️ Symbol Filters")
+            
+            # Get categorized symbols first
+            categorized_symbols = self.get_symbols_by_category()
+            
+            # Asset Category セクション（Symbol Filters最上段・独立セクション）
+            with st.expander("🏷️ Asset Category", expanded=True):
+                category_options = ["All Symbols"] + list(categorized_symbols.keys())
+                selected_category = st.selectbox(
+                    "Select Asset Category",
+                    category_options,
+                    format_func=lambda x: "All Symbols" if x == "All Symbols" 
+                    else categorized_symbols[x]["display_name"] if x in categorized_symbols 
+                    else x,
+                    help="Filter symbols by asset category"
+                )
+            
+            # Filter Conditions セクション（既存フィルタ・プリセット利用可能）
+            with st.expander("🔍 Filter Conditions", expanded=True):
+                # フィルタープリセット（キャッシュから高速取得）
+                filter_presets = st.session_state.filter_presets_cache
+                preset_options = ["User Defined"] + list(filter_presets.keys())
+                selected_preset = st.selectbox(
+                    "Filter Presets",
+                    preset_options,
+                    help="Pre-defined filter configurations for common use cases"
+                )
+                
+                # プリセット設定の詳細表示＆カスタム設定
+                custom_filters = {}
+                preset_config = None
             
             if selected_preset != "User Defined":
                 # プリセット選択時：設定内容を表示（編集不可）
@@ -1393,12 +1649,12 @@ class SymbolAnalysisDashboard:
                     
                     # Latest Analysis Details（上部）- 常に最新のデータを表示
                     st.markdown("**🔍 Latest Analysis Details**")
-                    st.caption("最新フィッティング結果の詳細表示（期間選択に関係なく最新データ）")
+                    st.caption("Display Period範囲内での最新フィッティング結果の詳細表示")
                     
-                    # 期間フィルタ無関係で最新のデータを取得
-                    all_latest_analyses = self.db.get_recent_analyses(symbol=symbol, limit=1)
-                    if not all_latest_analyses.empty:
-                        absolute_latest = all_latest_analyses.iloc[0]
+                    # 🔧 Display Period連携修正: フィルタ済みanalysis_data範囲内で最新データ取得（2025-08-11）
+                    # Display Periodでフィルタされたanalysis_data内の最新データを使用
+                    if not analysis_data.empty:
+                        absolute_latest = analysis_data.iloc[0]  # analysis_dataは既にフィルタ済み
                     else:
                         absolute_latest = latest  # フォールバック
                     
@@ -1546,7 +1802,7 @@ class SymbolAnalysisDashboard:
                     
                     # Integrated Predictions（統合予測表示）
                     st.markdown("**📈 Integrated Predictions**")
-                    st.caption("統合予測表示 - Latest Analysis基準による期間内の全予測日統合")
+                    st.caption("統合予測表示 - Display Period範囲内の全分析結果による予測統合")
                     
                     # Latest Analysis基準での新しいIntegrated Predictions
                     if absolute_latest_price_data is not None:
@@ -2811,36 +3067,32 @@ class SymbolAnalysisDashboard:
         st.title("📊 LPPL Market Analysis Dashboard")
         st.markdown("*Symbol-based analysis with trading position prioritization*")
         
-        # Render sidebar and get selections
-        sidebar_result = self.render_sidebar()
+        # Render new sidebar (v2) and get selections
+        sidebar_result = self.render_sidebar_v2()
         
         if sidebar_result is None:
-            st.info("Please select a symbol from the sidebar to view analysis results.")
+            # 初期画面でユーザーガイドを表示
+            st.info("""
+            ### 📋 Getting Started
+            
+            Please use the sidebar to:
+            1. **🎛️ Symbol Filters**: Set filters to find symbols of interest
+            2. **📈 Select Symbol**: Choose a symbol from filtered results
+            3. **📅 Displaying Period**: Select the date range for analysis
+            4. **🔄 Apply Filters**: Click to apply your selections and view results
+            
+            The analysis will display LPPL fitting results, prediction convergence, and parameters.
+            """)
             return
         
         selected_symbol, period_selection, filter_settings = sidebar_result
         
-        # 🆕 高度フィルタリング適用（2025-08-11追加・Legacy Priority Filter廃止）
-        with st.spinner(f"Loading analysis data for {selected_symbol}..."):
-            if filter_settings['preset_name']:
-                # プリセットフィルター適用
-                analysis_data = self.db.apply_filter_preset(filter_settings['preset_name'])
-                # 選択された銘柄でさらにフィルタリング
-                if not analysis_data.empty:
-                    analysis_data = analysis_data[analysis_data['symbol'] == selected_symbol]
-                # 🔧 表示専用日付カラム変換（バックエンド保護）
-                analysis_data = self._convert_date_columns_for_display(analysis_data)
-            elif filter_settings['custom']:
-                # カスタムフィルター適用
-                custom_filters = filter_settings['custom'].copy()
-                custom_filters['symbol'] = selected_symbol  # 銘柄フィルターを追加
-                analysis_data = self.db.get_filtered_analyses(**custom_filters)
-                # 🔧 表示専用日付カラム変換（バックエンド保護）
-                analysis_data = self._convert_date_columns_for_display(analysis_data)
-            else:
-                # デフォルト方式（フィルターなし）- get_symbol_analysis_data内で既に変換済み
-                display_limit = 1000 if period_selection else 50
-                analysis_data = self.get_symbol_analysis_data(selected_symbol, display_limit, period_selection)
+        # 🆕 選択銘柄の全データ取得（Symbol Filters影響なし）- v2実装（2025-08-11）
+        with st.spinner(f"Loading all analysis data for {selected_symbol}..."):
+            # Symbol選択後は常に全データ取得
+            # get_symbol_analysis_dataは内部でlimit=Noneで全データ取得し、
+            # period_selectionでフィルタリング
+            analysis_data = self.get_symbol_analysis_data(selected_symbol, limit=None, period_selection=period_selection)
         
         if analysis_data.empty:
             st.warning(f"No analysis data found for {selected_symbol} with current filters")
