@@ -336,7 +336,8 @@ class ResultsDatabase:
                     tc, beta, omega, phi, A, B, C,
                     r_squared, rmse, quality, confidence, is_usable,
                     predicted_crash_date, days_to_crash,
-                    window_days, total_candidates, successful_candidates
+                    window_days, total_candidates, successful_candidates,
+                    analysis_basis_date
                 FROM analysis_results
             '''
             
