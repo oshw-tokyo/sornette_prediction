@@ -347,8 +347,12 @@ class ResultsDatabase:
                 params.append(symbol)
             
             # ⚠️ CRITICAL: 分析基準日でソート（analysis_dateではない）
-            query += ' ORDER BY analysis_basis_date DESC, analysis_date DESC LIMIT ?'
-            params.append(limit)
+            query += ' ORDER BY analysis_basis_date DESC, analysis_date DESC'
+            
+            # 🔧 修正: limit=Noneの場合はLIMIT句を追加しない（2025-08-11）
+            if limit is not None:
+                query += ' LIMIT ?'
+                params.append(limit)
             
             return pd.read_sql_query(query, conn, params=params)
     
@@ -385,8 +389,12 @@ class ResultsDatabase:
                 params.append(symbol)
             
             # ⚠️ CRITICAL: 分析基準日でソート（analysis_dateではない）
-            query += ' ORDER BY analysis_basis_date DESC, analysis_date DESC LIMIT ?'
-            params.append(limit)
+            query += ' ORDER BY analysis_basis_date DESC, analysis_date DESC'
+            
+            # 🔧 修正: limit=Noneの場合はLIMIT句を追加しない（2025-08-11）
+            if limit is not None:
+                query += ' LIMIT ?'
+                params.append(limit)
             
             return pd.read_sql_query(query, conn, params=params)
     
