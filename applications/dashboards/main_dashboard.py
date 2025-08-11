@@ -693,31 +693,57 @@ class SymbolAnalysisDashboard:
                     help="Select a symbol from filtered results"
                 )
                 
+                # 🆕 Symbol選択後に即座にCurrently Selected Symbolを更新（2025-08-11修正）
+                if selected_symbol != st.session_state.get('selected_symbol_temp'):
+                    st.session_state.selected_symbol_temp = selected_symbol
+                    # リアルタイム更新のために再実行をトリガー
+                    st.rerun()
+                
             except Exception as e:
                 st.error(f"Failed to load symbols: {str(e)}")
                 return None
             
             # === 3. Currently Selected Symbol ===
             st.markdown("#### 🎯 Currently Selected")
-            if 'current_symbol' in st.session_state:
-                st.info(f"**{st.session_state.current_symbol}**")
+            # 🔧 修正：リアルタイム選択状況を反映（2025-08-11）
+            temp_symbol = st.session_state.get('selected_symbol_temp')
+            current_symbol = st.session_state.get('current_symbol')
+            
+            if temp_symbol and temp_symbol != current_symbol:
+                st.info(f"**{temp_symbol}** (Ready to Apply)")
+            elif current_symbol:
+                st.success(f"**{current_symbol}** (Active)")
             else:
                 st.info("*No symbol selected yet*")
             
             # === 4. Displaying Period ===
             st.subheader("📅 Displaying Period")
-            period_selection = self._get_period_selection(selected_symbol)
+            # 🔧 修正：Symbol未選択時のエラーハンドリング（2025-08-11）
+            if not temp_symbol:
+                st.info("Please select a symbol above to configure the displaying period.")
+                period_selection = None
+            else:
+                period_selection = self._get_period_selection(temp_symbol)
             
             # === 5. Apply Button ===
             st.markdown("---")
-            if st.button("🔄 **Apply Filters**", type="primary", use_container_width=True):
-                # 選択された銘柄を記憶
-                st.session_state.current_symbol = selected_symbol
-                st.session_state.apply_clicked = True
+            # 🔧 修正：Symbol選択状態に応じたボタン表示（2025-08-11）
+            apply_disabled = not temp_symbol
+            apply_button_text = "🔄 **Apply Filters**" if temp_symbol else "❌ **Select Symbol First**"
+            
+            if st.button(apply_button_text, type="primary", use_container_width=True, disabled=apply_disabled):
+                if temp_symbol:
+                    # 選択された銘柄を確定
+                    st.session_state.current_symbol = temp_symbol
+                    st.session_state.apply_clicked = True
+                    st.success(f"Applied analysis for {temp_symbol}!")
             
             # 返却値
-            if 'current_symbol' in st.session_state and st.session_state.get('apply_clicked', False):
-                return st.session_state.current_symbol, period_selection, {}
+            current_symbol = st.session_state.get('current_symbol')
+            if current_symbol and st.session_state.get('apply_clicked', False):
+                # apply_clickedフラグをリセット（次回のために）
+                st.session_state.apply_clicked = False
+                return current_symbol, period_selection, {}
             else:
                 return None
     
@@ -755,14 +781,19 @@ class SymbolAnalysisDashboard:
         return available_symbols
     
     def _get_period_selection(self, symbol):
-        """Displaying Period設定を取得"""
+        """
+        Displaying Period設定を取得
+        修正：Symbol未選択時の安全なハンドリング（2025-08-11）
+        """
         if not symbol:
+            st.info("📍 Please select a symbol to configure the displaying period.")
             return None
             
         try:
             # 選択銘柄の全データ取得（Symbol Filters無視）
             all_analyses = self.db.get_recent_analyses(symbol=symbol, limit=None)
             if all_analyses.empty:
+                st.warning(f"No analysis data found for {symbol}")
                 return None
             
             # 基準日範囲を計算
@@ -774,6 +805,7 @@ class SymbolAnalysisDashboard:
                     basis_dates.append(pd.to_datetime(row['data_period_end']))
             
             if not basis_dates:
+                st.warning(f"No valid analysis dates found for {symbol}")
                 return None
             
             basis_dates = sorted(basis_dates)
