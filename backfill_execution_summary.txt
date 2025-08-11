@@ -1,0 +1,24 @@
+📊 Backfillbatch実行結果サマリー:
+   総レコード数: 5,352件
+   対象銘柄数: 24銘柄
+   データ期間: 2022-01-01 〜 2025-08-09
+   本日追加: 1835件
+
+📅 銘柄別追加レコード（今回実行分）:
+      symbol  records_added
+BAMLH0A0HYM2             19
+       DGS30            134
+        DGS2            134
+       DGS10            133
+      VIXCLS             78
+    CBBTCUSD            133
+     DEXUSEU             62
+     DEXJPUS            132
+  NASDAQBANK            130
+   NASDAQSOX            133
+        DJUA            131
+        DJTA            121
+        DJIA            114
+   NASDAQ100            131
+       SP500            121
+   NASDAQCOM            129
