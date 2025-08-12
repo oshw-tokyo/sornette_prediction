@@ -10,6 +10,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import sys
 import os
@@ -686,18 +687,19 @@ class SymbolAnalysisDashboard:
                     st.warning("No symbols match current filters")
                     return None
                 
-                # Symbol選択
+                # Symbol選択 - NASDAQCOMをデフォルトに設定（2025-08-12）
+                default_symbol = "NASDAQCOM" if "NASDAQCOM" in available_symbols else available_symbols[0] if available_symbols else None
                 selected_symbol = st.selectbox(
                     "Choose Symbol",
                     available_symbols,
+                    index=available_symbols.index(default_symbol) if default_symbol and default_symbol in available_symbols else 0,
                     help="Select a symbol from filtered results"
                 )
                 
-                # 🆕 Symbol選択後に即座にCurrently Selected Symbolを更新（2025-08-11修正）
+                # 🆕 Symbol選択後にCurrently Selected Symbolを更新（無限ループ修正）
                 if selected_symbol != st.session_state.get('selected_symbol_temp'):
                     st.session_state.selected_symbol_temp = selected_symbol
-                    # リアルタイム更新のために再実行をトリガー
-                    st.rerun()
+                    # st.rerun()を削除して無限ループを防止
                 
             except Exception as e:
                 st.error(f"Failed to load symbols: {str(e)}")
@@ -716,34 +718,25 @@ class SymbolAnalysisDashboard:
             else:
                 st.info("*No symbol selected yet*")
             
-            # === 4. Displaying Period ===
-            st.subheader("📅 Displaying Period")
-            # 🔧 修正：Symbol未選択時のエラーハンドリング（2025-08-11）
-            if not temp_symbol:
-                st.info("Please select a symbol above to configure the displaying period.")
-                period_selection = None
-            else:
-                period_selection = self._get_period_selection(temp_symbol)
-            
-            # === 5. Apply Button ===
+            # === 4. Apply Symbol Selection ===
             st.markdown("---")
             # 🔧 修正：Symbol選択状態に応じたボタン表示（2025-08-11）
             apply_disabled = not temp_symbol
-            apply_button_text = "🔄 **Apply Filters**" if temp_symbol else "❌ **Select Symbol First**"
+            apply_button_text = "📈 **Select Symbol**" if temp_symbol else "❌ **Choose Symbol First**"
             
             if st.button(apply_button_text, type="primary", use_container_width=True, disabled=apply_disabled):
                 if temp_symbol:
                     # 選択された銘柄を確定
                     st.session_state.current_symbol = temp_symbol
                     st.session_state.apply_clicked = True
-                    st.success(f"Applied analysis for {temp_symbol}!")
+                    st.success(f"Selected symbol: {temp_symbol}!")
             
-            # 返却値
+            # 返却値 - Display Periodは各タブで個別管理
             current_symbol = st.session_state.get('current_symbol')
             if current_symbol and st.session_state.get('apply_clicked', False):
-                # apply_clickedフラグをリセット（次回のために）
-                st.session_state.apply_clicked = False
-                return current_symbol, period_selection, {}
+                # apply_clickedフラグをリセット（次回のために） - コメントアウトしてループ防止
+                # st.session_state.apply_clicked = False  
+                return current_symbol  # period_selectionとfiltersは削除
             else:
                 return None
     
@@ -812,9 +805,9 @@ class SymbolAnalysisDashboard:
             min_date = basis_dates[0].date()
             max_date = basis_dates[-1].date()
             
-            # デフォルト値
+            # デフォルト値 - 変更: 最古データから表示（2025-08-12）
             default_end = max_date
-            default_start = max(min_date, max_date - timedelta(days=120))
+            default_start = min_date  # 最古データから表示
             
             # 期間選択UI
             col1, col2 = st.columns(2)
@@ -1361,14 +1354,59 @@ class SymbolAnalysisDashboard:
         
         st.header(f"📈 {symbol} - LPPL Fitting Analysis")
         
+        if analysis_data.empty:
+            st.warning("No analysis data available for this symbol")
+            return
+        
+        # LPPL分析専用のDisplay Period設定
+        st.subheader("📅 Display Period (LPPL Analysis)")
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            if 'lppl_from_date' not in st.session_state:
+                st.session_state.lppl_from_date = analysis_data['analysis_basis_date'].min().date()
+            from_date = st.date_input("From", st.session_state.lppl_from_date, key='lppl_from_date_input')
+            st.session_state.lppl_from_date = from_date
+            
+        with col2:
+            if 'lppl_to_date' not in st.session_state:
+                st.session_state.lppl_to_date = analysis_data['analysis_basis_date'].max().date()
+            to_date = st.date_input("To", st.session_state.lppl_to_date, key='lppl_to_date_input')
+            st.session_state.lppl_to_date = to_date
+            
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            apply_period = st.button("🔄 Apply Period", type="primary", key='lppl_apply_period',
+                                   help="Apply selected date range to LPPL analysis")
+        
+        # 日付フィルタリング
+        if apply_period:
+            st.session_state.lppl_period_applied = True
+            
+        if 'lppl_period_applied' not in st.session_state:
+            st.info("💡 **Select Display Period**: Choose the date range above and click 'Apply Period' to start LPPL analysis.")
+            return
+        
+        # Display Period フィルタリング
+        analysis_data['analysis_basis_date'] = pd.to_datetime(analysis_data['analysis_basis_date'])
+        from_datetime = pd.to_datetime(from_date)
+        to_datetime = pd.to_datetime(to_date)
+        
+        date_mask = (analysis_data['analysis_basis_date'] >= from_datetime) & (analysis_data['analysis_basis_date'] <= to_datetime)
+        analysis_data = analysis_data[date_mask].copy()
+        
+        if len(analysis_data) == 0:
+            st.warning(f"No data available for selected period: {from_date} to {to_date}")
+            return
+        
+        st.markdown("---")
+        st.info(f"**LPPL Analysis Settings**: Period: {from_date} to {to_date} ({len(analysis_data)} analyses)")
+        st.markdown("---")
+        
         # デバッグ用のプロット分割オプション
         debug_mode = st.checkbox("🔍 Debug Mode: Split Integrated Plot into Two Separate Views", 
                                  value=False, 
                                  help="分析プロット：最新データの詳細確認、統合プロット：期間範囲の複数予測表示")
-        
-        if analysis_data.empty:
-            st.warning("No analysis data available for this symbol")
-            return
         
         # 最新の分析データを取得
         latest = analysis_data.iloc[0]
@@ -2792,6 +2830,460 @@ class SymbolAnalysisDashboard:
             """)
         
     
+    def render_crash_clustering_tab(self, symbol: str, analysis_data: pd.DataFrame):
+        """
+        新タブ: Crash Prediction Clustering (I052実装) - デバッグ簡素版
+        """
+        
+        st.header(f"🎯 {symbol} - Crash Prediction Clustering Analysis")
+        
+        if analysis_data.empty:
+            st.warning("No analysis data available for clustering")
+            return
+        
+        # 🚨 デバッグ用簡素版 - 無限ループ問題解決まで
+        st.success("✅ **Getting Started問題デバッグ成功!**")
+        st.info(f"""
+        **Symbol**: {symbol}
+        **Available Data**: {len(analysis_data)} analyses
+        **Date Range**: {analysis_data['analysis_basis_date'].min()} to {analysis_data['analysis_basis_date'].max()}
+        """)
+        
+        st.markdown("---")
+        st.success("✅ **Getting Started問題解決済み**: Full clustering functionality is now available!")
+        
+        # Crash Prediction Clustering専用のDisplay Period設定
+        st.subheader("📅 Display Period (Crash Clustering Analysis)")
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            if 'clustering_from_date' not in st.session_state:
+                st.session_state.clustering_from_date = analysis_data['analysis_basis_date'].min().date()
+            from_date = st.date_input("From", st.session_state.clustering_from_date, key='clustering_from_date_input')
+            st.session_state.clustering_from_date = from_date
+            
+        with col2:
+            if 'clustering_to_date' not in st.session_state:
+                st.session_state.clustering_to_date = analysis_data['analysis_basis_date'].max().date()
+            to_date = st.date_input("To", st.session_state.clustering_to_date, key='clustering_to_date_input')
+            st.session_state.clustering_to_date = to_date
+            
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            apply_period = st.button("🔄 Apply Period", type="primary", key='clustering_apply_period',
+                                   help="Apply selected date range to clustering analysis")
+        
+        # 日付フィルタリング（Apply Periodが押された場合またはセッション状態に保存済みの場合）
+        if apply_period:
+            st.session_state.clustering_period_applied = True
+            
+        if 'clustering_period_applied' not in st.session_state:
+            st.info("💡 **Select Display Period**: Choose the date range above and click 'Apply Period' to start clustering analysis.")
+            return
+        
+        # Display Period フィルタリング
+        analysis_data['analysis_basis_date'] = pd.to_datetime(analysis_data['analysis_basis_date'])
+        from_datetime = pd.to_datetime(from_date)
+        to_datetime = pd.to_datetime(to_date)
+        
+        date_mask = (analysis_data['analysis_basis_date'] >= from_datetime) & (analysis_data['analysis_basis_date'] <= to_datetime)
+        analysis_data = analysis_data[date_mask].copy()
+        
+        if len(analysis_data) == 0:
+            st.warning(f"No data available for selected period: {from_date} to {to_date}")
+            return
+        
+        st.markdown("---")
+        st.info(f"**Clustering Analysis Settings**: Period: {from_date} to {to_date} ({len(analysis_data)} analyses)")
+        st.markdown("---")
+        
+        # データ準備 - 日付フィルタリング適用済みのanalysis_dataを使用
+        valid_data = analysis_data.dropna(subset=['predicted_crash_date', 'analysis_basis_date']).copy()
+        
+        if len(valid_data) < 5:
+            st.warning(f"Insufficient data for clustering analysis (need at least 5 points, have {len(valid_data)})")
+            return
+        
+        # 日付変換
+        valid_data['basis_date'] = pd.to_datetime(valid_data['analysis_basis_date'])
+        valid_data['crash_date'] = pd.to_datetime(valid_data['predicted_crash_date'])
+        
+        # 数値化（分析用）
+        base_date = valid_data['basis_date'].min()  # 共通基準日
+        valid_data['basis_days'] = (valid_data['basis_date'] - base_date).dt.days
+        valid_data['crash_days'] = (valid_data['crash_date'] - base_date).dt.days
+        
+        # クラスタリングパラメータ設定（session_stateで永続化）
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            # session_stateで状態を保持
+            if 'clustering_eps_days' not in st.session_state:
+                st.session_state.clustering_eps_days = 30
+            eps_days = st.slider("Clustering Distance (days)", 10, 90, st.session_state.clustering_eps_days, 
+                               key='eps_days_slider', help="Max days between predictions to be in same cluster")
+            st.session_state.clustering_eps_days = eps_days
+            
+        with col2:
+            if 'clustering_min_samples' not in st.session_state:
+                st.session_state.clustering_min_samples = 3
+            min_samples = st.slider("Min Cluster Size", 2, 10, st.session_state.clustering_min_samples,
+                                   key='min_samples_slider', help="Minimum predictions to form a cluster")
+            st.session_state.clustering_min_samples = min_samples
+            
+        with col3:
+            if 'clustering_future_days' not in st.session_state:
+                st.session_state.clustering_future_days = 180
+            future_days = st.slider("Future Projection (days)", 30, 365, st.session_state.clustering_future_days,
+                                   key='future_days_slider', help="Days to project cluster trends into future")
+            st.session_state.clustering_future_days = future_days
+            
+        with col4:
+            if 'clustering_r2_threshold' not in st.session_state:
+                st.session_state.clustering_r2_threshold = 0.8
+            r2_threshold = st.slider("Min R² for Clustering", 0.0, 1.0, st.session_state.clustering_r2_threshold, 0.05,
+                                   key='r2_threshold_slider', help="Minimum R² value to include in clustering")
+            st.session_state.clustering_r2_threshold = r2_threshold
+            
+        # データ準備 - 日付フィルタリング適用済みのanalysis_dataを使用
+        valid_data = analysis_data.dropna(subset=['predicted_crash_date', 'analysis_basis_date']).copy()
+        
+        if len(valid_data) < 5:
+            st.warning(f"Insufficient data for clustering analysis (need at least 5 points, have {len(valid_data)})")
+            return
+        
+        # 日付変換
+        valid_data['basis_date'] = pd.to_datetime(valid_data['analysis_basis_date'])
+        valid_data['crash_date'] = pd.to_datetime(valid_data['predicted_crash_date'])
+        
+        # 数値化（分析用）
+        base_date = valid_data['basis_date'].min()  # 共通基準日
+        valid_data['basis_days'] = (valid_data['basis_date'] - base_date).dt.days
+        valid_data['crash_days'] = (valid_data['crash_date'] - base_date).dt.days
+        
+        # クラスタリングパラメータは即座に反映（シンプル化）
+        st.markdown("---")
+        st.info(f"""
+        **Clustering Analysis Settings**: 
+        - Distance: {eps_days} days | Min Size: {min_samples} | Future: {future_days} days | R²≥{r2_threshold:.2f}
+        - Period: {from_date} to {to_date} ({len(valid_data)} data points)
+        """)
+        st.markdown("---")
+            
+        # Step 1: R²フィルタリングによるデータ分離
+        # 高品質データ（クラスタリング対象）
+        high_quality_mask = valid_data['r_squared'] >= r2_threshold
+        clustering_data = valid_data[high_quality_mask].copy()
+        low_quality_data = valid_data[~high_quality_mask].copy()
+        
+        st.info(f"""
+        **Data Quality Filtering:**
+        - High Quality (R² ≥ {r2_threshold:.2f}): {len(clustering_data)} points → Used for clustering
+        - Low Quality (R² < {r2_threshold:.2f}): {len(low_quality_data)} points → Displayed separately
+        """)
+        
+        if len(clustering_data) < 5:
+            st.warning(f"Insufficient high-quality data for clustering (need at least 5 points, have {len(clustering_data)})")
+            return
+        
+        # Step 2: 高品質データのみで1次元クラスタリング（予測クラッシュ日のみ）
+        from sklearn.cluster import DBSCAN
+        clustering_input = clustering_data['crash_days'].values.reshape(-1, 1)
+        clusterer = DBSCAN(eps=eps_days, min_samples=min_samples)
+        clusters = clusterer.fit_predict(clustering_input)
+        clustering_data['cluster'] = clusters
+        
+        # クラスター統計（高品質データのみ）
+        unique_clusters = [c for c in np.unique(clusters) if c != -1]
+        n_clusters = len(unique_clusters)
+        n_noise = np.sum(clusters == -1)
+        
+        # 統計表示
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Clusters Found", n_clusters)
+        with col2:
+            st.metric("Noise Points", n_noise)
+        with col3:
+            st.metric("High Quality Points", len(clustering_data))
+        with col4:
+            avg_cluster_size = len(clustering_data[clustering_data['cluster'] != -1]) / max(n_clusters, 1) if n_clusters > 0 else 0
+            st.metric("Avg Cluster Size", f"{avg_cluster_size:.1f}")
+        
+        if n_clusters == 0:
+            st.warning("No clusters found with current parameters. Try adjusting the clustering distance or minimum cluster size.")
+            return
+        
+        # Step 3: 各クラスターでR²重み付き線形回帰
+        from sklearn.linear_model import LinearRegression
+        from scipy import stats
+        cluster_predictions = {}
+        
+        for cluster_id in unique_clusters:
+            cluster_subset = clustering_data[clustering_data['cluster'] == cluster_id]
+            
+            if len(cluster_subset) >= 2:
+                X = cluster_subset['basis_days'].values.reshape(-1, 1)
+                y = cluster_subset['crash_days'].values
+                
+                # R²重み付きによる重み計算
+                r2_weights = cluster_subset['r_squared'].values
+                # 重みを0.1-1.0の範囲に正規化（低R²でも最小重みは保持）
+                normalized_weights = 0.1 + 0.9 * (r2_weights - r2_weights.min()) / (r2_weights.max() - r2_weights.min() + 1e-10)
+                
+                # 重み付き線形回帰
+                model = LinearRegression()
+                model.fit(X, y, sample_weight=normalized_weights)
+                
+                # 統計的検証（重み付きの場合は近似）
+                slope, intercept, r_value, p_value, std_err = stats.linregress(X.flatten(), y)
+                
+                # 将来予測
+                future_basis = np.array([[clustering_data['basis_days'].max() + future_days]])
+                future_prediction = model.predict(future_basis)[0]
+                
+                cluster_predictions[cluster_id] = {
+                    'model': model,
+                    'slope': slope,
+                    'intercept': intercept,
+                    'r_squared': r_value**2,
+                    'p_value': p_value,
+                    'std_err': std_err,
+                    'size': len(cluster_subset),
+                    'avg_r2': r2_weights.mean(),
+                    'weight_range': f"{normalized_weights.min():.2f}-{normalized_weights.max():.2f}",
+                    'future_crash_days': future_prediction,
+                    'future_crash_date': datetime.now() + timedelta(days=future_prediction),
+                    'confidence': 'High' if p_value < 0.05 and r_value**2 > 0.7 else 'Medium' if r_value**2 > 0.5 else 'Low',
+                    'mean_crash_date': cluster_subset['crash_date'].mean(),
+                    'std_crash_days': cluster_subset['crash_days'].std()
+                }
+        
+        # 可視化: 2次元散布図 + クラスター + 回帰線
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=("Crash Prediction Clustering with R²-Weighted Regression", "Cluster Statistics"),
+            vertical_spacing=0.15,
+            row_heights=[0.7, 0.3]
+        )
+        
+        # カラーマップ（シンプルな色）
+        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA726', '#AB47BC', '#66BB6A', '#EF5350', '#26C6DA']
+        
+        # プロット1: 高品質データのクラスター
+        for i, cluster_id in enumerate(unique_clusters):
+            cluster_subset = clustering_data[clustering_data['cluster'] == cluster_id]
+            color = colors[i % len(colors)]
+            
+            # 散布図（シンプルな小さい点）
+            fig.add_trace(go.Scatter(
+                x=cluster_subset['basis_date'],
+                y=cluster_subset['crash_date'],
+                mode='markers',
+                name=f'Cluster {cluster_id+1} (n={len(cluster_subset)})',
+                marker=dict(size=6, color=color, opacity=0.7),
+                text=[f"LPPL R²={row['r_squared']:.3f}<br>Weight={0.1 + 0.9 * (row['r_squared'] - cluster_subset['r_squared'].min()) / (cluster_subset['r_squared'].max() - cluster_subset['r_squared'].min() + 1e-10):.2f}"
+                      for _, row in cluster_subset.iterrows()],
+                hovertemplate='<b>Cluster %{fullData.name}</b><br>%{text}<br>Basis: %{x}<br>Predicted: %{y}<extra></extra>'
+            ), row=1, col=1)
+            
+            # 回帰線（実線、シンプル）
+            if cluster_id in cluster_predictions:
+                pred = cluster_predictions[cluster_id]
+                
+                # クラスター内のbasis_daysの範囲を取得
+                cluster_basis_min = cluster_subset['basis_days'].min()
+                cluster_basis_max = cluster_subset['basis_days'].max()
+                
+                # 将来への延長も含めた範囲
+                future_basis_days = clustering_data['basis_days'].max() + future_days
+                
+                # 回帰直線のX軸範囲（basis_days）
+                X_line = np.array([cluster_basis_min, future_basis_days])
+                y_line = pred['model'].predict(X_line.reshape(-1, 1))
+                
+                # basis_daysとcrash_daysから実際の日付に変換
+                base_date = clustering_data['basis_date'].min()
+                X_dates = [base_date + timedelta(days=int(d)) for d in X_line]
+                y_dates = [base_date + timedelta(days=int(d)) for d in y_line]
+                
+                # 回帰線を描画
+                extended_x = X_dates
+                extended_y = y_dates
+                
+                fig.add_trace(go.Scatter(
+                    x=extended_x,
+                    y=extended_y,
+                    mode='lines',
+                    name=f'Trend {cluster_id+1}',
+                    line=dict(color=color, width=2, dash='solid'),
+                    showlegend=False,
+                    hovertemplate=f'R²-Weighted Fit<br>Slope: {pred["slope"]:.3f}<br>Avg LPPL R²: {pred["avg_r2"]:.3f}<br>Weight Range: {pred["weight_range"]}<extra></extra>'
+                ), row=1, col=1)
+        
+        # ノイズポイント（高品質データ内のノイズ）
+        noise_data = clustering_data[clustering_data['cluster'] == -1]
+        if len(noise_data) > 0:
+            fig.add_trace(go.Scatter(
+                x=noise_data['basis_date'],
+                y=noise_data['crash_date'],
+                mode='markers',
+                name=f'Noise (High Quality, n={len(noise_data)})',
+                marker=dict(size=4, color='lightgray', symbol='x', opacity=0.5),
+                hovertemplate='High Quality Noise<br>LPPL R²=%{customdata:.3f}<br>Basis: %{x}<br>Predicted: %{y}<extra></extra>',
+                customdata=noise_data['r_squared']
+            ), row=1, col=1)
+            
+        # 低品質データ（別カテゴリで表示）
+        if len(low_quality_data) > 0:
+            fig.add_trace(go.Scatter(
+                x=low_quality_data['basis_date'],
+                y=low_quality_data['crash_date'],
+                mode='markers',
+                name=f'Low Quality (R²<{r2_threshold:.2f}, n={len(low_quality_data)})',
+                marker=dict(size=4, color='red', symbol='triangle-up', opacity=0.3),
+                hovertemplate='Low Quality Data<br>LPPL R²=%{customdata:.3f}<br>Basis: %{x}<br>Predicted: %{y}<extra></extra>',
+                customdata=low_quality_data['r_squared']
+            ), row=1, col=1)
+            
+        # 基準日=クラッシュ日の直線（y=x線）
+        if len(clustering_data) > 0:
+            min_date = min(clustering_data['basis_date'].min(), clustering_data['crash_date'].min())
+            max_date = max(clustering_data['basis_date'].max(), clustering_data['crash_date'].max())
+            
+            fig.add_trace(go.Scatter(
+                x=[min_date, max_date],
+                y=[min_date, max_date],
+                mode='lines',
+                name='Reference: Fitting Date = Crash Date',
+                line=dict(color='blue', width=2, dash='dot'),
+                hovertemplate='Reference Line<br>Fitting Date = Predicted Crash Date<extra></extra>',
+                showlegend=True
+            ), row=1, col=1)
+        
+        # 現在時刻ライン（タイムスタンプ形式の問題のため一時的に無効化）
+        # today = datetime.datetime.now()
+        # fig.add_hline(y=today, line_dash="dot", line_color="gray", 
+        #              annotation_text="Today", row=1, col=1)
+        
+        # プロット2: クラスター統計バーチャート
+        if cluster_predictions:
+            cluster_ids = list(cluster_predictions.keys())
+            r_squared_values = [cluster_predictions[c]['r_squared'] for c in cluster_ids]
+            cluster_sizes = [cluster_predictions[c]['size'] for c in cluster_ids]
+            
+            fig.add_trace(go.Bar(
+                x=[f"Cluster {c+1}" for c in cluster_ids],
+                y=r_squared_values,
+                name='R² Score',
+                marker_color=[colors[i % len(colors)] for i in range(len(cluster_ids))],
+                text=[f"{r:.3f}" for r in r_squared_values],
+                textposition='auto',
+                hovertemplate='Cluster: %{x}<br>Avg LPPL R²: %{y:.3f}<br>Size: %{customdata}<extra></extra>',
+                customdata=cluster_sizes
+            ), row=2, col=1)
+        
+        # レイアウト設定
+        fig.update_xaxes(title_text="Fitting Basis Date", row=1, col=1)
+        fig.update_yaxes(title_text="Predicted Crash Date", row=1, col=1)
+        fig.update_xaxes(title_text="Cluster", row=2, col=1)
+        fig.update_yaxes(title_text="R² Score", range=[0, 1], row=2, col=1)
+        
+        fig.update_layout(
+            height=800,
+            showlegend=True,
+            hovermode='closest',
+            title_text=f"{symbol} - Crash Prediction Clustering Analysis"
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # クラスター詳細テーブル
+        if cluster_predictions:
+            st.subheader("📊 Cluster Analysis Results")
+            
+            cluster_df = pd.DataFrame([
+                {
+                    'Cluster': f"Cluster {cid+1}",
+                    'Size': pred['size'],
+                    'Avg R²': f"{pred['avg_r2']:.3f}",
+                    'Weight Range': pred['weight_range'],
+                    'Mean Crash Date': pred['mean_crash_date'].strftime('%Y-%m-%d'),
+                    'Std Dev (days)': f"{pred['std_crash_days']:.1f}",
+                    'Slope': f"{pred['slope']:.4f}",
+                    'Clustering Regression R²': f"{pred['r_squared']:.3f}",
+                    'P-value': f"{pred['p_value']:.4f}",
+                    'Confidence': pred['confidence'],
+                    'Future Prediction': pred['future_crash_date'].strftime('%Y-%m-%d'),
+                    'Days to Crash': f"{pred['future_crash_days']:.0f}"
+                }
+                for cid, pred in cluster_predictions.items()
+            ])
+            
+            # ソート: 平均R²降順
+            cluster_df = cluster_df.sort_values('Avg R²', ascending=False)
+            
+            st.dataframe(cluster_df, use_container_width=True)
+            
+            # 統計的解釈と基準日=クラッシュ日直線の説明
+            st.subheader("📈 Statistical Interpretation")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("""
+                **R²-Weighted Regression:**
+                - **Avg R²**: Average LPPL fit quality in cluster
+                - **Weight Range**: Min-Max weights applied
+                - Higher R² data gets more influence
+                - Improves prediction reliability
+                
+                **Slope Interpretation:**
+                - **Negative slope**: Predictions converging (getting closer)
+                - **Near zero**: Stable predictions (high confidence)
+                - **Positive slope**: Predictions diverging (moving further)
+                """)
+            
+            with col2:
+                st.markdown("""
+                **Confidence Levels:**
+                - **High**: R² > 0.7 and p-value < 0.05
+                - **Medium**: R² > 0.5
+                - **Low**: R² < 0.5
+                
+                **Data Quality Classification:**
+                - **High Quality**: R² ≥ threshold → Used in clustering
+                - **Low Quality**: R² < threshold → Displayed separately
+                - Noise points within high-quality data
+                """)
+                
+            with col3:
+                st.markdown("""
+                **Reference Line (Fitting Date = Crash Date):**
+                
+                The black dotted line represents cases where the fitting basis date equals the predicted crash date. This line has important meaning:
+                
+                - **Above the line**: Predicted crash is in the future
+                - **On the line**: Predicted crash is today (immediate risk)
+                - **Below the line**: Predicted crash is in the past (prediction expired)
+                
+                This helps assess the temporal validity and urgency of predictions.
+                """)
+            
+            # 最も信頼性の高いクラスター（平均R²×サイズで判定）
+            best_cluster = max(cluster_predictions.items(), 
+                             key=lambda x: (x[1]['avg_r2'] * x[1]['size']))
+            best_id, best_pred = best_cluster
+            
+            st.success(f"""
+            **🎯 Most Reliable R²-Weighted Prediction:**
+            - **Cluster {best_id+1}** with {best_pred['size']} data points
+            - **Average R²**: {best_pred['avg_r2']:.3f} (weight range: {best_pred['weight_range']})
+            - **Predicted crash**: {best_pred['future_crash_date'].strftime('%Y-%m-%d')}
+            - **Trend confidence**: {best_pred['confidence']} (Trend R² = {best_pred['r_squared']:.3f})
+            - **Days to predicted crash**: {best_pred['future_crash_days']:.0f}
+            - **Slope**: {best_pred['slope']:.4f} ({"converging" if best_pred['slope'] < 0 else "stable" if abs(best_pred['slope']) < 0.01 else "diverging"})
+            """)
+    
     def render_parameters_tab(self, symbol: str, analysis_data: pd.DataFrame):
         """Tab 3: Parameter Details Table"""
         
@@ -3099,45 +3591,43 @@ class SymbolAnalysisDashboard:
         st.title("📊 LPPL Market Analysis Dashboard")
         st.markdown("*Symbol-based analysis with trading position prioritization*")
         
-        # Render new sidebar (v2) and get selections
-        sidebar_result = self.render_sidebar_v2()
+        # Render new sidebar (v2) - Symbol選択のみ
+        selected_symbol = self.render_sidebar_v2()
         
-        if sidebar_result is None:
+        if selected_symbol is None:
             # 初期画面でユーザーガイドを表示
             st.info("""
             ### 📋 Getting Started
             
             Please use the sidebar to:
             1. **🎛️ Symbol Filters**: Set filters to find symbols of interest
-            2. **📈 Select Symbol**: Choose a symbol from filtered results
-            3. **📅 Displaying Period**: Select the date range for analysis
-            4. **🔄 Apply Filters**: Click to apply your selections and view results
+            2. **📈 Select Symbol**: Choose a symbol and click "Select Symbol"
             
-            The analysis will display LPPL fitting results, prediction convergence, and parameters.
+            After selecting a symbol, each tab will have its own Display Period settings.
             """)
             return
         
-        selected_symbol, period_selection, filter_settings = sidebar_result
-        
-        # 🆕 選択銘柄の全データ取得（Symbol Filters影響なし）- v2実装（2025-08-11）
+        # 🆕 選択銘柄の全データ取得（各タブで個別にフィルタリング）
         with st.spinner(f"Loading all analysis data for {selected_symbol}..."):
-            # Symbol選択後は常に全データ取得
-            # get_symbol_analysis_dataは内部でlimit=Noneで全データ取得し、
-            # period_selectionでフィルタリング
-            analysis_data = self.get_symbol_analysis_data(selected_symbol, limit=None, period_selection=period_selection)
+            # 全データ取得（フィルタリングは各タブで実施）
+            analysis_data = self.get_symbol_analysis_data(selected_symbol, limit=None, period_selection=None)
         
         if analysis_data.empty:
-            st.warning(f"No analysis data found for {selected_symbol} with current filters")
+            st.warning(f"No analysis data found for {selected_symbol}")
             return
         
         # 🎯 フィルタリング完了 - 新システムで全て処理済み
         
-        # Main content tabs - updated tab names for clarity
-        tab1, tab2, tab3 = st.tabs([
+        # Main content tabs - 新タブを最左端に追加（2025-08-12）
+        tab_clustering, tab1, tab2, tab3 = st.tabs([
+            "🎯 Crash Prediction Clustering",  # 新タブを最初に配置
             "📈 LPPL Fitting Analysis", 
             "📊 Prediction Convergence", 
             "📋 Parameters & References"
         ])
+        
+        with tab_clustering:
+            self.render_crash_clustering_tab(selected_symbol, analysis_data)
         
         with tab1:
             self.render_price_predictions_tab(selected_symbol, analysis_data)
