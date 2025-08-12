@@ -274,24 +274,59 @@ COINGECKO_API_KEY=your_coingecko_api_key_here
 - **2000年ドットコムバブル検証** (定性的検証)
 - **tc→datetime変換** (時間精度対応、DB保存時実行済み)
 
-### 📊 **可視化システム**
-- **Webダッシュボード**: リアルタイム・インタラクティブ可視化
+### 📊 **可視化システム (Symbol Filters Architecture v2)**
+- **Webダッシュボード**: Symbol Filters Architecture v2による直感的UI/UX
+- **銘柄選択システム**: フィルター・選択・期間の完全分離
+- **Apply Button制御**: 明示的更新制御による予測可能な動作
+- **リアルタイム状態表示**: Currently Selected Symbolによる即座フィードバック
+- **全データアクセス**: Symbol選択後に全履歴データ保証
 - **PNG自動保存**: デフォルト無効化（Issue I032解決済み）
-- **メモリ効率**: 不要なファイル生成を回避
+- **メモリ効率**: 不要なファイル生成回避、セッション状態最適化
 
 ### 🚀 **統一実行インターフェース**
 ```bash
 # 全機能へのアクセスはentry_points/main.pyのみ
 python entry_points/main.py analyze ALL      # カタログ全銘柄包括解析
 python entry_points/main.py analyze SYMBOL   # 個別銘柄解析
-python entry_points/main.py dashboard        # ダッシュボード起動
-python entry_points/main.py validate         # 論文再現テスト
+python entry_points/main.py dashboard        # 🆕 Symbol Filters Dashboard v2 起動
+python entry_points/main.py validate --crash 1987  # 論文再現保護テスト（100/100スコア維持）
 
-# 🕐 定期解析システム（実装中）
+# 🕐 定期解析システム（要件定義完了）
 python entry_points/main.py scheduled-analysis run     # 定期解析実行
 python entry_points/main.py scheduled-analysis backfill --start 2024-01-01  # 過去データ蓄積
 python entry_points/main.py scheduled-analysis status  # 解析状態確認
 ```
+
+---
+
+---
+
+## 🆕 **最新実装: Symbol Filters Dashboard Architecture v2** (2025-08-11)
+
+### 🎯 **革新的アーキテクチャの実現**
+
+```
+Symbol Filters → Symbol Selection → Apply → ALL Data Access → Display Period Filtering
+     ↓               ↓            ↓           ↓                    ↓
+銘柄リスト絞り込み → 銘柄選択 → 明示的実行 → 全履歴データ → プロット範囲制御
+```
+
+### 🎆 **主要機能**
+- **完全分離設計**: 銘柄選択・データアクセス・期間制御の独立性
+- **Apply Button制御**: 予測可能な明示的更新制御
+- **リアルタイム状態**: 選択と同時のCurrently Selected Symbol更新
+- **全データ保証**: Symbol選択後に全履歴データアクセス
+- **エラー防止**: Symbol未選択時の適切なガイダンス
+
+### 🛡️ **品質保証**
+- ✅ **論文再現保護**: 100/100スコア維持確認済み
+- ✅ **後方互換性**: 既存機能完全保持
+- ✅ **SQL最適化**: datatype mismatch問題根本解決
+- ✅ **パフォーマンス**: 起動時間大幅短縮
+
+### 📚 **関連ドキュメント**
+- **要件書**: `docs/dashboard_requirements.md` (v1.1対応更新済み)
+- **実装仕様**: `docs/dashboard_implementation_specification.md` (v1.1対応更新済み)
 
 ---
 
