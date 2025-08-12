@@ -3013,55 +3013,61 @@ class SymbolAnalysisDashboard:
             st.warning("No clusters found with current parameters. Try adjusting the clustering distance or minimum cluster size.")
             return
         
-        # Step 3: 各クラスターでR²重み付き線形回帰
-        from sklearn.linear_model import LinearRegression
-        from scipy import stats
+        # Step 3: 各クラスターでR²重み付き統計サマリー（I054改善実装）
         cluster_predictions = {}
         
         for cluster_id in unique_clusters:
             cluster_subset = clustering_data[clustering_data['cluster'] == cluster_id]
             
-            if len(cluster_subset) >= 2:
-                X = cluster_subset['basis_days'].values.reshape(-1, 1)
-                y = cluster_subset['crash_days'].values
-                
+            if len(cluster_subset) >= 1:  # 単一点でも統計計算可能
                 # R²重み付きによる重み計算
                 r2_weights = cluster_subset['r_squared'].values
                 # 重みを0.1-1.0の範囲に正規化（低R²でも最小重みは保持）
                 normalized_weights = 0.1 + 0.9 * (r2_weights - r2_weights.min()) / (r2_weights.max() - r2_weights.min() + 1e-10)
                 
-                # 重み付き線形回帰
-                model = LinearRegression()
-                model.fit(X, y, sample_weight=normalized_weights)
+                # R²重み付き平均値計算（改善手法）
+                crash_days = cluster_subset['crash_days'].values
+                weighted_mean = np.average(crash_days, weights=normalized_weights)
                 
-                # 統計的検証（重み付きの場合は近似）
-                slope, intercept, r_value, p_value, std_err = stats.linregress(X.flatten(), y)
+                # ばらつき指標計算
+                weighted_std = np.sqrt(np.average((crash_days - weighted_mean)**2, weights=normalized_weights))
+                simple_std = np.std(crash_days, ddof=1 if len(crash_days) > 1 else 0)
                 
-                # 将来予測
-                future_basis = np.array([[clustering_data['basis_days'].max() + future_days]])
-                future_prediction = model.predict(future_basis)[0]
+                # 四分位範囲計算
+                q25 = np.percentile(crash_days, 25)
+                q75 = np.percentile(crash_days, 75)
+                iqr = q75 - q25
+                
+                # 信頼度評価（簡素化：平均R²とデータ数ベース）
+                avg_r2 = r2_weights.mean()
+                confidence = 'High' if avg_r2 > 0.7 and len(cluster_subset) >= 5 else \
+                           'Medium' if avg_r2 > 0.5 and len(cluster_subset) >= 3 else 'Low'
+                
+                # 将来予測：重み付き平均をそのまま使用（時系列仮定なし）
+                future_crash_days = weighted_mean
+                future_crash_date = datetime.now() + timedelta(days=weighted_mean)
                 
                 cluster_predictions[cluster_id] = {
-                    'model': model,
-                    'slope': slope,
-                    'intercept': intercept,
-                    'r_squared': r_value**2,
-                    'p_value': p_value,
-                    'std_err': std_err,
+                    'weighted_mean': weighted_mean,
+                    'weighted_std': weighted_std,
+                    'simple_std': simple_std,
+                    'q25': q25,
+                    'q75': q75,
+                    'iqr': iqr,
                     'size': len(cluster_subset),
-                    'avg_r2': r2_weights.mean(),
+                    'avg_r2': avg_r2,
                     'weight_range': f"{normalized_weights.min():.2f}-{normalized_weights.max():.2f}",
-                    'future_crash_days': future_prediction,
-                    'future_crash_date': datetime.now() + timedelta(days=future_prediction),
-                    'confidence': 'High' if p_value < 0.05 and r_value**2 > 0.7 else 'Medium' if r_value**2 > 0.5 else 'Low',
+                    'future_crash_days': future_crash_days,
+                    'future_crash_date': future_crash_date,
+                    'confidence': confidence,
                     'mean_crash_date': cluster_subset['crash_date'].mean(),
-                    'std_crash_days': cluster_subset['crash_days'].std()
+                    'data_range': f"{crash_days.min():.0f}-{crash_days.max():.0f} days"
                 }
         
         # 可視化: 2次元散布図 + クラスター + 回帰線
         fig = make_subplots(
             rows=2, cols=1,
-            subplot_titles=("Crash Prediction Clustering with R²-Weighted Regression", "Cluster Statistics"),
+            subplot_titles=("Crash Prediction Clustering with R²-Weighted Average (I054)", "Cluster Statistics"),
             vertical_spacing=0.15,
             row_heights=[0.7, 0.3]
         )
@@ -3086,38 +3092,35 @@ class SymbolAnalysisDashboard:
                 hovertemplate='<b>Cluster %{fullData.name}</b><br>%{text}<br>Basis: %{x}<br>Predicted: %{y}<extra></extra>'
             ), row=1, col=1)
             
-            # 回帰線（実線、シンプル）
+            # R²重み付き平均値の水平線+ばらつき帯（I054改善実装）
             if cluster_id in cluster_predictions:
                 pred = cluster_predictions[cluster_id]
                 
-                # クラスター内のbasis_daysの範囲を取得
-                cluster_basis_min = cluster_subset['basis_days'].min()
-                cluster_basis_max = cluster_subset['basis_days'].max()
-                
-                # 将来への延長も含めた範囲
-                future_basis_days = clustering_data['basis_days'].max() + future_days
-                
-                # 回帰直線のX軸範囲（basis_days）
-                X_line = np.array([cluster_basis_min, future_basis_days])
-                y_line = pred['model'].predict(X_line.reshape(-1, 1))
-                
-                # basis_daysとcrash_daysから実際の日付に変換
+                # basis_daysから実際の日付に変換（共通基準）
                 base_date = clustering_data['basis_date'].min()
-                X_dates = [base_date + timedelta(days=int(d)) for d in X_line]
-                y_dates = [base_date + timedelta(days=int(d)) for d in y_line]
                 
-                # 回帰線を描画
-                extended_x = X_dates
-                extended_y = y_dates
+                # クラスター範囲（過去から将来まで）
+                cluster_basis_min = int(cluster_subset['basis_days'].min())
+                future_basis_days = int(clustering_data['basis_days'].max() + future_days)
                 
+                # 水平線（重み付き平均値）の日付座標計算
+                weighted_mean_date = base_date + timedelta(days=int(pred['weighted_mean']))
+                
+                # X軸範囲（全データ範囲に拡張）
+                all_basis_min = clustering_data['basis_days'].min()
+                all_basis_max = clustering_data['basis_days'].max()
+                x_range = [base_date + timedelta(days=int(all_basis_min)), 
+                          base_date + timedelta(days=int(all_basis_max))]
+                
+                # 中心線（水平・細いライン）
                 fig.add_trace(go.Scatter(
-                    x=extended_x,
-                    y=extended_y,
+                    x=x_range,
+                    y=[weighted_mean_date, weighted_mean_date],
                     mode='lines',
-                    name=f'Trend {cluster_id+1}',
-                    line=dict(color=color, width=2, dash='solid'),
+                    name=f'Center {cluster_id+1}',
+                    line=dict(color=color, width=1, dash='solid'),
                     showlegend=False,
-                    hovertemplate=f'R²-Weighted Fit<br>Slope: {pred["slope"]:.3f}<br>Avg LPPL R²: {pred["avg_r2"]:.3f}<br>Weight Range: {pred["weight_range"]}<extra></extra>'
+                    hovertemplate=f'R²-Weighted Average<br>Center: {weighted_mean_date.strftime("%Y-%m-%d")}<br>Avg R²: {pred["avg_r2"]:.3f}<br>Weight: {pred["weight_range"]}<extra></extra>'
                 ), row=1, col=1)
         
         # ノイズポイント（高品質データ内のノイズ）
@@ -3165,18 +3168,18 @@ class SymbolAnalysisDashboard:
         # fig.add_hline(y=today, line_dash="dot", line_color="gray", 
         #              annotation_text="Today", row=1, col=1)
         
-        # プロット2: クラスター統計バーチャート
+        # プロット2: クラスター統計バーチャート（I054更新版）
         if cluster_predictions:
             cluster_ids = list(cluster_predictions.keys())
-            r_squared_values = [cluster_predictions[c]['r_squared'] for c in cluster_ids]
+            avg_r2_values = [cluster_predictions[c]['avg_r2'] for c in cluster_ids]
             cluster_sizes = [cluster_predictions[c]['size'] for c in cluster_ids]
             
             fig.add_trace(go.Bar(
                 x=[f"Cluster {c+1}" for c in cluster_ids],
-                y=r_squared_values,
-                name='R² Score',
+                y=avg_r2_values,
+                name='Avg R² Score',
                 marker_color=[colors[i % len(colors)] for i in range(len(cluster_ids))],
-                text=[f"{r:.3f}" for r in r_squared_values],
+                text=[f"{r:.3f}" for r in avg_r2_values],
                 textposition='auto',
                 hovertemplate='Cluster: %{x}<br>Avg LPPL R²: %{y:.3f}<br>Size: %{customdata}<extra></extra>',
                 customdata=cluster_sizes
@@ -3207,13 +3210,12 @@ class SymbolAnalysisDashboard:
                     'Size': pred['size'],
                     'Avg R²': f"{pred['avg_r2']:.3f}",
                     'Weight Range': pred['weight_range'],
-                    'Mean Crash Date': pred['mean_crash_date'].strftime('%Y-%m-%d'),
-                    'Std Dev (days)': f"{pred['std_crash_days']:.1f}",
-                    'Slope': f"{pred['slope']:.4f}",
-                    'Clustering Regression R²': f"{pred['r_squared']:.3f}",
-                    'P-value': f"{pred['p_value']:.4f}",
+                    'Weighted Mean Date': pred['future_crash_date'].strftime('%Y-%m-%d'),
+                    'Weighted STD (days)': f"{pred['weighted_std']:.1f}",
+                    'Simple STD (days)': f"{pred['simple_std']:.1f}",
+                    'IQR (days)': f"{pred['iqr']:.1f}",
+                    'Data Range': pred['data_range'],
                     'Confidence': pred['confidence'],
-                    'Future Prediction': pred['future_crash_date'].strftime('%Y-%m-%d'),
                     'Days to Crash': f"{pred['future_crash_days']:.0f}"
                 }
                 for cid, pred in cluster_predictions.items()
@@ -3231,29 +3233,30 @@ class SymbolAnalysisDashboard:
             
             with col1:
                 st.markdown("""
-                **R²-Weighted Regression:**
-                - **Avg R²**: Average LPPL fit quality in cluster
-                - **Weight Range**: Min-Max weights applied
-                - Higher R² data gets more influence
-                - Improves prediction reliability
+                **R²-Weighted Average Method (I054):**
+                - **Weighted Mean**: Center line from R²-weighted average
+                - **Weight Range**: Min-Max weights applied to predictions
+                - Higher R² data gets more influence on center
+                - No time-series assumptions required
                 
-                **Slope Interpretation:**
-                - **Negative slope**: Predictions converging (getting closer)
-                - **Near zero**: Stable predictions (high confidence)
-                - **Positive slope**: Predictions diverging (moving further)
+                **Uncertainty Visualization:**
+                - **Center line**: Weighted average prediction date
+                - **Dashed boundaries**: ±1 weighted standard deviation
+                - **Shaded area**: Uncertainty band (confidence interval)
                 """)
             
             with col2:
                 st.markdown("""
-                **Confidence Levels:**
-                - **High**: R² > 0.7 and p-value < 0.05
-                - **Medium**: R² > 0.5
-                - **Low**: R² < 0.5
+                **Statistical Measures:**
+                - **Weighted STD**: R²-weighted standard deviation
+                - **Simple STD**: Unweighted standard deviation 
+                - **IQR**: Interquartile range (25%-75%)
+                - **Data Range**: Min-Max span in cluster
                 
-                **Data Quality Classification:**
-                - **High Quality**: R² ≥ threshold → Used in clustering
-                - **Low Quality**: R² < threshold → Displayed separately
-                - Noise points within high-quality data
+                **Confidence Levels (Simplified):**
+                - **High**: Avg R² > 0.7 and cluster size ≥ 5
+                - **Medium**: Avg R² > 0.5 and cluster size ≥ 3
+                - **Low**: Below medium criteria
                 """)
                 
             with col3:
@@ -3279,10 +3282,33 @@ class SymbolAnalysisDashboard:
             - **Cluster {best_id+1}** with {best_pred['size']} data points
             - **Average R²**: {best_pred['avg_r2']:.3f} (weight range: {best_pred['weight_range']})
             - **Predicted crash**: {best_pred['future_crash_date'].strftime('%Y-%m-%d')}
-            - **Trend confidence**: {best_pred['confidence']} (Trend R² = {best_pred['r_squared']:.3f})
+            - **Confidence**: {best_pred['confidence']}
             - **Days to predicted crash**: {best_pred['future_crash_days']:.0f}
-            - **Slope**: {best_pred['slope']:.4f} ({"converging" if best_pred['slope'] < 0 else "stable" if abs(best_pred['slope']) < 0.01 else "diverging"})
+            - **Data range**: {best_pred['data_range']}
             """)
+            
+            # クラスタリング詳細表
+            if cluster_predictions:
+                st.subheader("📊 Cluster Prediction Details")
+                
+                cluster_table_data = []
+                for cluster_id, pred in cluster_predictions.items():
+                    cluster_table_data.append({
+                        'Cluster ID': f'Cluster {cluster_id+1}',
+                        'Data Points': pred['size'],
+                        'Average R²': f"{pred['avg_r2']:.3f}",
+                        'Weight Range': pred['weight_range'],
+                        'Predicted Date': pred['future_crash_date'].strftime('%Y-%m-%d'),
+                        'Days to Crash': f"{pred['future_crash_days']:.0f}",
+                        'Weighted STD': f"±{pred['weighted_std']:.1f} days",
+                        'Simple STD': f"±{pred['simple_std']:.1f} days",
+                        'IQR': f"{pred['iqr']:.1f} days",
+                        'Confidence': pred['confidence'],
+                        'Data Range': pred['data_range']
+                    })
+                
+                cluster_df = pd.DataFrame(cluster_table_data)
+                st.dataframe(cluster_df, use_container_width=True)
     
     def render_parameters_tab(self, symbol: str, analysis_data: pd.DataFrame):
         """Tab 3: Parameter Details Table"""
