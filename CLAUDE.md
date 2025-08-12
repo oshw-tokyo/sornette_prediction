@@ -274,7 +274,7 @@ COINGECKO_API_KEY=your_coingecko_api_key_here
 - **2000年ドットコムバブル検証** (定性的検証)
 - **tc→datetime変換** (時間精度対応、DB保存時実行済み)
 
-### 📊 **可視化システム (Symbol Filters Architecture v2)**
+### 📊 **可視化システム (Symbol Filters Architecture v2 + Clustering Analytics)**
 - **Webダッシュボード**: Symbol Filters Architecture v2による直感的UI/UX
 - **銘柄選択システム**: フィルター・選択・期間の完全分離
 - **Apply Button制御**: 明示的更新制御による予測可能な動作
@@ -282,6 +282,16 @@ COINGECKO_API_KEY=your_coingecko_api_key_here
 - **全データアクセス**: Symbol選択後に全履歴データ保証
 - **PNG自動保存**: デフォルト無効化（Issue I032解決済み）
 - **メモリ効率**: 不要なファイル生成回避、セッション状態最適化
+
+### 🎯 **Crash Prediction Clustering Analytics (I052実装完了)**
+- **1D DBSCAN clustering**: 予測クラッシュ日の密度ベース自動クラスタリング
+- **R²-weighted regression**: LPPL品質指標による重み付き線形回帰分析
+- **Data quality filtering**: 高品質/低品質データの自動分離（閾値調整可能）
+- **Interactive visualization**: 2パネル統合表示（散布図+統計グラフ）
+- **Future prediction**: クラスター傾向の将来投影（信頼度評価付き）
+- **Statistical analysis**: 収束/拡散パターンの自動検出・解釈ガイド
+- **Session persistence**: パラメータ設定の自動保存・復元
+- **Independent controls**: タブ独立Display Period制御（Getting Started問題解決済み）
 
 ### 🚀 **統一実行インターフェース**
 ```bash
@@ -536,6 +546,61 @@ workspace_for_claude/experimental_api_test.py  # ワークスペースで実験
 ↓ (検証成功・実用性確認後)
 infrastructure/data_sources/new_api_client.py  # 本体に正式統合
 ```
+
+---
+
+## 📊 **ダッシュボード詳細仕様（2025-08-12更新）**
+
+### 🎯 **4タブ構成システム**
+```
+Symbol Analysis Dashboard (Symbol Filters Architecture v2)
+├── 🎯 Crash Prediction Clustering     # NEW: Issue I052実装完了
+├── 📈 Price Predictions               # Core: LPPL予測表示
+├── 🔀 Prediction Convergence          # Advanced: 予測収束解析
+└── 📋 Parameter Details               # Technical: パラメータテーブル
+```
+
+### 🎯 **Crash Prediction Clustering タブ（Issue I052）**
+- **機能概要**: 複数の予測クラッシュ日を時系列クラスタリング分析
+- **核心技術**: 1D DBSCAN + R²-weighted linear regression
+- **データ品質管理**: 高品質(R² ≥ threshold)・低品質データの自動分離表示
+- **Interactive Parameters**:
+  - Clustering Distance (10-90 days): DBSCAN eps parameter  
+  - Min Cluster Size (2-10): DBSCAN min_samples parameter
+  - Future Projection (30-365 days): 回帰線の将来延長期間
+  - Min R² for Clustering (0.0-1.0): データ品質フィルタリング閾値
+- **Visualization Components**:
+  - **Upper Panel**: 2D scatter plot (Fitting Date vs Predicted Crash Date)
+    - Color-coded clusters with regression trend lines
+    - Reference line (Fitting Date = Crash Date) for immediate risk indication
+    - High-quality data clustering vs low-quality data separation
+  - **Lower Panel**: Cluster statistics bar chart (R² scores by cluster)
+- **Statistical Analysis**:
+  - Confidence scoring (High/Medium/Low based on R² and p-value)
+  - Convergence detection (negative slope = predictions getting closer)
+  - Future crash date prediction with reliability assessment
+- **Session State Management**: All parameters persist across interactions
+- **Independent Display Period**: タブ独立の期間フィルタリング制御
+
+### 📈 **Price Predictions タブ（既存システム）**
+- LPPL曲線フィッティング結果の可視化
+- 予測クラッシュ日・価格の表示
+- 品質指標（R², confidence interval）の表示
+
+### 🔀 **Prediction Convergence タブ（既存システム）**  
+- 複数分析の収束パターン解析
+- 時系列での予測安定性評価
+
+### 📋 **Parameter Details タブ（既存システム）**
+- 全パラメータの詳細テーブル表示
+- CSV ダウンロード機能
+
+### 🚨 **技術的解決済み問題**
+- **Getting Started Loop**: st.rerun()無限ループ問題を根本解決
+- **Session State Management**: パラメータリセット問題を完全修正
+- **Apply Period Independence**: タブ間独立動作の実現
+- **Coordinate System**: 回帰線とスキャッタープロット座標系統一
+- **Import Dependencies**: sklearn, plotly, scipy等の適切な依存関係管理
 
 ---
 
