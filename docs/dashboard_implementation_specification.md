@@ -1,7 +1,7 @@
 # ダッシュボード実装仕様書（実装状況ベース）
 
-**更新日**: 2025-08-13 (最終更新: Crash Prediction Clustering安定版)  
-**版数**: v1.3 (Crash Prediction Clustering Production Release)  
+**更新日**: 2025-08-13 (最終更新: Unified Analysis Period + Prediction Data Tab)  
+**版数**: v1.4 (Dashboard UI Major Improvements)  
 **メタ情報仕様**: [meta_information_specification.md](./meta_information_specification.md) に準拠
 
 ---
@@ -12,13 +12,18 @@
 
 Symbol-Based Market Analysis Dashboard は、LPPL（Log-Periodic Power Law）モデルによる市場クラッシュ予測結果を可視化する Streamlit ベースのWebインターフェースです。**Symbol Filters Architecture v2 (2025-08-11実装)**により、銘柄選択・データアクセス・期間制御の完全分離を実現し、直感的で予測可能なユーザー体験を提供します。
 
-### 🆕 **v1.3の主要革新** (2025-08-13)
+### 🆕 **v1.4の主要革新** (2025-08-13)
+- **Prediction Data Tab簡素化**: Multi-Period Convergence Analysis削除（204行削除）、データ可視化に特化
+- **統一Analysis Period機能**: 全4タブに包括的期間選択機能を実装
+- **パフォーマンス大幅改善**: 重いプログレスバー削除、テキストベース期間表示で高速化
+- **一貫したUX**: From/To選択 + 期間統計表示の統一パターン
+- **Issue管理**: I058（LPPL Individual Results UI改善）、I059（期間バー表示問題→解決）追加
+
+### 📋 **v1.3の主要機能** (継続)
 - **Crash Prediction Clustering Production**: 開発完了・安定版リリース
 - **Prediction Horizon Filter**: Sornette理論ベース最小予測期間フィルター（デフォルト21日）
 - **Min Cluster Size最適化**: より良いクラスター形成のため初期値を3に変更
 - **Isolated Points表記**: Noiseの誤解を解消する適切な用語へ改善
-- **Reference Line統一**: Prediction Convergenceタブと色統一（lightblue）
-- **Development Tab廃止**: 実験完了、メイン機能への統合完了
 
 ---
 
@@ -148,7 +153,7 @@ Symbol Filters → Symbol Selection → Apply → ALL Data Access → Display Pe
 - データベース情報のデバッグ表示
 - **変更可否**: ✅ **改善推奨** - より詳細な診断情報追加可能
 
-### **Tab 2: Prediction Convergence** 📊
+### **Tab 2: Prediction Data** 📊
 **メタ情報**: `🟢[IMPLEMENTED]` `🔧[ENHANCED]` `⭐[HIGH]` `⚙️[FEATURE]` `🎯[CORE]`
 
 **機能**: 多期間収束分析による予測信頼性評価  
@@ -286,7 +291,7 @@ horizon_filtered_data = valid_data[valid_data['prediction_horizon'] >= min_horiz
 #### **3. 統一された可視化デザイン**
 **メタ情報**: `🟢[IMPLEMENTED]` `🆕[ENHANCED]` `📋[MEDIUM]` `⚙️[FEATURE]` `🎯[ISOLATED]`
 
-- **Reference Line Color**: `lightblue`（Prediction Convergenceタブと統一）
+- **Reference Line Color**: `lightblue`（Prediction Dataタブと統一）
 - **Cluster Colors**: `['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA726', '#AB47BC', '#66BB6A']`
 - **Isolated Points**: グレー `lightgray` × マーカーで視覚的区別
 - **視認性向上**: 背景との明確なコントラスト確保

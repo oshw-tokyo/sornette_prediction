@@ -1350,9 +1350,9 @@ class SymbolAnalysisDashboard:
             return datetime.now() + timedelta(days=30)  # フォールバック
     
     def render_price_predictions_tab(self, symbol: str, analysis_data: pd.DataFrame):
-        """Tab 1: LPPL Fitting Analysis - Overlays LPPL fits onto normalized market data for comprehensive analysis"""
+        """Tab 3: LPPL Fitting Plot - Visual analysis of LPPL model fitting results"""
         
-        st.header(f"📈 {symbol} - LPPL Fitting Analysis")
+        st.header(f"📈 {symbol} - LPPL Fitting Plot")
         
         if analysis_data.empty:
             st.warning("No analysis data available for this symbol")
@@ -2466,9 +2466,9 @@ class SymbolAnalysisDashboard:
             st.json(debug_info)
     
     def render_prediction_data_tab(self, symbol: str, analysis_data: pd.DataFrame):
-        """Tab 2: Prediction Data Visualization"""
+        """Tab 1: Crash Prediction Data Visualization"""
         
-        st.header(f"🎯 {symbol} - Prediction Data Visualization")
+        st.header(f"📊 {symbol} - Crash Prediction Data")
         
         if analysis_data.empty:
             st.warning("No analysis data available for this symbol")
@@ -2690,7 +2690,7 @@ class SymbolAnalysisDashboard:
         新タブ: Crash Prediction Clustering (I052実装) - デバッグ簡素版
         """
         
-        st.header(f"🎯 {symbol} - Crash Prediction Clustering Analysis")
+        st.header(f"🎯 {symbol} - Prediction Clustering")
         
         if analysis_data.empty:
             st.warning("No analysis data available for clustering")
@@ -3243,9 +3243,9 @@ class SymbolAnalysisDashboard:
             """)
     
     def render_parameters_tab(self, symbol: str, analysis_data: pd.DataFrame):
-        """Tab 3: Parameter Details Table"""
+        """Tab 4: Parameters Only"""
         
-        st.header(f"📋 {symbol} - Parameter Details")
+        st.header(f"📋 {symbol} - LPPL Parameters")
         
         if analysis_data.empty:
             st.warning("No analysis data available for this symbol")
@@ -3525,6 +3525,24 @@ class SymbolAnalysisDashboard:
             else:
                 st.metric("Future Predictions", "N/A")
         
+        # Download functionality
+        csv = final_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Parameter Data",
+            data=csv,
+            file_name=f"{symbol}_parameters_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
+    
+    def render_references_tab(self, symbol: str, analysis_data: pd.DataFrame):
+        """Tab 5: References and Benchmarks"""
+        
+        st.header(f"📚 {symbol} - References & Benchmarks")
+        
+        if analysis_data.empty:
+            st.warning("No analysis data available for references")
+            return
+        
         # Reference information from Sornette paper reproduction
         st.subheader("📚 Reference: Sornette Paper Reproduction")
         
@@ -3591,15 +3609,6 @@ class SymbolAnalysisDashboard:
             - **Research Grade**: Matches or exceeds paper reproduction metrics
             - **Trading Grade**: High quality + recent data validation
             """)
-        
-        # Download functionality
-        csv = final_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Parameter Data",
-            data=csv,
-            file_name=f"{symbol}_parameters_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
-        )
     
     def run(self):
         """Main dashboard execution"""
@@ -3634,25 +3643,29 @@ class SymbolAnalysisDashboard:
         
         # 🎯 フィルタリング完了 - 新システムで全て処理済み
         
-        # Main content tabs - クラスタリングタブ追加（2025-08-12）
-        tab_clustering, tab1, tab2, tab3 = st.tabs([
-            "🎯 Crash Prediction Clustering",  # メインクラスタリングタブ
-            "📈 LPPL Fitting Analysis", 
-            "📊 Prediction Data", 
-            "📋 Parameters & References"
+        # Main content tabs - 新しいタブ順序（2025-08-13）
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📊 Crash Prediction Data",     # 1. データ確認・可視化
+            "🎯 Prediction Clustering",     # 2. クラスタリング分析  
+            "📈 LPPL Fitting Plot",         # 3. フィッティング結果
+            "📋 Parameters",                # 4. パラメータ詳細
+            "📚 References"                 # 5. 参照情報
         ])
         
-        with tab_clustering:
-            self.render_crash_clustering_tab(selected_symbol, analysis_data)
-        
         with tab1:
-            self.render_price_predictions_tab(selected_symbol, analysis_data)
-        
-        with tab2:
             self.render_prediction_data_tab(selected_symbol, analysis_data)
         
+        with tab2:
+            self.render_crash_clustering_tab(selected_symbol, analysis_data)
+        
         with tab3:
+            self.render_price_predictions_tab(selected_symbol, analysis_data)
+        
+        with tab4:
             self.render_parameters_tab(selected_symbol, analysis_data)
+        
+        with tab5:
+            self.render_references_tab(selected_symbol, analysis_data)
 
 def main():
     """Main execution function"""
