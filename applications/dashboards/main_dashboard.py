@@ -3175,6 +3175,118 @@ class SymbolAnalysisDashboard:
         
         st.plotly_chart(fig, use_container_width=True)
         
+        # Integrated Cluster Predictions Plot (Market Data with Cluster Mean Dates)
+        if cluster_predictions and symbol:
+            st.subheader("📈 Integrated Cluster Predictions")
+            
+            # Get market data for the selected symbol
+            from infrastructure.data_sources.unified_data_client import UnifiedDataClient
+            data_client = UnifiedDataClient()
+            
+            # Calculate date range for market data (use last year of data)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+            
+            try:
+                # Fetch market data
+                market_data = data_client.get_symbol_data(
+                    symbol=symbol,
+                    start_date=start_date.strftime('%Y-%m-%d'),
+                    end_date=end_date.strftime('%Y-%m-%d')
+                )
+                
+                if market_data is not None and not market_data.empty:
+                    # Create integrated predictions plot
+                    integrated_fig = go.Figure()
+                    
+                    # Add market data
+                    integrated_fig.add_trace(go.Scatter(
+                        x=market_data.index,
+                        y=market_data['Close'],
+                        mode='lines',
+                        name=f'{symbol} Price',
+                        line=dict(color='white', width=2),
+                        hovertemplate='%{x}<br>Price: %{y:.2f}<extra></extra>'
+                    ))
+                    
+                    # Add vertical lines for cluster mean predictions
+                    colors = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink']
+                    
+                    for cluster_id, pred in sorted(cluster_predictions.items()):
+                        color = colors[cluster_id % len(colors)]
+                        crash_date = pred['future_crash_date']
+                        
+                        # Add vertical line for cluster mean prediction
+                        integrated_fig.add_vline(
+                            x=crash_date,
+                            line_dash="dash",
+                            line_color=color,
+                            line_width=2,
+                            annotation_text=f"C{cluster_id+1}: {crash_date.strftime('%Y-%m-%d')}",
+                            annotation_position="top"
+                        )
+                        
+                        # Add shaded area for standard deviation (±1 STD)
+                        std_days = pred['weighted_std']
+                        start_std = crash_date - timedelta(days=std_days)
+                        end_std = crash_date + timedelta(days=std_days)
+                        
+                        integrated_fig.add_vrect(
+                            x0=start_std, x1=end_std,
+                            fillcolor=color, opacity=0.1,
+                            layer="below", line_width=0,
+                            annotation_text=f"±{std_days:.0f}d",
+                            annotation_position="bottom"
+                        )
+                    
+                    # Add current date line
+                    integrated_fig.add_vline(
+                        x=datetime.now(),
+                        line_dash="dot",
+                        line_color="gray",
+                        line_width=1,
+                        annotation_text="Today",
+                        annotation_position="bottom"
+                    )
+                    
+                    # Update layout
+                    integrated_fig.update_layout(
+                        title=f"{symbol} - Market Data with Cluster Predictions",
+                        xaxis_title="Date",
+                        yaxis_title="Price",
+                        height=500,
+                        showlegend=True,
+                        hovermode='x unified',
+                        template="plotly_dark",
+                        xaxis=dict(
+                            showgrid=True,
+                            gridwidth=1,
+                            gridcolor='rgba(128, 128, 128, 0.2)',
+                            # Extend x-axis to show future predictions
+                            range=[market_data.index.min(), 
+                                   max(market_data.index.max(), 
+                                       max([pred['future_crash_date'] for pred in cluster_predictions.values()]) + timedelta(days=30))]
+                        ),
+                        yaxis=dict(
+                            showgrid=True,
+                            gridwidth=1,
+                            gridcolor='rgba(128, 128, 128, 0.2)'
+                        )
+                    )
+                    
+                    st.plotly_chart(integrated_fig, use_container_width=True)
+                    
+                    # Add explanation
+                    st.caption("""
+                    **📊 Integrated Cluster Predictions**: This plot shows market data with weighted mean crash predictions from each cluster.
+                    - **Vertical Lines**: R²-weighted mean prediction dates for each cluster
+                    - **Shaded Areas**: ±1 weighted standard deviation confidence intervals
+                    - **Colors**: Each cluster has a unique color matching the scatter plot above
+                    """)
+                    
+            except Exception as e:
+                st.warning(f"Could not fetch market data for {symbol}: {str(e)}")
+        
         # クラスター詳細テーブル
         if cluster_predictions:
             st.subheader("📊 Cluster Analysis Results")
