@@ -286,35 +286,34 @@ def get_symbol_data(symbol):
 - **データ管理機能**: データ削除・エクスポート等の管理機能は除外  
 - **設定変更機能**: パラメータ変更等はコマンドライン経由のみ
 
-#### 実装済み機能構成（3タブ構成）
+#### 実装済み機能構成（5タブ構成）
 
-##### 1. 📈 LPPL Fitting Analysis タブ
+##### 1. 📊 Crash Prediction Data タブ
 **メイン機能**:
-- **Market Data with LPPL Predictions**: 統合プロット・最新分析基準の市場データ可視化
-- **Integrated Predictions**: 期間内全予測の統合表示・縦線可視化（黒背景ラベル・日付のみ表示）
-- **Individual Fitting Results**: 個別フィッティング結果・Future Period表示・最大5件制限
-- **Prediction Summary**: 2指標Days to Crash表示（本日から・基準日から）
+- **データ確認・可視化**: 市場データとLPPL予測の基本プロット表示
+- **プロット説明**: データの確認に有効な基本可視化機能
 
-**技術的特徴**:
-- **Future Period表示**: フィッティング基準日以降60日間の予測曲線
-- **期間選択連動**: サイドバーAnalysis Period Selectionとの完全連動
-- **科学的独立性**: Latest Analysis基準での統合予測（期間フィルタ独立）
-- **パフォーマンス制限**: Individual Results 5件・20項目制限警告（上下配置）
-
-##### 2. 📊 Prediction Convergence タブ
+##### 2. 🎯 Prediction Clustering タブ  
 **メイン機能**:
-- **Crash Prediction Convergence**: 散布図・フィッティング基準日vs予測クラッシュ日
-- **Multi-Period Convergence Analysis**: 固定期間別収束分析（1/3/6ヶ月・1/2年）
+- **R²重み付きクラスタリング**: 予測精度に基づく投資判断支援分析
+- **投資判断支援テーブル**: C1/C2表記・本日からの日数・信頼度評価
+- **統計的最適化パラメータ**: 最小クラスタサイズ・期間フィルタリング
 
-**技術的特徴**:
-- **y=x参照線**: 青・細線・実線・散布図範囲内表示
-- **収束分析手法**: 標準偏差・重み付け・トレンド解析・コンセンサス予測
-- **固定期間独立性**: サイドバー期間選択と独立した標準化時間窓
+##### 3. 📈 LPPL Fitting Plot タブ
+**メイン機能**:
+- **プロット専用表示**: フィッティング結果の詳細可視化
+- **期間選択連動**: Analysis Period機能による表示範囲制御
 
-##### 3. 📋 Parameters & References タブ
+##### 4. 📋 Parameters タブ
 **メイン機能**:
 - **パラメータテーブル**: 全LPPL最重要パラメータ表示・CSV出力
-- **Reference情報**: 3段階参照情報（Black Monday・Dot-com・General Benchmarks）
+- **分析結果詳細**: 選択銘柄の詳細パラメータ情報
+
+##### 5. 📚 References タブ
+**メイン機能**:
+- **歴史的検証**: 3段階参照情報（Black Monday・Dot-com・General Benchmarks）
+- **科学的ベンチマーク**: LPPL理論・パラメータ範囲・品質基準
+- **銘柄非依存**: 選択銘柄に関係なく一般的な参照情報を表示
 
 **参照情報内容**:
 - **1987 Black Monday**: 100/100再現・R²0.85-0.95・β~0.33・ω~6-8

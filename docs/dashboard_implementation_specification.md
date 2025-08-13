@@ -186,11 +186,18 @@ Symbol Filters → Symbol Selection → Apply → ALL Data Access → Display Pe
 - **メタ情報**: `🟢[IMPLEMENTED]` `📋[MEDIUM]` `🔒[STABLE]` `🔧[UTILITY]` `🎯[ISOLATED]`
 - **実装**: 全UI要素の英語統一、国際対応準備完了
 
-### **Tab 3: Parameters & References** 📋
+### **Tab 4: Parameters** 📋
 **メタ情報**: `🟢[IMPLEMENTED]` `🔧[ENHANCED]` `⭐[HIGH]` `⚙️[FEATURE]` `🔗[DEPENDENT]`
 
-**機能**: LPPLパラメータ・メタデータ・参照情報の詳細表示  
-**実装メソッド**: `render_parameters_tab()` (Line 2400-2900+)
+**機能**: LPPLパラメータ詳細表示・データダウンロード  
+**実装メソッド**: `render_parameters_tab()` - パラメータのみに特化
+
+### **Tab 5: References** 📚
+**メタ情報**: `🟢[IMPLEMENTED]` `🆕[NEW]` `⭐[HIGH]` `⚙️[FEATURE]` `🎯[INDEPENDENT]`
+
+**機能**: 歴史的検証データ・ベンチマーク・科学的妥当性参照  
+**実装メソッド**: `render_references_tab()` - 銘柄に依存しない一般的検証データ
+**特徴**: 選択銘柄に関係なく一定内容を表示（Black Monday、Dot-com等）
 
 ### **Tab 4: Crash Prediction Clustering** 🎯 
 **メタ情報**: `🟢[IMPLEMENTED]` `🆕[NEW]` `🔥[CRITICAL]` `⚙️[FEATURE]` `🎯[CORE]`
