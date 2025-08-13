@@ -2979,10 +2979,10 @@ class SymbolAnalysisDashboard:
             
         with col2:
             if 'clustering_min_samples_preview' not in st.session_state:
-                st.session_state.clustering_min_samples_preview = st.session_state.get('clustering_min_samples', 8)
+                st.session_state.clustering_min_samples_preview = st.session_state.get('clustering_min_samples', 3)
             min_samples_preview = st.slider("Min Cluster", 2, 20, 
                                           st.session_state.clustering_min_samples_preview,
-                                          key='min_samples_slider', help="Minimum predictions to form a cluster. Recommended: 8 for typical datasets (238 avg analyses)")
+                                          key='min_samples_slider', help="Minimum predictions to form a cluster. Default: 3 for better cluster formation")
             st.caption("size")
             
         with col3:
@@ -3000,6 +3000,59 @@ class SymbolAnalysisDashboard:
                                            st.session_state.clustering_r2_threshold_preview, 0.05,
                                            key='r2_threshold_slider', help="Minimum R² value to include in clustering. Only data points with R² above this threshold will be used for clustering analysis (Data Quality Filter)")
         
+        # 第2行のフィルター（最小予測期間）
+        st.markdown("### 📅 Prediction Horizon Filter")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if 'clustering_min_horizon_days_preview' not in st.session_state:
+                st.session_state.clustering_min_horizon_days_preview = st.session_state.get('clustering_min_horizon_days', 21)
+            if 'show_horizon_details' not in st.session_state:
+                st.session_state.show_horizon_details = False
+            min_horizon_days_preview = st.slider(
+                "Min Prediction Horizon", 
+                min_value=0, max_value=90, 
+                value=st.session_state.clustering_min_horizon_days_preview,
+                key='min_horizon_days_slider',
+                help="Exclude predictions where crash date is too close to fitting date (Sornette research: near-crash fittings have low accuracy)"
+            )
+            st.caption("days")
+        
+        with col2:
+            if st.button("❓ Horizon Filter Details", help="Click for Sornette research background and filter rationale"):
+                st.session_state.show_horizon_details = True
+                
+            # 詳細説明の表示制御
+            if st.session_state.get('show_horizon_details', False):
+                with st.expander("📚 Sornette Research: Prediction Horizon Theory", expanded=True):
+                    st.markdown(f"""
+                    **🎯 Current Filter Setting**: Excluding predictions within **{min_horizon_days_preview} days** of fitting date.
+                    
+                    **📖 Sornette Research Evidence**:
+                    - **Optimal Prediction Window**: 1-6 months ahead
+                    - **Minimum Practical Horizon**: ~30 days
+                    - **Near-Crash Problem**: Fittings too close to critical time suffer from:
+                      - Increased noise sensitivity
+                      - LPPL singularity effects
+                      - Degraded predictive accuracy
+                    
+                    **⚙️ Implementation**:
+                    - **0 days**: No filtering (include all predictions)
+                    - **10-30 days**: Conservative filtering (recommended)
+                    - **30+ days**: Strict filtering (Sornette theoretical minimum)
+                    
+                    **✅ Scientific Basis**: Based on LPPL model behavior near critical time points.
+                    """)
+                    
+                    if st.button("✖️ Close Details"):
+                        st.session_state.show_horizon_details = False
+        
+        with col3:
+            st.empty()  # 空白列
+        
+        with col4:
+            st.empty()  # 空白列
+        
         # Applyボタン（すべての設定を一度に適用）
         st.markdown("---")
         col1, col2, col3 = st.columns([1, 3, 1])
@@ -3015,6 +3068,7 @@ class SymbolAnalysisDashboard:
             st.session_state.clustering_min_samples = min_samples_preview
             st.session_state.clustering_future_days = future_days_preview
             st.session_state.clustering_r2_threshold = r2_threshold_preview
+            st.session_state.clustering_min_horizon_days = min_horizon_days_preview
             
         # 初回表示時の処理
         if 'clustering_period_applied' not in st.session_state:
@@ -3026,6 +3080,7 @@ class SymbolAnalysisDashboard:
         min_samples = st.session_state.get('clustering_min_samples', 3)
         future_days = st.session_state.get('clustering_future_days', 180)
         r2_threshold = st.session_state.get('clustering_r2_threshold', 0.8)
+        min_horizon_days = st.session_state.get('clustering_min_horizon_days', 21)
             
         # データ準備 - 日付フィルタリング適用済みのanalysis_dataを使用
         valid_data = analysis_data.dropna(subset=['predicted_crash_date', 'analysis_basis_date']).copy()
@@ -3038,16 +3093,34 @@ class SymbolAnalysisDashboard:
         valid_data['basis_date'] = pd.to_datetime(valid_data['analysis_basis_date'])
         valid_data['crash_date'] = pd.to_datetime(valid_data['predicted_crash_date'])
         
-        # 数値化（分析用）
-        base_date = valid_data['basis_date'].min()  # 共通基準日
-        valid_data['basis_days'] = (valid_data['basis_date'] - base_date).dt.days
-        valid_data['crash_days'] = (valid_data['crash_date'] - base_date).dt.days
+        # 予測期間計算（最小予測期間フィルター用）
+        valid_data['prediction_horizon'] = (valid_data['crash_date'] - valid_data['basis_date']).dt.days
         
+        # 最小予測期間フィルター適用
+        horizon_filtered_data = valid_data[valid_data['prediction_horizon'] >= min_horizon_days].copy()
+        
+        if len(horizon_filtered_data) < 5:
+            st.warning(f"""
+            **Insufficient Data After Horizon Filtering**
             
-        # R²フィルタリングによるデータ分離
-        high_quality_mask = valid_data['r_squared'] >= r2_threshold
-        clustering_data = valid_data[high_quality_mask].copy()
-        low_quality_data = valid_data[~high_quality_mask].copy()
+            After applying the {min_horizon_days}-day minimum prediction horizon, only {len(horizon_filtered_data)} data points remain.
+            
+            **💡 Solutions:**
+            1. **Reduce Min Horizon**: Try {max(0, min_horizon_days-5)}-{min_horizon_days-1} days
+            2. **Expand Analysis Period**: Select a longer time range
+            3. **Review Filter Settings**: Consider if {min_horizon_days}-day horizon is too restrictive
+            """)
+            return
+        
+        # 数値化（分析用）
+        base_date = horizon_filtered_data['basis_date'].min()  # 共通基準日
+        horizon_filtered_data['basis_days'] = (horizon_filtered_data['basis_date'] - base_date).dt.days
+        horizon_filtered_data['crash_days'] = (horizon_filtered_data['crash_date'] - base_date).dt.days
+        
+        # R²フィルタリングによるデータ分離（予測期間フィルター後に適用）
+        high_quality_mask = horizon_filtered_data['r_squared'] >= r2_threshold
+        clustering_data = horizon_filtered_data[high_quality_mask].copy()
+        low_quality_data = horizon_filtered_data[~high_quality_mask].copy()
         
         if len(clustering_data) < 5:
             st.warning(f"""
@@ -3077,27 +3150,29 @@ class SymbolAnalysisDashboard:
         n_clusters = len(unique_clusters)
         n_noise = np.sum(clusters == -1)
         
-        # 統計表示（Data Quality Filter結果を含む）
+        # 統計表示（Data Quality Filter + Horizon Filter結果を含む）
         col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
-            st.metric("Total Points", len(valid_data), help="All data points in selected period")
+            st.metric("Raw Data", len(valid_data), help="All data points in selected period")
         with col2:
+            removal_rate = (len(valid_data) - len(horizon_filtered_data)) / len(valid_data) * 100 if len(valid_data) > 0 else 0
+            st.metric("Horizon Filtered", len(horizon_filtered_data), 
+                     delta=f"-{removal_rate:.1f}%",
+                     help=f"After excluding predictions within {min_horizon_days} days (Sornette filter)")
+        with col3:
             st.metric("High Quality", len(clustering_data), 
                      delta=f"R²≥{r2_threshold:.2f}", 
                      help=f"Points with R² ≥ {r2_threshold:.2f} (used for clustering)")
-        with col3:
-            st.metric("Clusters Found", n_clusters, help="Number of distinct clusters identified")
         with col4:
-            st.metric("Noise Points", n_noise, help="High quality points not in any cluster")
+            st.metric("Clusters Found", n_clusters, help="Number of distinct clusters identified")
         with col5:
-            avg_cluster_size = len(clustering_data[clustering_data['cluster'] != -1]) / max(n_clusters, 1) if n_clusters > 0 else 0
-            st.metric("Avg Cluster Size", f"{avg_cluster_size:.1f}", help="Average predictions per cluster")
+            st.metric("Isolated Points", n_noise, help="High-quality predictions that don't form clusters (insufficient density for min cluster size)")
         
         if n_clusters == 0:
             st.warning(f"""
             **No Clusters Found**
             
-            All {len(clustering_data)} high-quality data points are treated as noise with current parameters.
+            All {len(clustering_data)} high-quality data points remain isolated (unclustered) with current parameters.
             
             **💡 Solutions:**
             1. **Increase Clustering Distance**: Try {eps_days + 10}-{eps_days + 30} days (currently {eps_days})
@@ -3224,9 +3299,9 @@ class SymbolAnalysisDashboard:
                 x=noise_data['basis_date'],
                 y=noise_data['crash_date'],
                 mode='markers',
-                name=f'Noise (High Quality, n={len(noise_data)})',
+                name=f'Isolated (High Quality, n={len(noise_data)})',
                 marker=dict(size=4, color='lightgray', symbol='x', opacity=0.5),
-                hovertemplate='High Quality Noise<br>LPPL R²=%{customdata:.3f}<br>Basis: %{x}<br>Predicted: %{y}<extra></extra>',
+                hovertemplate='Isolated Prediction<br>LPPL R²=%{customdata:.3f}<br>Basis: %{x}<br>Predicted: %{y}<extra></extra>',
                 customdata=noise_data['r_squared']
             ), row=1, col=1)
             
@@ -3255,7 +3330,7 @@ class SymbolAnalysisDashboard:
                 y=x_range,
                 mode='lines',
                 name='Reference: Fitting Date = Crash Date',
-                line=dict(color='blue', width=2, dash='dot'),
+                line=dict(color='lightblue', width=2, dash='dot'),
                 hovertemplate='Reference Line<br>Fitting Date = Predicted Crash Date<extra></extra>',
                 showlegend=True
             ), row=1, col=1)
@@ -3322,7 +3397,6 @@ class SymbolAnalysisDashboard:
             - **Days to predicted crash**: {best_pred['future_crash_days']:.0f}
             - **Data range**: {best_pred['data_range']}
             """)
-            
     
     def render_parameters_tab(self, symbol: str, analysis_data: pd.DataFrame):
         """Tab 3: Parameter Details Table"""
@@ -3658,9 +3732,9 @@ class SymbolAnalysisDashboard:
         
         # 🎯 フィルタリング完了 - 新システムで全て処理済み
         
-        # Main content tabs - 新タブを最左端に追加（2025-08-12）
+        # Main content tabs - クラスタリングタブ追加（2025-08-12）
         tab_clustering, tab1, tab2, tab3 = st.tabs([
-            "🎯 Crash Prediction Clustering",  # 新タブを最初に配置
+            "🎯 Crash Prediction Clustering",  # メインクラスタリングタブ
             "📈 LPPL Fitting Analysis", 
             "📊 Prediction Convergence", 
             "📋 Parameters & References"

@@ -1,7 +1,7 @@
 # ダッシュボード実装仕様書（実装状況ベース）
 
-**更新日**: 2025-08-07 (最終更新: 2025-08-11)  
-**版数**: v1.1 (Symbol Filters Architecture v2 実装完了版)  
+**更新日**: 2025-08-13 (最終更新: Crash Prediction Clustering安定版)  
+**版数**: v1.3 (Crash Prediction Clustering Production Release)  
 **メタ情報仕様**: [meta_information_specification.md](./meta_information_specification.md) に準拠
 
 ---
@@ -12,11 +12,13 @@
 
 Symbol-Based Market Analysis Dashboard は、LPPL（Log-Periodic Power Law）モデルによる市場クラッシュ予測結果を可視化する Streamlit ベースのWebインターフェースです。**Symbol Filters Architecture v2 (2025-08-11実装)**により、銘柄選択・データアクセス・期間制御の完全分離を実現し、直感的で予測可能なユーザー体験を提供します。
 
-### 🆕 **v1.1の主要革新** (2025-08-11)
-- **Symbol Filters**: 銘柄選択リストのみに影響、データ取得から完全分離
-- **Apply Button制御**: 明示的な更新制御による予測可能な動作
-- **Currently Selected Symbol**: リアルタイム選択状態表示
-- **Displaying Period**: プロット範囲のみ制御、全データアクセス保証
+### 🆕 **v1.3の主要革新** (2025-08-13)
+- **Crash Prediction Clustering Production**: 開発完了・安定版リリース
+- **Prediction Horizon Filter**: Sornette理論ベース最小予測期間フィルター（デフォルト21日）
+- **Min Cluster Size最適化**: より良いクラスター形成のため初期値を3に変更
+- **Isolated Points表記**: Noiseの誤解を解消する適切な用語へ改善
+- **Reference Line統一**: Prediction Convergenceタブと色統一（lightblue）
+- **Development Tab廃止**: 実験完了、メイン機能への統合完了
 
 ---
 
@@ -26,7 +28,7 @@ Symbol-Based Market Analysis Dashboard は、LPPL（Log-Periodic Power Law）モ
 **ファイル**: `applications/dashboards/main_dashboard.py`  
 **メタ情報**: `🟢[IMPLEMENTED]` `🔥[CRITICAL]` `🔒[STABLE]` `🎯[CORE]` `🔗[DEPENDENT]`
 
-- **行数**: 3,100行+ （2025-08-11現在 - Symbol Filters Architecture v2実装）
+- **行数**: 3,300行+ （2025-08-13現在 - Clustering Production Release実装）
 - **主要クラス**: `SymbolAnalysisDashboard`
 - **主要メソッド**: `render_sidebar_v2()`, `get_symbol_analysis_data()`, `_get_filtered_symbols()`
 - **依存関係**: ResultsDatabase, UnifiedDataClient, Streamlit
@@ -241,7 +243,108 @@ Symbol Filters → Symbol Selection → Apply → ALL Data Access → Display Pe
 
 **変更可否**: ✅ **機能拡張推奨** - より多様な投資指標、リスク管理機能追加可能
 
-#### **2025-08-11包括的機能拡張**
+---
+
+## 🎯 **Tab 1: Crash Prediction Clustering (Production Release 2025-08-13)**
+
+**メタ情報**: `🟢[IMPLEMENTED]` `🔥[CRITICAL]` `🔒[STABLE]` `⚙️[FEATURE]` `🎯[CORE]` `💰[BUSINESS]`
+
+### **システム概要**
+科学的に検証されたクラッシュ予測クラスタリングシステム。複数の時期のLPPL分析結果をDBSCANアルゴリズムとR²重み付けにより統合し、投資判断支援情報を提供する。
+
+### **核心技術スタック**
+- **アルゴリズム**: DBSCAN 1D密度クラスタリング + R²品質重み付け
+- **データフィルタリング**: Sornette理論ベース最小予測期間フィルター
+- **可視化**: Plotly 2D散布図 + インタラクティブホバー
+- **統計計算**: 重み付き平均・標準偏差による信頼度評価
+
+### **Production Release機能 (2025-08-13)**
+
+#### **1. 予測期間フィルタリングシステム**
+**メタ情報**: `🟢[IMPLEMENTED]` `🆕[NEW]` `🔥[CRITICAL]` `⚙️[FEATURE]` `🎯[CORE]`
+
+- **Min Prediction Horizon**: 21日（デフォルト）、0-90日調整可能
+- **科学的根拠**: Sornette研究「近接予測の精度劣化問題」に基づく実装
+- **フィルター効果**: クラッシュ直前フィッティングの除外による予測精度向上
+- **UI**: 「❓ Horizon Filter Details」ボタンによる理論的背景解説
+
+**実装詳細**:
+```python
+# 予測期間計算とフィルタリング (Line 3072-3076)
+valid_data['prediction_horizon'] = (valid_data['crash_date'] - valid_data['basis_date']).dt.days
+horizon_filtered_data = valid_data[valid_data['prediction_horizon'] >= min_horizon_days].copy()
+```
+
+#### **2. 最適化されたクラスタリングパラメータ**
+**メタ情報**: `🟢[IMPLEMENTED]` `🆕[OPTIMIZED]` `⭐[HIGH]` `⚙️[FEATURE]` `🎯[CORE]`
+
+- **Min Cluster Size**: 3（初期値、2-20調整可能）
+- **Clustering Distance**: 30日（初期値、7-120日調整可能）
+- **R² Threshold**: 0.8（品質フィルター、0.0-1.0調整可能）
+- **Isolated Points**: 従来の「Noise Points」から科学的に正確な表記へ変更
+
+#### **3. 統一された可視化デザイン**
+**メタ情報**: `🟢[IMPLEMENTED]` `🆕[ENHANCED]` `📋[MEDIUM]` `⚙️[FEATURE]` `🎯[ISOLATED]`
+
+- **Reference Line Color**: `lightblue`（Prediction Convergenceタブと統一）
+- **Cluster Colors**: `['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA726', '#AB47BC', '#66BB6A']`
+- **Isolated Points**: グレー `lightgray` × マーカーで視覚的区別
+- **視認性向上**: 背景との明確なコントラスト確保
+
+#### **4. 包括的データ品質表示**
+**メタ情報**: `🟢[IMPLEMENTED]` `🆕[NEW]` `⭐[HIGH]` `🔧[UTILITY]` `🎯[CORE]`
+
+5段階データ品質メトリクス:
+1. **Raw Data**: 総分析結果数
+2. **Horizon Filtered**: 予測期間フィルター後（除去率表示）
+3. **High Quality**: R²品質フィルター後
+4. **Clusters Found**: 発見クラスター数
+5. **Isolated Points**: 高品質だが未クラスター化点数
+
+#### **5. 開発版機能の統合結果**
+**メタ情報**: `🟢[INTEGRATED]` `🔄[MIGRATED]` `🔒[STABLE]` `⚙️[FEATURE]` `🎯[CORE]`
+
+**Issue I057開発・検証完了**:
+- ✅ **多次元クラスタリング**: 統計的有意性確認後、実用性評価により1D採用
+- ✅ **軸入れ替え可視化**: ユーザビリティテスト後、従来レイアウト採用
+- ✅ **R²重み付け手法**: 数学的妥当性確認、継続採用
+- ✅ **最小予測期間フィルター**: Sornette理論検証済み、メイン機能統合
+- ❌ **Development Tab**: 実験完了により廃止
+
+### **投資判断支援機能**
+**メタ情報**: `🟢[IMPLEMENTED]` `🔥[CRITICAL]` `🎯[CORE]` `💰[BUSINESS]`
+
+#### **クラスター分析結果テーブル**
+**列順序**: Cluster → Weight Mean Date → Days to Crash → Days from Today → Weighted STD → STD → Size → Avg R² → Confidence
+
+**重要指標**:
+- **Weight Mean Date**: R²重み付き予測クラッシュ日
+- **Days from Today**: 投資判断の緊急度指標
+- **Confidence**: High/Medium/Low自動評価
+
+#### **リスク評価システム**
+- **統計的信頼度**: クラスターサイズ・R²平均値・標準偏差による総合評価
+- **時間的緊急度**: 本日からの予測日数による投資タイミング判断
+- **予測統合**: 複数時期分析の品質重み付き統合
+
+### **技術的制約・注意事項**
+**メタ情報**: `🚨[CONSTRAINT]` `🔒[STABLE]` `📋[IMPORTANT]`
+
+#### **変更禁止事項**
+- ❌ **フィッティング基準日概念**: `analysis_basis_date`優先表示は科学的根幹
+- ❌ **R²重み付き計算式**: 線形変換 `0.1 + 0.9 * (R² - R²_min) / (R²_max - R²_min)`
+- ❌ **DBSCAN 1Dアプローチ**: 統計検証により最適化完了
+
+#### **推奨拡張領域**
+- ✅ **投資指標追加**: ポジションサイズ推奨、リスク・リターン比率等
+- ✅ **アラートシステム**: 高信頼度予測の自動通知機能
+- ✅ **履歴分析**: 予測精度の時系列追跡・改善提案
+
+**変更可否**: 🔒 **コア機能安定** / ✅ **周辺機能拡張推奨**
+
+---
+
+#### **2025-08-11包括的機能拡張（統合済み）**
 1. **フィッティング基準日ベース表示**
    - **メタ情報**: `🟢[IMPLEMENTED]` `🔥[CRITICAL]` `🔒[STABLE]` `🎯[CORE]` `🏗️[FOUNDATION]`
    - **実装**: `analysis_basis_date` 優先表示による科学的正確性保証
