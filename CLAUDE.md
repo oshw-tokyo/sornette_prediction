@@ -560,25 +560,29 @@ Symbol Analysis Dashboard (Symbol Filters Architecture v2)
 └── 📋 Parameter Details               # Technical: パラメータテーブル
 ```
 
-### 🎯 **Crash Prediction Clustering タブ（Issue I052）**
+### 🎯 **Crash Prediction Clustering タブ（Issue I052完了・I054改善実装）**
 - **機能概要**: 複数の予測クラッシュ日を時系列クラスタリング分析
-- **核心技術**: 1D DBSCAN + R²-weighted linear regression
+- **核心技術**: 1D DBSCAN + R²-weighted average method（I054改善実装）
 - **データ品質管理**: 高品質(R² ≥ threshold)・低品質データの自動分離表示
 - **Interactive Parameters**:
   - Clustering Distance (10-90 days): DBSCAN eps parameter  
   - Min Cluster Size (2-10): DBSCAN min_samples parameter
-  - Future Projection (30-365 days): 回帰線の将来延長期間
+  - Future Projection (30-365 days): 将来予測期間表示
   - Min R² for Clustering (0.0-1.0): データ品質フィルタリング閾値
-- **Visualization Components**:
+- **Visualization Components（I054改善版）**:
   - **Upper Panel**: 2D scatter plot (Fitting Date vs Predicted Crash Date)
-    - Color-coded clusters with regression trend lines
+    - Color-coded clusters with **thin horizontal center lines** (width=1)
+    - **R²-weighted average method**: No regression assumptions
     - Reference line (Fitting Date = Crash Date) for immediate risk indication
     - High-quality data clustering vs low-quality data separation
-  - **Lower Panel**: Cluster statistics bar chart (R² scores by cluster)
-- **Statistical Analysis**:
-  - Confidence scoring (High/Medium/Low based on R² and p-value)
-  - Convergence detection (negative slope = predictions getting closer)
-  - Future crash date prediction with reliability assessment
+  - **Lower Panel**: Cluster statistics bar chart (Average R² scores by cluster)
+  - **Statistics Table**: Comprehensive cluster details with weighted/simple STD, IQR
+- **Statistical Analysis（I054改善版）**:
+  - **R²-weighted average**: Center line from weighted mean of predictions
+  - **Uncertainty measures**: Weighted STD, Simple STD, IQR表示
+  - **Confidence scoring**: High/Medium/Low based on Avg R² and cluster size
+  - **No time-series assumptions**: More statistically robust methodology
+  - **Clean visualization**: Removes complex regression lines and uncertainty bands
 - **Session State Management**: All parameters persist across interactions
 - **Independent Display Period**: タブ独立の期間フィルタリング制御
 
