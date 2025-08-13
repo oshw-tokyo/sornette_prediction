@@ -2979,10 +2979,10 @@ class SymbolAnalysisDashboard:
             
         with col2:
             if 'clustering_min_samples_preview' not in st.session_state:
-                st.session_state.clustering_min_samples_preview = st.session_state.get('clustering_min_samples', 3)
-            min_samples_preview = st.slider("Min Cluster", 2, 10, 
+                st.session_state.clustering_min_samples_preview = st.session_state.get('clustering_min_samples', 8)
+            min_samples_preview = st.slider("Min Cluster", 2, 20, 
                                           st.session_state.clustering_min_samples_preview,
-                                          key='min_samples_slider', help="Minimum predictions to form a cluster")
+                                          key='min_samples_slider', help="Minimum predictions to form a cluster. Recommended: 8 for typical datasets (238 avg analyses)")
             st.caption("size")
             
         with col3:
@@ -3050,7 +3050,19 @@ class SymbolAnalysisDashboard:
         low_quality_data = valid_data[~high_quality_mask].copy()
         
         if len(clustering_data) < 5:
-            st.warning(f"Insufficient high-quality data for clustering (need at least 5 points, have {len(clustering_data)})")
+            st.warning(f"""
+            **Insufficient Data for Clustering Analysis**
+            
+            - Current high-quality data: {len(clustering_data)} points (R² ≥ {r2_threshold:.2f})
+            - Required minimum: 5 points
+            
+            **💡 Solutions:**
+            1. **Expand Analysis Period**: Select a longer time range (From/To dates)
+            2. **Lower R² Threshold**: Reduce Min R² to {max(0.5, r2_threshold-0.1):.1f} or lower
+            3. **Check Data Availability**: Ensure sufficient historical analysis data exists
+            
+            Current period: {from_date} to {to_date} ({len(valid_data)} total points)
+            """)
             return
         
         # Step 2: 高品質データのみで1次元クラスタリング（予測クラッシュ日のみ）
@@ -3082,7 +3094,18 @@ class SymbolAnalysisDashboard:
             st.metric("Avg Cluster Size", f"{avg_cluster_size:.1f}", help="Average predictions per cluster")
         
         if n_clusters == 0:
-            st.warning("No clusters found with current parameters. Try adjusting the clustering distance or minimum cluster size.")
+            st.warning(f"""
+            **No Clusters Found**
+            
+            All {len(clustering_data)} high-quality data points are treated as noise with current parameters.
+            
+            **💡 Solutions:**
+            1. **Increase Clustering Distance**: Try {eps_days + 10}-{eps_days + 30} days (currently {eps_days})
+            2. **Decrease Min Cluster Size**: Try {max(2, min_samples - 2)}-{max(2, min_samples - 1)} (currently {min_samples})
+            3. **Lower R² Threshold**: Include more data by reducing to {max(0.5, r2_threshold - 0.1):.1f}
+            
+            **Current Settings**: Distance={eps_days}d, MinSize={min_samples}, R²≥{r2_threshold:.2f}
+            """)
             return
         
         # Step 3: 各クラスターでR²重み付き統計サマリー（I054改善実装）
@@ -3259,19 +3282,20 @@ class SymbolAnalysisDashboard:
         if cluster_predictions:
             st.subheader("📊 Cluster Analysis Results")
             
+            # 今日からの日数を計算
+            today = datetime.now().date()
+            
             cluster_df = pd.DataFrame([
                 {
                     'Cluster': f"C{cid+1}",
+                    'Weight Mean Date': pred['future_crash_date'].strftime('%Y-%m-%d'),
+                    'Days to Crash': f"{pred['future_crash_days']:.0f}",
+                    'Days from Today': f"{(pred['future_crash_date'].date() - today).days}",
+                    'Weighted STD': f"{pred['weighted_std']:.1f}",
+                    'STD': f"{pred['simple_std']:.1f}",
                     'Size': pred['size'],
                     'Avg R²': f"{pred['avg_r2']:.3f}",
-                    'Weight Range': pred['weight_range'],
-                    'Weighted Mean Date': pred['future_crash_date'].strftime('%Y-%m-%d'),
-                    'Weighted STD (days)': f"{pred['weighted_std']:.1f}",
-                    'Simple STD (days)': f"{pred['simple_std']:.1f}",
-                    'IQR (days)': f"{pred['iqr']:.1f}",
-                    'Data Range': pred['data_range'],
-                    'Confidence': pred['confidence'],
-                    'Days to Crash': f"{pred['future_crash_days']:.0f}"
+                    'Confidence': pred['confidence']
                 }
                 for cid, pred in sorted(cluster_predictions.items())  # クラスターID順にソート
             ])
@@ -3279,6 +3303,9 @@ class SymbolAnalysisDashboard:
             # DataFrameはクラスターID順で既にソート済み（上記のsorted()により）
             
             st.dataframe(cluster_df, use_container_width=True)
+            
+            # 単位情報を別行で表示
+            st.caption("**Units**: Days to Crash (days from analysis basis date) | Days from Today (days from current date) | Weighted STD & STD (±days) | Size (number of predictions)")
             st.caption("*Center predictions are calculated using R²-weighted averaging, giving higher influence to predictions with better model fit*")
             
             # 最も信頼性の高いクラスター（平均R²×サイズで判定）
