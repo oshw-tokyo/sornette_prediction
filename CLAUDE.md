@@ -283,15 +283,15 @@ COINGECKO_API_KEY=your_coingecko_api_key_here
 - **PNG自動保存**: デフォルト無効化（Issue I032解決済み）
 - **メモリ効率**: 不要なファイル生成回避、セッション状態最適化
 
-### 🎯 **Crash Prediction Clustering Analytics (I052実装完了)**
-- **1D DBSCAN clustering**: 予測クラッシュ日の密度ベース自動クラスタリング
-- **R²-weighted regression**: LPPL品質指標による重み付き線形回帰分析
-- **Data quality filtering**: 高品質/低品質データの自動分離（閾値調整可能）
-- **Interactive visualization**: 2パネル統合表示（散布図+統計グラフ）
-- **Future prediction**: クラスター傾向の将来投影（信頼度評価付き）
-- **Statistical analysis**: 収束/拡散パターンの自動検出・解釈ガイド
-- **Session persistence**: パラメータ設定の自動保存・復元
-- **Independent controls**: タブ独立Display Period制御（Getting Started問題解決済み）
+### 🎯 **Crash Prediction Clustering Analytics (I052実装完了・2025-08-13)**
+- **R²重み付きクラスタリング**: DBSCAN 1D密度クラスタリング + R²品質重み付け平均
+- **統合期間選択UI**: From/To日付選択・期間視覚化プログレスバー・自動範囲計算
+- **統計的最適化パラメータ**: 距離10-90日・最小クラスタサイズ2-20（初期値8）・R²閾値0-1.0
+- **投資判断支援テーブル**: C1/C2表記・本日からの日数・Weight Mean Date・信頼度評価
+- **2D散布図可視化**: フィッティング基準日vs予測クラッシュ日・クラスター中心線・参照線
+- **包括的ヘルプシステム**: 理論説明・パラメータガイド・投資判断解釈をexpandable形式
+- **ユーザー重視エラーハンドリング**: データ不足時の具体的解決策提示（期間拡張・閾値調整）
+- **Apply Button制御**: 期間選択・パラメータ設定の統合制御による予測可能な動作
 
 ### 🚀 **統一実行インターフェース**
 ```bash
