@@ -13,11 +13,11 @@
 Symbol-Based Market Analysis Dashboard は、LPPL（Log-Periodic Power Law）モデルによる市場クラッシュ予測結果を可視化する Streamlit ベースのWebインターフェースです。**Symbol Filters Architecture v2 (2025-08-11実装)**により、銘柄選択・データアクセス・期間制御の完全分離を実現し、直感的で予測可能なユーザー体験を提供します。
 
 ### 🆕 **v1.4の主要革新** (2025-08-13)
-- **Prediction Data Tab簡素化**: Multi-Period Convergence Analysis削除（204行削除）、データ可視化に特化
-- **統一Analysis Period機能**: 全4タブに包括的期間選択機能を実装
+- **タブ構造大幅改編**: 5タブの論理的ワークフロー順序（Data→Clustering→Fitting→Parameters→References）
+- **Parameters/References分離**: 情報整理と使いやすさの向上
+- **統一Analysis Period機能**: 全5タブに包括的期間選択機能を実装
 - **パフォーマンス大幅改善**: 重いプログレスバー削除、テキストベース期間表示で高速化
-- **一貫したUX**: From/To選択 + 期間統計表示の統一パターン
-- **Issue管理**: I058（LPPL Individual Results UI改善）、I059（期間バー表示問題→解決）追加
+- **タブ名称明確化**: 各タブの目的を明確にするネーミング
 
 ### 📋 **v1.3の主要機能** (継続)
 - **Crash Prediction Clustering Production**: 開発完了・安定版リリース
@@ -114,13 +114,20 @@ Symbol Filters → Symbol Selection → Apply → ALL Data Access → Display Pe
 
 ---
 
-## 📊 **3タブ構成システム**
+## 📊 **5タブ構成システム** (v1.4大幅改編)
 
-### **Tab 1: LPPL Fitting Analysis** 📈
+### **🎯 新タブ順序とワークフロー**
+1. **📊 Crash Prediction Data** - データ確認・可視化
+2. **🎯 Prediction Clustering** - DBSCAN分析  
+3. **📈 LPPL Fitting Plot** - フィッティング結果
+4. **📋 Parameters** - パラメータ詳細のみ
+5. **📚 References** - 検証データ・ベンチマーク
+
+### **Tab 1: Crash Prediction Data** 📊
 **メタ情報**: `🟢[IMPLEMENTED]` `🔥[CRITICAL]` `🔧[EVOLVING]` `⚙️[FEATURE]` `🔗[DEPENDENT]`
 
-**機能**: 論文再現テスト相当の包括的LPPL分析可視化  
-**実装メソッド**: `render_price_predictions_tab()` (Line 1400-1850+)
+**機能**: クラッシュ予測データの可視化・検証  
+**実装メソッド**: `render_prediction_data_tab()` - 簡素化されたデータ表示
 
 #### **主要機能 (2025-08-11拡張)**
 1. **Latest Analysis Details**
