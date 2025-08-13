@@ -3537,11 +3537,7 @@ class SymbolAnalysisDashboard:
     def render_references_tab(self, symbol: str, analysis_data: pd.DataFrame):
         """Tab 5: References and Benchmarks"""
         
-        st.header(f"📚 {symbol} - References & Benchmarks")
-        
-        if analysis_data.empty:
-            st.warning("No analysis data available for references")
-            return
+        st.header("📚 References & Benchmarks")
         
         # Reference information from Sornette paper reproduction
         st.subheader("📚 Reference: Sornette Paper Reproduction")
