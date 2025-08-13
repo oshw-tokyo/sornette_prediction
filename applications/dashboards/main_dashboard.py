@@ -2841,19 +2841,13 @@ class SymbolAnalysisDashboard:
             st.warning("No analysis data available for clustering")
             return
         
-        # 🚨 デバッグ用簡素版 - 無限ループ問題解決まで
-        st.success("✅ **Getting Started問題デバッグ成功!**")
-        st.info(f"""
-        **Symbol**: {symbol}
-        **Available Data**: {len(analysis_data)} analyses
-        **Date Range**: {analysis_data['analysis_basis_date'].min()} to {analysis_data['analysis_basis_date'].max()}
-        """)
         
-        st.markdown("---")
-        st.success("✅ **Getting Started問題解決済み**: Full clustering functionality is now available!")
+        # Clustering Analysis Settings
+        st.subheader("⚙️ Clustering Analysis Settings")
         
-        # Crash Prediction Clustering専用のDisplay Period設定
-        st.subheader("📅 Display Period (Crash Clustering Analysis)")
+        # 期間設定セクション
+        st.markdown("### 📅 Analysis Data Period")
+        st.caption("解析データの対象とする期間")
         col1, col2, col3 = st.columns([2, 2, 1])
         
         with col1:
@@ -2870,16 +2864,6 @@ class SymbolAnalysisDashboard:
             
         with col3:
             st.markdown("<br>", unsafe_allow_html=True)
-            apply_period = st.button("🔄 Apply Period", type="primary", key='clustering_apply_period',
-                                   help="Apply selected date range to clustering analysis")
-        
-        # 日付フィルタリング（Apply Periodが押された場合またはセッション状態に保存済みの場合）
-        if apply_period:
-            st.session_state.clustering_period_applied = True
-            
-        if 'clustering_period_applied' not in st.session_state:
-            st.info("💡 **Select Display Period**: Choose the date range above and click 'Apply Period' to start clustering analysis.")
-            return
         
         # Display Period フィルタリング
         analysis_data['analysis_basis_date'] = pd.to_datetime(analysis_data['analysis_basis_date'])
@@ -2893,9 +2877,6 @@ class SymbolAnalysisDashboard:
             st.warning(f"No data available for selected period: {from_date} to {to_date}")
             return
         
-        st.markdown("---")
-        st.info(f"**Clustering Analysis Settings**: Period: {from_date} to {to_date} ({len(analysis_data)} analyses)")
-        st.markdown("---")
         
         # データ準備 - 日付フィルタリング適用済みのanalysis_dataを使用
         valid_data = analysis_data.dropna(subset=['predicted_crash_date', 'analysis_basis_date']).copy()
@@ -2913,36 +2894,63 @@ class SymbolAnalysisDashboard:
         valid_data['basis_days'] = (valid_data['basis_date'] - base_date).dt.days
         valid_data['crash_days'] = (valid_data['crash_date'] - base_date).dt.days
         
-        # クラスタリングパラメータ設定（session_stateで永続化）
+        # クラスタリングパラメータ設定
+        st.markdown("### 🎯 Clustering Parameters")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            # session_stateで状態を保持
-            if 'clustering_eps_days' not in st.session_state:
-                st.session_state.clustering_eps_days = 30
-            eps_days = st.slider("Clustering Distance (days)", 10, 90, st.session_state.clustering_eps_days, 
-                               key='eps_days_slider', help="Max days between predictions to be in same cluster")
-            st.session_state.clustering_eps_days = eps_days
+            # プレビュー用の一時変数（Applyまで反映されない）
+            if 'clustering_eps_days_preview' not in st.session_state:
+                st.session_state.clustering_eps_days_preview = st.session_state.get('clustering_eps_days', 30)
+            eps_days_preview = st.slider("Clustering Distance (days)", 10, 90, 
+                                       st.session_state.clustering_eps_days_preview, 
+                                       key='eps_days_slider', help="Max days between predictions to be in same cluster")
             
         with col2:
-            if 'clustering_min_samples' not in st.session_state:
-                st.session_state.clustering_min_samples = 3
-            min_samples = st.slider("Min Cluster Size", 2, 10, st.session_state.clustering_min_samples,
-                                   key='min_samples_slider', help="Minimum predictions to form a cluster")
-            st.session_state.clustering_min_samples = min_samples
+            if 'clustering_min_samples_preview' not in st.session_state:
+                st.session_state.clustering_min_samples_preview = st.session_state.get('clustering_min_samples', 3)
+            min_samples_preview = st.slider("Min Cluster Size", 2, 10, 
+                                          st.session_state.clustering_min_samples_preview,
+                                          key='min_samples_slider', help="Minimum predictions to form a cluster")
             
         with col3:
-            if 'clustering_future_days' not in st.session_state:
-                st.session_state.clustering_future_days = 180
-            future_days = st.slider("Future Projection (days)", 30, 365, st.session_state.clustering_future_days,
-                                   key='future_days_slider', help="Days to project cluster trends into future")
-            st.session_state.clustering_future_days = future_days
+            if 'clustering_future_days_preview' not in st.session_state:
+                st.session_state.clustering_future_days_preview = st.session_state.get('clustering_future_days', 180)
+            future_days_preview = st.slider("Future Projection (days)", 30, 365, 
+                                          st.session_state.clustering_future_days_preview,
+                                          key='future_days_slider', help="Days to project cluster trends into future")
             
         with col4:
-            if 'clustering_r2_threshold' not in st.session_state:
-                st.session_state.clustering_r2_threshold = 0.8
-            r2_threshold = st.slider("Min R² for Clustering", 0.0, 1.0, st.session_state.clustering_r2_threshold, 0.05,
-                                   key='r2_threshold_slider', help="Minimum R² value to include in clustering")
-            st.session_state.clustering_r2_threshold = r2_threshold
+            if 'clustering_r2_threshold_preview' not in st.session_state:
+                st.session_state.clustering_r2_threshold_preview = st.session_state.get('clustering_r2_threshold', 0.8)
+            r2_threshold_preview = st.slider("Min R² for Clustering", 0.0, 1.0, 
+                                           st.session_state.clustering_r2_threshold_preview, 0.05,
+                                           key='r2_threshold_slider', help="Minimum R² value to include in clustering")
+        
+        # Applyボタン（すべての設定を一度に適用）
+        st.markdown("---")
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col2:
+            apply_settings = st.button("🔄 Apply", type="primary", key='clustering_apply_settings',
+                                      help="Apply all selected settings")
+        
+        # Applyボタンが押された場合、プレビュー値を実際の値にコピー
+        if apply_settings:
+            st.session_state.clustering_period_applied = True
+            st.session_state.clustering_eps_days = eps_days_preview
+            st.session_state.clustering_min_samples = min_samples_preview
+            st.session_state.clustering_future_days = future_days_preview
+            st.session_state.clustering_r2_threshold = r2_threshold_preview
+            
+        # 初回表示時の処理
+        if 'clustering_period_applied' not in st.session_state:
+            st.info("💡 **Getting Started**: Configure your settings above and click 'Apply' to start clustering analysis.")
+            return
+        
+        # 実際に使用する値（Apply後の値）
+        eps_days = st.session_state.get('clustering_eps_days', 30)
+        min_samples = st.session_state.get('clustering_min_samples', 3)
+        future_days = st.session_state.get('clustering_future_days', 180)
+        r2_threshold = st.session_state.get('clustering_r2_threshold', 0.8)
             
         # データ準備 - 日付フィルタリング適用済みのanalysis_dataを使用
         valid_data = analysis_data.dropna(subset=['predicted_crash_date', 'analysis_basis_date']).copy()
@@ -2960,12 +2968,12 @@ class SymbolAnalysisDashboard:
         valid_data['basis_days'] = (valid_data['basis_date'] - base_date).dt.days
         valid_data['crash_days'] = (valid_data['crash_date'] - base_date).dt.days
         
-        # クラスタリングパラメータは即座に反映（シンプル化）
+        # 適用中の設定を表示
         st.markdown("---")
-        st.info(f"""
-        **Clustering Analysis Settings**: 
-        - Distance: {eps_days} days | Min Size: {min_samples} | Future: {future_days} days | R²≥{r2_threshold:.2f}
+        st.success(f"""
+        **Applied Settings**: 
         - Period: {from_date} to {to_date} ({len(valid_data)} data points)
+        - Distance: {eps_days} days | Min Size: {min_samples} | Future: {future_days} days | R²≥{r2_threshold:.2f}
         """)
         st.markdown("---")
             
