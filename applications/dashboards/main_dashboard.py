@@ -1358,34 +1358,52 @@ class SymbolAnalysisDashboard:
             st.warning("No analysis data available for this symbol")
             return
         
-        # LPPL分析専用のDisplay Period設定
-        st.subheader("📅 Display Period (LPPL Analysis)")
-        col1, col2, col3 = st.columns([2, 2, 1])
+        # Analysis Data Period - Enhanced version matching clustering tab
+        st.subheader("📅 Analysis Data Period")
+        st.caption("解析データの対象とする期間")
+        
+        # データ範囲の計算（From/Toの下に表示用）
+        original_data = self.get_symbol_analysis_data(symbol, limit=1000)  # フィルタ前の全データ
+        if not original_data.empty:
+            original_data['analysis_basis_date'] = pd.to_datetime(original_data['analysis_basis_date'])
+            full_min_date = original_data['analysis_basis_date'].min()
+            full_max_date = original_data['analysis_basis_date'].max()
+        
+        col1, col2 = st.columns([1, 1])
         
         with col1:
             if 'lppl_from_date' not in st.session_state:
                 st.session_state.lppl_from_date = analysis_data['analysis_basis_date'].min().date()
             from_date = st.date_input("From", st.session_state.lppl_from_date, key='lppl_from_date_input')
             st.session_state.lppl_from_date = from_date
+            # Oldest Analysis情報を直下に表示
+            if not original_data.empty:
+                st.caption(f"📍 Oldest Analysis: {full_min_date.strftime('%Y-%m-%d')}")
             
         with col2:
             if 'lppl_to_date' not in st.session_state:
                 st.session_state.lppl_to_date = analysis_data['analysis_basis_date'].max().date()
             to_date = st.date_input("To", st.session_state.lppl_to_date, key='lppl_to_date_input')
             st.session_state.lppl_to_date = to_date
-            
-        with col3:
-            st.markdown("<br>", unsafe_allow_html=True)
-            apply_period = st.button("🔄 Apply Period", type="primary", key='lppl_apply_period',
-                                   help="Apply selected date range to LPPL analysis")
+            # Latest Analysis情報を直下に表示
+            if not original_data.empty:
+                st.caption(f"📍 Latest Analysis: {full_max_date.strftime('%Y-%m-%d')}")
         
-        # 日付フィルタリング
-        if apply_period:
-            st.session_state.lppl_period_applied = True
+        # 📊 選択期間の情報表示
+        if not original_data.empty:
+            selected_min = pd.to_datetime(from_date)
+            selected_max = pd.to_datetime(to_date)
             
-        if 'lppl_period_applied' not in st.session_state:
-            st.info("💡 **Select Display Period**: Choose the date range above and click 'Apply Period' to start LPPL analysis.")
-            return
+            # 期間の割合計算
+            total_days = (full_max_date - full_min_date).days
+            selected_duration = (selected_max - selected_min).days
+            start_offset = (selected_min - full_min_date).days if total_days > 0 else 0
+            selected_ratio = selected_duration / total_days if total_days > 0 else 1.0
+            
+            # テキスト形式で期間情報を表示
+            st.info(f"📅 **Analysis Period Summary**: {selected_duration} days selected ({selected_ratio*100:.1f}% of available data) | Position: Day {start_offset+1}-{start_offset+selected_duration} of {total_days} total days")
+        
+        st.markdown("---")
         
         # Display Period フィルタリング
         analysis_data['analysis_basis_date'] = pd.to_datetime(analysis_data['analysis_basis_date'])
@@ -2447,10 +2465,10 @@ class SymbolAnalysisDashboard:
             
             st.json(debug_info)
     
-    def render_prediction_convergence_tab(self, symbol: str, analysis_data: pd.DataFrame):
-        """Tab 2: Prediction Convergence Analysis"""
+    def render_prediction_data_tab(self, symbol: str, analysis_data: pd.DataFrame):
+        """Tab 2: Prediction Data Visualization"""
         
-        st.header(f"🎯 {symbol} - Prediction Convergence Analysis")
+        st.header(f"🎯 {symbol} - Prediction Data Visualization")
         
         if analysis_data.empty:
             st.warning("No analysis data available for this symbol")
@@ -2476,8 +2494,66 @@ class SymbolAnalysisDashboard:
         valid_data = valid_data.copy()  # Make a copy to avoid modifying the original
         valid_data['fitting_basis_date'] = fitting_basis_dates_valid
         
+        # Analysis Data Period functionality
+        st.subheader("📅 Analysis Data Period")
+        st.caption("解析データの対象とする期間")
+        
+        # データ範囲の計算（From/Toの下に表示用）
+        original_data = self.get_symbol_analysis_data(symbol, limit=1000)  # フィルタ前の全データ
+        if not original_data.empty:
+            original_data['analysis_basis_date'] = pd.to_datetime(original_data['analysis_basis_date'])
+            full_min_date = original_data['analysis_basis_date'].min()
+            full_max_date = original_data['analysis_basis_date'].max()
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            if 'prediction_data_from_date' not in st.session_state:
+                st.session_state.prediction_data_from_date = valid_data['fitting_basis_date'].min().date()
+            from_date = st.date_input("From", st.session_state.prediction_data_from_date, key='prediction_data_from_date_input')
+            st.session_state.prediction_data_from_date = from_date
+            # Oldest Analysis情報を直下に表示
+            if not original_data.empty:
+                st.caption(f"📍 Oldest Analysis: {full_min_date.strftime('%Y-%m-%d')}")
+            
+        with col2:
+            if 'prediction_data_to_date' not in st.session_state:
+                st.session_state.prediction_data_to_date = valid_data['fitting_basis_date'].max().date()
+            to_date = st.date_input("To", st.session_state.prediction_data_to_date, key='prediction_data_to_date_input')
+            st.session_state.prediction_data_to_date = to_date
+            # Latest Analysis情報を直下に表示
+            if not original_data.empty:
+                st.caption(f"📍 Latest Analysis: {full_max_date.strftime('%Y-%m-%d')}")
+        
+        # 📊 選択期間の視覚表示（プログレスバーのみ・より幅広く）
+        if not original_data.empty:
+            selected_min = pd.to_datetime(from_date)
+            selected_max = pd.to_datetime(to_date)
+            
+            # 期間の割合計算
+            total_days = (full_max_date - full_min_date).days
+            selected_duration = (selected_max - selected_min).days
+            
+            # 選択期間の開始位置と長さを計算
+            start_offset = (selected_min - full_min_date).days if total_days > 0 else 0
+            selected_ratio = selected_duration / total_days if total_days > 0 else 1.0
+        
+        st.markdown("---")
+        
+        # Period フィルタリング
+        valid_data['fitting_basis_date'] = pd.to_datetime(valid_data['fitting_basis_date'])
+        from_datetime = pd.to_datetime(from_date)
+        to_datetime = pd.to_datetime(to_date)
+        
+        date_mask = (valid_data['fitting_basis_date'] >= from_datetime) & (valid_data['fitting_basis_date'] <= to_datetime)
+        valid_data = valid_data[date_mask].copy()
+        
+        if len(valid_data) == 0:
+            st.warning(f"No data available for selected period: {from_date} to {to_date}")
+            return
+        
         # Main scatter plot: Analysis date vs Predicted crash date
-        st.subheader("📊 Crash Prediction Convergence")
+        st.subheader("📊 Crash Prediction Data")
         
         fig = go.Figure()
         
@@ -2593,7 +2669,7 @@ class SymbolAnalysisDashboard:
         ))
         
         fig.update_layout(
-            title=f"{symbol} - Prediction Convergence Analysis",
+            title=f"{symbol} - Prediction Data Visualization",
             xaxis_title="Fitting Basis Date",
             yaxis_title="Predicted Crash Date",
             height=600,
@@ -2607,227 +2683,6 @@ class SymbolAnalysisDashboard:
         📏 **Reference Line (Light Blue)**: The diagonal line represents the theoretical case where the predicted crash date equals the fitting basis date. If points are on the line, predictions suggest crashes on the same day as fitting (immediate risk).
         """)
         
-        # Multi-period convergence analysis
-        st.subheader("📈 Multi-Period Convergence Analysis")
-        st.caption("Convergence analysis for **fixed time periods** with multiple methods")
-        
-        # 重要な区別の説明
-        with st.expander("📋 **Important**: Difference from Main Scatter Plot"):
-            st.markdown("""
-            **🔍 Main Scatter Plot (above)**:
-            - **Follows sidebar period selection** (Analysis Period Selection)
-            - Shows data filtered by your selected date range
-            - **Dynamic**: Changes when you adjust sidebar settings
-            
-            **📊 Multi-Period Convergence Analysis (below)**:
-            - **Uses fixed periods** (1 Month, 3 Months, etc.)
-            - **Independent from sidebar selection**
-            - Each tab shows exactly the specified lookback period from today
-            - **Consistent**: Always shows the same fixed time window
-            
-            **⚡ Purpose**: This allows you to compare convergence across standardized time windows regardless of your current sidebar settings.
-            """)
-        
-        # Define analysis periods (fixed periods only) - Ordered from short to long term
-        analysis_periods = {
-            "1 Month": 30,
-            "3 Months": 90,
-            "6 Months": 180,
-            "1 Year": 365,
-            "2 Years": 730
-        }
-        
-        # Create tabs for different periods (1 Month will be first/default)
-        period_tabs = st.tabs(list(analysis_periods.keys()))
-        
-        for tab_idx, (period_name, days) in enumerate(analysis_periods.items()):
-            with period_tabs[tab_idx]:
-                # Fixed period analysis (independent from sidebar selection)
-                cutoff_date = datetime.now() - timedelta(days=days)
-                period_data = valid_data[valid_data['fitting_basis_date'] >= cutoff_date].copy()
-                
-                # 期間の説明を明確化
-                start_date_str = cutoff_date.strftime('%Y-%m-%d')
-                end_date_str = datetime.now().strftime('%Y-%m-%d')
-                st.info(f"**Fixed Period Analysis**: Latest {period_name} ({len(period_data)} analyses)")
-                st.caption(f"📅 **Analysis Period**: {start_date_str} to {end_date_str} (fitting basis dates)")
-                st.caption(f"⚠️ **Note**: This analysis is **independent** from sidebar period selection - uses fixed {period_name} lookback")
-                
-                if len(period_data) < 3:
-                    st.warning(f"⚠️ **Insufficient data** for convergence analysis ({len(period_data)} analyses). Need at least 3.")
-                    
-                    # データ不足の場合の説明と代替案
-                    if len(period_data) > 0:
-                        latest_fitting_date = period_data['fitting_basis_date'].max()
-                        st.info(f"📊 **Available data**: {len(period_data)} analyses (latest: {latest_fitting_date.strftime('%Y-%m-%d')})")
-                        st.info("💡 **Suggestion**: Try a longer period (e.g., 3 Months or 6 Months) for sufficient data")
-                    else:
-                        st.info("📊 **No data** available for this period")
-                        st.info("💡 **Suggestion**: Check if analyses exist in the database or try a different time period")
-                    
-                    # 対照として、全期間のデータ量を表示
-                    st.info(f"📈 **Total available**: {len(valid_data)} analyses in database")
-                    continue
-                
-                # Calculate convergence metrics using multiple methods
-                convergence_results = self.calculate_multi_method_convergence(period_data)
-                
-                # 🎯 収束ステータスを最上部に大きく表示
-                convergence_status = convergence_results['convergence_status']
-                status_colors = {
-                    'Excellent': '🟢',
-                    'Good': '🔵', 
-                    'Moderate': '🟡',
-                    'Poor': '🔴',
-                    'Error': '⚫'
-                }
-                status_icon = status_colors.get(convergence_status, '❓')
-                
-                st.markdown(f"### {status_icon} **Convergence Status: {convergence_status}**")
-                
-                # 簡潔な説明を追加
-                if convergence_status == 'Excellent':
-                    st.success(f"✅ **Highly convergent** - Std Dev: {convergence_results['std_deviation']:.1f} days, CV: {convergence_results['coefficient_variation']:.3f}")
-                elif convergence_status == 'Good':
-                    st.info(f"✅ **Good convergence** - Std Dev: {convergence_results['std_deviation']:.1f} days, CV: {convergence_results['coefficient_variation']:.3f}")
-                elif convergence_status == 'Moderate':
-                    st.warning(f"⚠️ **Moderate convergence** - Std Dev: {convergence_results['std_deviation']:.1f} days, CV: {convergence_results['coefficient_variation']:.3f}")
-                else:  # Poor or Error
-                    st.error(f"❌ **Poor/No convergence** - Std Dev: {convergence_results['std_deviation']:.1f} days, CV: {convergence_results['coefficient_variation']:.3f}")
-                
-                # コンセンサス予測日も目立つ位置に表示
-                st.markdown(f"🎯 **Consensus Crash Date**: **{convergence_results['consensus_date'].strftime('%Y-%m-%d')}**")
-                
-                # Display detailed convergence results
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("**📊 Convergence Metrics**")
-                    
-                    # Standard deviation method
-                    st.metric(
-                        "Standard Deviation (Days)", 
-                        f"{convergence_results['std_deviation']:.1f}",
-                        help="Lower values indicate better convergence"
-                    )
-                    
-                    # Coefficient of variation
-                    st.metric(
-                        "Coefficient of Variation", 
-                        f"{convergence_results['coefficient_variation']:.3f}",
-                        help="Standard deviation / mean. Lower values indicate better convergence"
-                    )
-                    
-                    # Range method
-                    st.metric(
-                        "Prediction Range (Days)", 
-                        f"{convergence_results['prediction_range']:.0f}",
-                        help="Difference between max and min predictions"
-                    )
-                    
-                
-                with col2:
-                    st.markdown("**🎯 Advanced Metrics**")
-                    
-                    # Weighted convergence (recent data weighted more)
-                    st.metric(
-                        "Weighted Std Dev (Days)", 
-                        f"{convergence_results['weighted_std']:.1f}",
-                        help="Recent analyses weighted more heavily"
-                    )
-                    
-                    # Trend analysis
-                    trend_slope = convergence_results['trend_slope']
-                    trend_direction = "Stabilizing" if abs(trend_slope) < 0.1 else ("Converging" if trend_slope < 0 else "Diverging")
-                    st.metric(
-                        "Trend Direction", 
-                        trend_direction,
-                        delta=f"{trend_slope:.3f} days/analysis",
-                        help="Negative slope = converging, Positive = diverging"
-                    )
-                    
-                    # R² of trend
-                    st.metric(
-                        "Trend Consistency (R²)", 
-                        f"{convergence_results['trend_r_squared']:.3f}",
-                        help="How consistently predictions are trending"
-                    )
-                    
-                    # Most probable crash date
-                    st.metric(
-                        "Consensus Crash Date",
-                        convergence_results['consensus_date'].strftime('%Y-%m-%d'),
-                        help="Weighted average of recent predictions"
-                    )
-                
-                # Convergence visualization for this period
-                st.markdown(f"**📊 {period_name} Convergence Plot**")
-                
-                # デバッグ情報を追加
-                if len(period_data) == 0:
-                    st.warning(f"No data available for {period_name} plot")
-                else:
-                    st.info(f"Generating plot with {len(period_data)} data points")
-                
-                period_fig = self.create_convergence_plot(period_data, period_name, convergence_results)
-                
-                # プロットが空かどうかをチェック
-                if len(period_fig.data) == 0:
-                    st.error(f"⚠️ Plot generation failed for {period_name}. Check data availability.")
-                    st.info("Possible causes: Missing 'fitting_basis_date' or 'predicted_crash_date' columns in data")
-                else:
-                    st.plotly_chart(period_fig, use_container_width=True)
-                
-                # Method explanations
-                with st.expander(f"📊 {period_name} Analysis Methods"):
-                    st.markdown(f"""
-                    **Convergence Analysis Methods for {period_name}:**
-                    
-                    1. **Standard Deviation Method**: 
-                       - Calculates std dev of crash predictions
-                       - Lower values = better convergence
-                       - Current: {convergence_results['std_deviation']:.1f} days
-                    
-                    2. **Coefficient of Variation**: 
-                       - Normalized measure (std dev / mean)
-                       - Accounts for different prediction ranges
-                       - Current: {convergence_results['coefficient_variation']:.3f}
-                    
-                    3. **Weighted Analysis**:
-                       - Recent predictions weighted more heavily
-                       - Uses exponential decay weighting
-                       - Weighted Std Dev: {convergence_results['weighted_std']:.1f} days
-                    
-                    4. **Trend Analysis**:
-                       - Linear regression of predictions over time
-                       - Slope: {convergence_results['trend_slope']:.3f} days/analysis
-                       - R²: {convergence_results['trend_r_squared']:.3f}
-                    
-                    **Convergence Status Criteria:**
-                    - **Excellent**: Std Dev < 5 days, CV < 0.05
-                    - **Good**: Std Dev < 10 days, CV < 0.10  
-                    - **Moderate**: Std Dev < 20 days, CV < 0.20
-                    - **Poor**: Above moderate thresholds
-                    
-                    **Data Quality**: {len(period_data)} analyses, R² range: {period_data['r_squared'].min():.3f} - {period_data['r_squared'].max():.3f}
-                    """)
-        
-        # Analysis explanation
-        with st.expander("📊 Chart Explanation"):
-            st.markdown("""
-            **Purpose**: Analyze whether crash predictions are converging to a specific date
-            
-            **Interpretation**:
-            - **Horizontal axis**: Fitting basis date (final day of data used for fitting)
-            - **Vertical axis**: Predicted crash date from that analysis
-            - **Color intensity**: R² score (darker = better fit)
-            - **Hover info**: Shows days from fitting basis to predicted crash
-            
-            **Convergence patterns**:
-            - **Converging predictions**: Points form a horizontal line → consistent crash date
-            - **Diverging predictions**: Points spread vertically → unstable predictions
-            - **Trend analysis**: Look for patterns as fitting basis dates progress
-            """)
         
     
     def render_crash_clustering_tab(self, symbol: str, analysis_data: pd.DataFrame):
@@ -2885,20 +2740,9 @@ class SymbolAnalysisDashboard:
             total_days = (full_max_date - full_min_date).days
             selected_duration = (selected_max - selected_min).days
             
-            # プログレスバーをより幅広く表示
-            progress_value = min(1.0, max(0.0, (selected_max - full_min_date).days / total_days)) if total_days > 0 else 1.0
-            
-            # プログレスバーをオレンジ色でスタイリング
-            st.markdown("""
-            <style>
-            .stProgress > div > div > div > div {
-                background: linear-gradient(90deg, #FFA500 0%, #FF8C00 50%, #D2691E 100%) !important;
-                opacity: 0.7 !important;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            st.progress(progress_value, text=f"Analysis Period: {selected_duration}d / {total_days}d available | Coverage: {(selected_duration/total_days)*100:.1f}%")
+            # 選択期間の開始位置と長さを計算
+            start_offset = (selected_min - full_min_date).days if total_days > 0 else 0
+            selected_ratio = selected_duration / total_days if total_days > 0 else 1.0
         
         st.markdown("---")
         
@@ -3407,6 +3251,64 @@ class SymbolAnalysisDashboard:
             st.warning("No analysis data available for this symbol")
             return
         
+        # Analysis Data Period functionality
+        st.subheader("📅 Analysis Data Period")
+        st.caption("解析データの対象とする期間")
+        
+        # データ範囲の計算（From/Toの下に表示用）
+        original_data = self.get_symbol_analysis_data(symbol, limit=1000)  # フィルタ前の全データ
+        if not original_data.empty:
+            original_data['analysis_basis_date'] = pd.to_datetime(original_data['analysis_basis_date'])
+            full_min_date = original_data['analysis_basis_date'].min()
+            full_max_date = original_data['analysis_basis_date'].max()
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            if 'parameters_from_date' not in st.session_state:
+                st.session_state.parameters_from_date = analysis_data['analysis_basis_date'].min().date()
+            from_date = st.date_input("From", st.session_state.parameters_from_date, key='parameters_from_date_input')
+            st.session_state.parameters_from_date = from_date
+            # Oldest Analysis情報を直下に表示
+            if not original_data.empty:
+                st.caption(f"📍 Oldest Analysis: {full_min_date.strftime('%Y-%m-%d')}")
+            
+        with col2:
+            if 'parameters_to_date' not in st.session_state:
+                st.session_state.parameters_to_date = analysis_data['analysis_basis_date'].max().date()
+            to_date = st.date_input("To", st.session_state.parameters_to_date, key='parameters_to_date_input')
+            st.session_state.parameters_to_date = to_date
+            # Latest Analysis情報を直下に表示
+            if not original_data.empty:
+                st.caption(f"📍 Latest Analysis: {full_max_date.strftime('%Y-%m-%d')}")
+        
+        # 📊 選択期間の視覚表示（プログレスバーのみ・より幅広く）
+        if not original_data.empty:
+            selected_min = pd.to_datetime(from_date)
+            selected_max = pd.to_datetime(to_date)
+            
+            # 期間の割合計算
+            total_days = (full_max_date - full_min_date).days
+            selected_duration = (selected_max - selected_min).days
+            
+            # 選択期間の開始位置と長さを計算
+            start_offset = (selected_min - full_min_date).days if total_days > 0 else 0
+            selected_ratio = selected_duration / total_days if total_days > 0 else 1.0
+        
+        st.markdown("---")
+        
+        # Period フィルタリング
+        analysis_data['analysis_basis_date'] = pd.to_datetime(analysis_data['analysis_basis_date'])
+        from_datetime = pd.to_datetime(from_date)
+        to_datetime = pd.to_datetime(to_date)
+        
+        date_mask = (analysis_data['analysis_basis_date'] >= from_datetime) & (analysis_data['analysis_basis_date'] <= to_datetime)
+        analysis_data = analysis_data[date_mask].copy()
+        
+        if len(analysis_data) == 0:
+            st.warning(f"No data available for selected period: {from_date} to {to_date}")
+            return
+        
         # Prepare detailed parameter table
         display_df = analysis_data.copy()
         
@@ -3736,7 +3638,7 @@ class SymbolAnalysisDashboard:
         tab_clustering, tab1, tab2, tab3 = st.tabs([
             "🎯 Crash Prediction Clustering",  # メインクラスタリングタブ
             "📈 LPPL Fitting Analysis", 
-            "📊 Prediction Convergence", 
+            "📊 Prediction Data", 
             "📋 Parameters & References"
         ])
         
@@ -3747,7 +3649,7 @@ class SymbolAnalysisDashboard:
             self.render_price_predictions_tab(selected_symbol, analysis_data)
         
         with tab2:
-            self.render_prediction_convergence_tab(selected_symbol, analysis_data)
+            self.render_prediction_data_tab(selected_symbol, analysis_data)
         
         with tab3:
             self.render_parameters_tab(selected_symbol, analysis_data)
