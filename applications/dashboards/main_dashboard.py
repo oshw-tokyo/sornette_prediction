@@ -2793,8 +2793,8 @@ class SymbolAnalysisDashboard:
                 **📏 Clustering Parameters:**
                 - **Distance (days)**: Maximum time gap between predictions to group them
                 - **Min Cluster Size**: Minimum predictions needed to form a valid cluster
-                - **Future Projection**: How far ahead to extend the visualization
                 - **Min R²**: Quality threshold for including data in clustering
+                - **Min Days to Crash**: Minimum time between fitting date and predicted crash date
                 """)
                 
             with col2:
@@ -2830,72 +2830,52 @@ class SymbolAnalysisDashboard:
             st.caption("size")
             
         with col3:
-            if 'clustering_future_days_preview' not in st.session_state:
-                st.session_state.clustering_future_days_preview = st.session_state.get('clustering_future_days', 180)
-            future_days_preview = st.slider("Projection", 30, 365, 
-                                          st.session_state.clustering_future_days_preview,
-                                          key='future_days_slider', help="Days to project cluster trends into future")
-            st.caption("days")
-            
-        with col4:
             if 'clustering_r2_threshold_preview' not in st.session_state:
                 st.session_state.clustering_r2_threshold_preview = st.session_state.get('clustering_r2_threshold', 0.8)
             r2_threshold_preview = st.slider("Min R²", 0.0, 1.0, 
                                            st.session_state.clustering_r2_threshold_preview, 0.05,
                                            key='r2_threshold_slider', help="Minimum R² value to include in clustering. Only data points with R² above this threshold will be used for clustering analysis (Data Quality Filter)")
-        
-        # 第2行のフィルター（最小予測期間）
-        st.markdown("### 📅 Prediction Horizon Filter")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
+            
+        with col4:
             if 'clustering_min_horizon_days_preview' not in st.session_state:
                 st.session_state.clustering_min_horizon_days_preview = st.session_state.get('clustering_min_horizon_days', 21)
-            if 'show_horizon_details' not in st.session_state:
-                st.session_state.show_horizon_details = False
             min_horizon_days_preview = st.slider(
-                "Min Prediction Horizon", 
+                "Min Days to Crash", 
                 min_value=0, max_value=90, 
                 value=st.session_state.clustering_min_horizon_days_preview,
                 key='min_horizon_days_slider',
-                help="Exclude predictions where crash date is too close to fitting date (Sornette research: near-crash fittings have low accuracy)"
+                help="Minimum days between fitting date and predicted crash date (excludes near-crash predictions with low accuracy)"
             )
             st.caption("days")
         
-        with col2:
-            if st.button("❓ Horizon Filter Details", help="Click for Sornette research background and filter rationale"):
-                st.session_state.show_horizon_details = True
+        # Min Days to Crash Details Button
+        if st.button("❓ Min Days to Crash - Sornette Research Details", help="Click for scientific background and filter rationale"):
+            st.session_state.show_horizon_details = not st.session_state.get('show_horizon_details', False)
+            
+        # 詳細説明の表示制御
+        if st.session_state.get('show_horizon_details', False):
+            with st.expander("📚 Sornette Research: Prediction Horizon Theory", expanded=True):
+                st.markdown(f"""
+                **🎯 Current Filter Setting**: Excluding predictions within **{min_horizon_days_preview} days** of fitting date.
                 
-            # 詳細説明の表示制御
-            if st.session_state.get('show_horizon_details', False):
-                with st.expander("📚 Sornette Research: Prediction Horizon Theory", expanded=True):
-                    st.markdown(f"""
-                    **🎯 Current Filter Setting**: Excluding predictions within **{min_horizon_days_preview} days** of fitting date.
-                    
-                    **📖 Sornette Research Evidence**:
-                    - **Optimal Prediction Window**: 1-6 months ahead
-                    - **Minimum Practical Horizon**: ~30 days
-                    - **Near-Crash Problem**: Fittings too close to critical time suffer from:
-                      - Increased noise sensitivity
-                      - LPPL singularity effects
-                      - Degraded predictive accuracy
-                    
-                    **⚙️ Implementation**:
-                    - **0 days**: No filtering (include all predictions)
-                    - **10-30 days**: Conservative filtering (recommended)
-                    - **30+ days**: Strict filtering (Sornette theoretical minimum)
-                    
-                    **✅ Scientific Basis**: Based on LPPL model behavior near critical time points.
-                    """)
-                    
-                    if st.button("✖️ Close Details"):
-                        st.session_state.show_horizon_details = False
-        
-        with col3:
-            st.empty()  # 空白列
-        
-        with col4:
-            st.empty()  # 空白列
+                **📖 Sornette Research Evidence**:
+                - **Optimal Prediction Window**: 1-6 months ahead
+                - **Minimum Practical Horizon**: ~30 days
+                - **Near-Crash Problem**: Fittings too close to critical time suffer from:
+                  - Increased noise sensitivity
+                  - LPPL singularity effects
+                  - Degraded predictive accuracy
+                
+                **⚙️ Implementation**:
+                - **0 days**: No filtering (include all predictions)
+                - **10-30 days**: Conservative filtering (recommended)
+                - **30+ days**: Strict filtering (Sornette theoretical minimum)
+                
+                **✅ Scientific Basis**: Based on LPPL model behavior near critical time points.
+                """)
+                
+                if st.button("✖️ Close Details"):
+                    st.session_state.show_horizon_details = False
         
         # Applyボタン（すべての設定を一度に適用）
         st.markdown("---")
@@ -2910,7 +2890,6 @@ class SymbolAnalysisDashboard:
             st.session_state.clustering_period_applied = True
             st.session_state.clustering_eps_days = eps_days_preview
             st.session_state.clustering_min_samples = min_samples_preview
-            st.session_state.clustering_future_days = future_days_preview
             st.session_state.clustering_r2_threshold = r2_threshold_preview
             st.session_state.clustering_min_horizon_days = min_horizon_days_preview
             
@@ -2922,7 +2901,6 @@ class SymbolAnalysisDashboard:
         # 実際に使用する値（Apply後の値）
         eps_days = st.session_state.get('clustering_eps_days', 30)
         min_samples = st.session_state.get('clustering_min_samples', 3)
-        future_days = st.session_state.get('clustering_future_days', 180)
         r2_threshold = st.session_state.get('clustering_r2_threshold', 0.8)
         min_horizon_days = st.session_state.get('clustering_min_horizon_days', 21)
             
