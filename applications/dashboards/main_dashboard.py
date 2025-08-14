@@ -2683,14 +2683,232 @@ class SymbolAnalysisDashboard:
         📏 **Reference Line (Light Blue)**: The diagonal line represents the theoretical case where the predicted crash date equals the fitting basis date. If points are on the line, predictions suggest crashes on the same day as fitting (immediate risk).
         """)
         
+        # ========================================
+        # Issue I058: Latest Analysis & Integrated Predictions
+        # (Moved from former LPPL Fitting Plot tab)
+        # ========================================
+        st.markdown("---")
+        st.subheader("📊 Latest Analysis & Integrated Predictions")
+        
+        # Get the latest analysis data
+        latest = valid_data.iloc[0] if not valid_data.empty else None
+        
+        if latest is not None:
+            # Latest Analysis Details
+            st.markdown("### 🔍 Latest Analysis Details")
+            st.caption("Most recent fitting result and prediction")
+            
+            # Get the latest price data for plotting
+            latest_start = self._ensure_date_string(latest.get('data_period_start'))
+            latest_end = self._ensure_date_string(latest.get('data_period_end'))
+            
+            if latest_start and latest_end:
+                latest_price_data = self.get_symbol_price_data(symbol, latest_start, latest_end)
+                
+                if latest_price_data is not None and not latest_price_data.empty and 'Close' in latest_price_data.columns:
+                    # LPPL parameters
+                    latest_params = {
+                        'tc': latest.get('tc', 1.0),
+                        'beta': latest.get('beta', 0.33),
+                        'omega': latest.get('omega', 6.0),
+                        'phi': latest.get('phi', 0.0),
+                        'A': latest.get('A', 0.0),
+                        'B': latest.get('B', 0.0),
+                        'C': latest.get('C', 0.0)
+                    }
+                    
+                    # Calculate LPPL fit
+                    latest_lppl = self.compute_lppl_fit(latest_price_data['Close'], latest_params)
+                    
+                    if latest_lppl:
+                        # Create latest analysis plot
+                        latest_fig = go.Figure()
+                        
+                        # Market data
+                        latest_fig.add_trace(go.Scatter(
+                            x=latest_price_data.index,
+                            y=latest_lppl['normalized_prices'],
+                            mode='lines',
+                            name='Market Data',
+                            line=dict(color='lightblue', width=2)
+                        ))
+                        
+                        # LPPL fit
+                        latest_fig.add_trace(go.Scatter(
+                            x=latest_price_data.index,
+                            y=latest_lppl['normalized_fitted'],
+                            mode='lines',
+                            name='LPPL Fit',
+                            line=dict(color='red', width=2.5)
+                        ))
+                        
+                        # Add predicted crash date line
+                        if pd.notna(latest.get('tc')):
+                            pred_date = self.convert_tc_to_real_date(
+                                latest['tc'], latest_start, latest_end
+                            )
+                            
+                            # Y-axis range
+                            y_min = min(latest_lppl['normalized_prices'].min(), 
+                                       latest_lppl['normalized_fitted'].min())
+                            y_max = max(latest_lppl['normalized_prices'].max(), 
+                                       latest_lppl['normalized_fitted'].max())
+                            
+                            latest_fig.add_shape(
+                                type="line",
+                                x0=pred_date, x1=pred_date,
+                                y0=y_min * 0.98, y1=y_max * 1.02,
+                                line=dict(color='red', width=3, dash="dash"),
+                                layer='above'
+                            )
+                            
+                            latest_fig.add_annotation(
+                                x=pred_date,
+                                y=y_max * 0.95,
+                                text=f"Predicted: {pred_date.strftime('%Y-%m-%d')}",
+                                showarrow=False,
+                                font=dict(color='red', size=11),
+                                bgcolor="rgba(255, 200, 200, 0.3)"
+                            )
+                        
+                        latest_fig.update_layout(
+                            title="Latest Analysis Result",
+                            height=400,
+                            xaxis_title="Date",
+                            yaxis_title="Normalized Price",
+                            showlegend=True
+                        )
+                        
+                        st.plotly_chart(latest_fig, use_container_width=True)
+                        
+                        # Display metrics
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("R² Score", f"{latest.get('r_squared', 0):.4f}")
+                        with col2:
+                            st.metric("Quality", latest.get('quality', 'N/A'))
+                        with col3:
+                            if pd.notna(latest.get('tc')):
+                                pred_date = self.convert_tc_to_real_date(
+                                    latest['tc'], latest_start, latest_end
+                                )
+                                days_to_crash = (pred_date - datetime.now()).days
+                                st.metric("Days to Crash", days_to_crash)
+                        with col4:
+                            st.metric("tc Value", f"{latest.get('tc', 0):.4f}")
+            
+            # Integrated Predictions
+            st.markdown("---")
+            st.markdown("### 📈 Integrated Predictions")
+            st.caption("Combined view of multiple recent predictions")
+            
+            # Get top 5 most recent analyses for integrated view
+            recent_analyses = valid_data.head(5)
+            
+            if len(recent_analyses) > 1:
+                integrated_fig = go.Figure()
+                
+                # Use the latest analysis price data as base
+                if latest_price_data is not None and latest_lppl:
+                    # Add market data (from latest analysis)
+                    integrated_fig.add_trace(go.Scatter(
+                        x=latest_price_data.index,
+                        y=latest_lppl['normalized_prices'],
+                        mode='lines',
+                        name='Market Data',
+                        line=dict(color='lightblue', width=2)
+                    ))
+                    
+                    # Colors for different predictions
+                    colors = ['red', 'orange', 'green', 'purple', 'brown']
+                    
+                    # Add prediction lines for each analysis
+                    for i, (_, analysis) in enumerate(recent_analyses.iterrows()):
+                        if pd.notna(analysis.get('tc')):
+                            analysis_start = self._ensure_date_string(analysis.get('data_period_start'))
+                            analysis_end = self._ensure_date_string(analysis.get('data_period_end'))
+                            
+                            if analysis_start and analysis_end:
+                                pred_date = self.convert_tc_to_real_date(
+                                    analysis['tc'], analysis_start, analysis_end
+                                )
+                                
+                                color = colors[i % len(colors)]
+                                fitting_date = pd.to_datetime(analysis.get('fitting_basis_date', analysis_end))
+                                
+                                # Add vertical line for this prediction
+                                integrated_fig.add_shape(
+                                    type="line",
+                                    x0=pred_date, x1=pred_date,
+                                    y0=0, y1=1,
+                                    yref="paper",
+                                    line=dict(color=color, width=2, dash="dash"),
+                                    opacity=0.7
+                                )
+                                
+                                # Add annotation
+                                integrated_fig.add_annotation(
+                                    x=pred_date,
+                                    y=0.95 - (i * 0.05),
+                                    yref="paper",
+                                    text=f"{pred_date.strftime('%m/%d')}",
+                                    showarrow=False,
+                                    font=dict(color=color, size=10),
+                                    bgcolor="rgba(20, 20, 30, 0.9)",
+                                    bordercolor=color,
+                                    borderwidth=1
+                                )
+                    
+                    integrated_fig.update_layout(
+                        title="Integrated Predictions (Recent 5 Analyses)",
+                        height=400,
+                        xaxis_title="Date",
+                        yaxis_title="Normalized Price",
+                        showlegend=True
+                    )
+                    
+                    st.plotly_chart(integrated_fig, use_container_width=True)
+                    
+                    # Summary table of predictions
+                    st.markdown("#### Prediction Summary")
+                    summary_data = []
+                    for i, (_, analysis) in enumerate(recent_analyses.iterrows()):
+                        if pd.notna(analysis.get('tc')):
+                            analysis_start = self._ensure_date_string(analysis.get('data_period_start'))
+                            analysis_end = self._ensure_date_string(analysis.get('data_period_end'))
+                            
+                            if analysis_start and analysis_end:
+                                pred_date = self.convert_tc_to_real_date(
+                                    analysis['tc'], analysis_start, analysis_end
+                                )
+                                fitting_date = pd.to_datetime(analysis.get('fitting_basis_date', analysis_end))
+                                
+                                summary_data.append({
+                                    "Fitting Date": fitting_date.strftime('%Y-%m-%d'),
+                                    "Predicted Crash": pred_date.strftime('%Y-%m-%d'),
+                                    "Days to Crash": (pred_date - datetime.now()).days,
+                                    "R²": f"{analysis.get('r_squared', 0):.4f}",
+                                    "Quality": analysis.get('quality', 'N/A')
+                                })
+                    
+                    if summary_data:
+                        summary_df = pd.DataFrame(summary_data)
+                        st.dataframe(summary_df, use_container_width=True)
+            else:
+                st.info("Not enough data for integrated predictions (need at least 2 analyses)")
+        
         
     
-    def render_crash_clustering_tab(self, symbol: str, analysis_data: pd.DataFrame):
+    def render_clustering_analysis_tab(self, symbol: str, analysis_data: pd.DataFrame):
         """
-        新タブ: Crash Prediction Clustering (I052実装) - デバッグ簡素版
+        Issue I058: 統合されたClustering Analysisタブ
+        旧render_crash_clustering_tabを拡張し、Individual Results機能を追加
+        """
+        """
+        新タブ: Clustering Analysis (I052実装→I058拡張)
         """
         
-        st.header(f"🎯 {symbol} - Prediction Clustering")
+        st.header(f"🎯 {symbol} - Clustering Analysis")
         
         if analysis_data.empty:
             st.warning("No analysis data available for clustering")
@@ -3059,7 +3277,7 @@ class SymbolAnalysisDashboard:
         # 可視化: 2次元散布図 + クラスター
         fig = make_subplots(
             rows=1, cols=1,
-            subplot_titles=("Crash Prediction Clustering",)
+            subplot_titles=("Clustering Analysis",)
         )
         
         # カラーマップ（シンプルな色）
@@ -3170,7 +3388,7 @@ class SymbolAnalysisDashboard:
             height=600,  # 棒グラフ削除により高さを減少
             showlegend=True,
             hovermode='closest',
-            title_text=f"{symbol} - Crash Prediction Clustering Analysis"
+            title_text=f"{symbol} - Clustering Analysis"
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -3220,6 +3438,266 @@ class SymbolAnalysisDashboard:
             - **Days to predicted crash**: {best_pred['future_crash_days']:.0f}
             - **Data range**: {best_pred['data_range']}
             """)
+            
+            # ========================================
+            # Issue I058: Individual Results Section
+            # ========================================
+            st.markdown("---")
+            st.subheader("📈 Individual Fitting Results")
+            st.caption("Select a cluster to view individual fitting results from that cluster")
+            
+            # Cluster selection UI
+            col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
+            
+            with col1:
+                # Create cluster options for dropdown
+                cluster_options = [f"C{cid+1} ({pred['size']} results, R²={pred['avg_r2']:.3f})" 
+                                  for cid, pred in sorted(cluster_predictions.items())]
+                
+                selected_cluster_display = st.selectbox(
+                    "Select Cluster:",
+                    cluster_options,
+                    key="selected_cluster_for_individual"
+                )
+                
+                # Extract cluster ID from display string
+                if selected_cluster_display:
+                    selected_cluster_id = int(selected_cluster_display.split("C")[1].split(" ")[0]) - 1
+                else:
+                    selected_cluster_id = None
+            
+            with col2:
+                sort_by = st.selectbox(
+                    "Sort by:",
+                    ["Date (Latest)", "Date (Oldest)", "R² (Highest)", "R² (Lowest)"],
+                    key="individual_sort_by"
+                )
+            
+            with col3:
+                max_results = st.number_input(
+                    "Max results:",
+                    min_value=1,
+                    max_value=100,
+                    value=10,
+                    step=5,
+                    key="individual_max_results"
+                )
+            
+            with col4:
+                show_individual_results = st.button(
+                    "🔍 Show Individual Fitting Results",
+                    type="primary",
+                    use_container_width=True
+                )
+            
+            # Display individual results when button is clicked
+            if show_individual_results and selected_cluster_id is not None:
+                with st.spinner(f"Loading individual results for C{selected_cluster_id+1}..."):
+                    # Get cluster data
+                    cluster_data = cluster_predictions[selected_cluster_id]
+                    cluster_indices = cluster_data['indices']
+                    
+                    # Get the actual data for this cluster
+                    cluster_subset = plot_data.iloc[cluster_indices].copy()
+                    
+                    # Apply sorting
+                    if "Date (Latest)" in sort_by:
+                        cluster_subset = cluster_subset.sort_values('fitting_basis_date', ascending=False)
+                    elif "Date (Oldest)" in sort_by:
+                        cluster_subset = cluster_subset.sort_values('fitting_basis_date', ascending=True)
+                    elif "R² (Highest)" in sort_by:
+                        cluster_subset = cluster_subset.sort_values('r_squared', ascending=False)
+                    elif "R² (Lowest)" in sort_by:
+                        cluster_subset = cluster_subset.sort_values('r_squared', ascending=True)
+                    
+                    # Limit results
+                    cluster_subset = cluster_subset.head(max_results)
+                    
+                    # Display results count
+                    st.info(f"Showing {len(cluster_subset)} of {len(cluster_indices)} results from C{selected_cluster_id+1}")
+                    
+                    # Create cache for price data if not exists
+                    if 'cluster_price_cache' not in st.session_state:
+                        st.session_state.cluster_price_cache = {}
+                    
+                    # Display individual fitting plots
+                    for idx, (_, row) in enumerate(cluster_subset.iterrows()):
+                        if pd.notna(row.get('tc')):
+                            # Get analysis parameters
+                            ind_tc = row['tc']
+                            ind_symbol = symbol  # Use the global symbol for now
+                            ind_start = self._ensure_date_string(row.get('data_period_start'))
+                            ind_end = self._ensure_date_string(row.get('data_period_end'))
+                            
+                            if ind_start and ind_end:
+                                # Get fitting basis date
+                                fitting_basis_date = row.get('fitting_basis_date', row.get('analysis_basis_date', ind_end))
+                                fitting_basis_dt = pd.to_datetime(fitting_basis_date)
+                                
+                                st.markdown("---")
+                                st.markdown(f"#### Analysis #{idx+1} - Fitting Basis: {fitting_basis_dt.strftime('%Y-%m-%d')}")
+                                
+                                # Check cache for price data
+                                cache_key = f"{ind_symbol}_{ind_start}_{ind_end}"
+                                
+                                if cache_key in st.session_state.cluster_price_cache:
+                                    # Use cached data
+                                    individual_data = st.session_state.cluster_price_cache[cache_key]
+                                else:
+                                    # Fetch new data and cache it
+                                    individual_data = self.get_symbol_price_data(ind_symbol, ind_start, ind_end)
+                                    if individual_data is not None and not individual_data.empty:
+                                        st.session_state.cluster_price_cache[cache_key] = individual_data
+                                
+                                if individual_data is not None and not individual_data.empty and 'Close' in individual_data.columns:
+                                    # Extract LPPL parameters
+                                    individual_params = {
+                                        'tc': row.get('tc', 1.0),
+                                        'beta': row.get('beta', 0.33),
+                                        'omega': row.get('omega', 6.0),
+                                        'phi': row.get('phi', 0.0),
+                                        'A': row.get('A', 0.0),
+                                        'B': row.get('B', 0.0),
+                                        'C': row.get('C', 0.0)
+                                    }
+                                    
+                                    # Calculate LPPL fitting
+                                    individual_lppl = self.compute_lppl_fit(individual_data['Close'], individual_params)
+                                    
+                                    if individual_lppl:
+                                        # Create individual fitting plot
+                                        individual_fig = go.Figure()
+                                        
+                                        # Actual data
+                                        individual_fig.add_trace(go.Scatter(
+                                            x=individual_data.index,
+                                            y=individual_lppl['normalized_prices'],
+                                            mode='lines',
+                                            name='Market Data',
+                                            line=dict(color='lightblue', width=2)
+                                        ))
+                                        
+                                        # LPPL fit (up to basis date)
+                                        basis_mask = individual_data.index <= fitting_basis_dt
+                                        individual_fig.add_trace(go.Scatter(
+                                            x=individual_data.index[basis_mask],
+                                            y=individual_lppl['normalized_fitted'][basis_mask],
+                                            mode='lines',
+                                            name='LPPL Fit (Fitted)',
+                                            line=dict(color='red', width=2.5)
+                                        ))
+                                        
+                                        # LPPL fit (after basis date) - Future Period
+                                        future_mask = individual_data.index > fitting_basis_dt
+                                        if future_mask.any():
+                                            individual_fig.add_trace(go.Scatter(
+                                                x=individual_data.index[future_mask],
+                                                y=individual_lppl['normalized_fitted'][future_mask],
+                                                mode='lines',
+                                                name='LPPL Fit (Prediction)',
+                                                line=dict(color='orange', width=2.5, dash='dot'),
+                                                opacity=0.8
+                                            ))
+                                        
+                                        # Predicted crash date vertical line
+                                        individual_pred_date = self.convert_tc_to_real_date(ind_tc, ind_start, ind_end)
+                                        
+                                        # Calculate Y-axis range
+                                        y_min = min(individual_lppl['normalized_prices'].min(), 
+                                                   individual_lppl['normalized_fitted'].min())
+                                        y_max = max(individual_lppl['normalized_prices'].max(), 
+                                                   individual_lppl['normalized_fitted'].max())
+                                        
+                                        # Add vertical line for predicted crash date
+                                        individual_fig.add_shape(
+                                            type="line",
+                                            x0=individual_pred_date,
+                                            x1=individual_pred_date,
+                                            y0=y_min * 0.98,
+                                            y1=y_max * 1.02,
+                                            line=dict(color='rgba(255, 100, 100, 0.8)', width=2, dash="dash"),
+                                            layer='above'
+                                        )
+                                        
+                                        individual_fig.add_annotation(
+                                            x=individual_pred_date,
+                                            y=y_max * 0.95,
+                                            text=f"Crash: {individual_pred_date.strftime('%m/%d')}",
+                                            showarrow=False,
+                                            font=dict(size=10, color='white'),
+                                            bgcolor="rgba(20, 20, 30, 0.9)",
+                                            bordercolor="rgba(255, 100, 100, 0.8)",
+                                            borderwidth=1
+                                        )
+                                        
+                                        # Update layout
+                                        individual_fig.update_layout(
+                                            title=f"{ind_symbol} - Fitted on {fitting_basis_dt.strftime('%Y-%m-%d')} (R²={row.get('r_squared', 0):.4f})",
+                                            height=400,
+                                            plot_bgcolor='rgba(20, 20, 30, 0.95)',
+                                            paper_bgcolor='rgba(15, 15, 25, 0.95)',
+                                            font=dict(color='white'),
+                                            xaxis=dict(
+                                                gridcolor='rgba(100, 100, 100, 0.2)',
+                                                showgrid=True,
+                                                gridwidth=1,
+                                                title="Date"
+                                            ),
+                                            yaxis=dict(
+                                                gridcolor='rgba(100, 100, 100, 0.2)',
+                                                showgrid=True,
+                                                gridwidth=1,
+                                                title="Normalized Price"
+                                            ),
+                                            showlegend=True,
+                                            legend=dict(
+                                                x=0.02,
+                                                y=0.98,
+                                                bgcolor='rgba(0, 0, 0, 0.5)'
+                                            )
+                                        )
+                                        
+                                        st.plotly_chart(individual_fig, use_container_width=True, 
+                                                      key=f"cluster_individual_{selected_cluster_id}_{idx}")
+                                        
+                                        # Display metrics for this analysis
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            st.metric("Predicted Crash", individual_pred_date.strftime('%Y-%m-%d'))
+                                        with col2:
+                                            st.metric("R² Score", f"{row.get('r_squared', 0):.4f}")
+                                        with col3:
+                                            quality = row.get('quality', 'N/A')
+                                            if quality != 'N/A':
+                                                st.metric("Quality", quality)
+                                            else:
+                                                # Calculate quality based on R²
+                                                r2 = row.get('r_squared', 0)
+                                                if r2 >= 0.95:
+                                                    quality = "Excellent"
+                                                elif r2 >= 0.90:
+                                                    quality = "Good"
+                                                elif r2 >= 0.85:
+                                                    quality = "Fair"
+                                                else:
+                                                    quality = "Poor"
+                                                st.metric("Quality", quality)
+                                        with col4:
+                                            days_to_crash = (individual_pred_date - datetime.now()).days
+                                            st.metric("Days to Crash", days_to_crash)
+                                    else:
+                                        st.error(f"LPPL calculation failed for analysis #{idx+1}")
+                                else:
+                                    st.warning(f"Unable to retrieve data for analysis #{idx+1}")
+                            else:
+                                st.warning(f"Missing date information for analysis #{idx+1}")
+                        else:
+                            st.warning(f"Missing tc value for analysis #{idx+1}")
+                    
+                    # Clear cache if it gets too large (> 50 entries)
+                    if len(st.session_state.cluster_price_cache) > 50:
+                        st.session_state.cluster_price_cache = {}
+                        print("🧹 Cleared price cache (exceeded 50 entries)")
     
     def render_parameters_tab(self, symbol: str, analysis_data: pd.DataFrame):
         """Tab 4: Parameters Only"""
@@ -3618,28 +4096,30 @@ class SymbolAnalysisDashboard:
         
         # 🎯 フィルタリング完了 - 新システムで全て処理済み
         
-        # Main content tabs - 新しいタブ順序（2025-08-13）
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "📊 Crash Prediction Data",     # 1. データ確認・可視化
-            "🎯 Prediction Clustering",     # 2. クラスタリング分析  
-            "📈 LPPL Fitting Plot",         # 3. フィッティング結果
-            "📋 Parameters",                # 4. パラメータ詳細
-            "📚 References"                 # 5. 参照情報
+        # Main content tabs - Issue I058実装（2025-08-14）
+        # Phase 2: タブ構造変更 - LPPL Fitting Plotタブ削除、Clustering Analysis改名
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Crash Prediction Data",     # 1. データ確認・可視化（Enhanced with Latest Analysis）
+            "🎯 Clustering Analysis",       # 2. クラスタリング分析（旧Prediction Clustering, Enhanced with Individual Results）
+            "📋 Parameters",                # 3. パラメータ詳細（変更なし）
+            "📚 References"                 # 4. 参照情報（変更なし）
         ])
         
         with tab1:
             self.render_prediction_data_tab(selected_symbol, analysis_data)
         
         with tab2:
-            self.render_crash_clustering_tab(selected_symbol, analysis_data)
+            # Issue I058: Clustering Analysis統合タブ（旧Prediction Clustering）
+            self.render_clustering_analysis_tab(selected_symbol, analysis_data)
+        
+        # Issue I058: LPPL Fitting Plotタブは削除（機能は他タブへ移動）
+        # with tab3:
+        #     self.render_price_predictions_tab(selected_symbol, analysis_data)
         
         with tab3:
-            self.render_price_predictions_tab(selected_symbol, analysis_data)
-        
-        with tab4:
             self.render_parameters_tab(selected_symbol, analysis_data)
         
-        with tab5:
+        with tab4:
             self.render_references_tab(selected_symbol, analysis_data)
 
 def main():
