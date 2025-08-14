@@ -3501,11 +3501,11 @@ class SymbolAnalysisDashboard:
                     cluster_mask = clustering_data['cluster'] == selected_cluster_id
                     cluster_subset = clustering_data[cluster_mask].copy()
                     
-                    # Apply sorting
+                    # Apply sorting (using basis_date which is the correct column name in clustering_data)
                     if "Date (Latest)" in sort_by:
-                        cluster_subset = cluster_subset.sort_values('fitting_basis_date', ascending=False)
+                        cluster_subset = cluster_subset.sort_values('basis_date', ascending=False)
                     elif "Date (Oldest)" in sort_by:
-                        cluster_subset = cluster_subset.sort_values('fitting_basis_date', ascending=True)
+                        cluster_subset = cluster_subset.sort_values('basis_date', ascending=True)
                     elif "R² (Highest)" in sort_by:
                         cluster_subset = cluster_subset.sort_values('r_squared', ascending=False)
                     elif "R² (Lowest)" in sort_by:
@@ -3531,8 +3531,8 @@ class SymbolAnalysisDashboard:
                             ind_end = self._ensure_date_string(row.get('data_period_end'))
                             
                             if ind_start and ind_end:
-                                # Get fitting basis date
-                                fitting_basis_date = row.get('fitting_basis_date', row.get('analysis_basis_date', ind_end))
+                                # Get fitting basis date (basis_date is the column name in clustering_data)
+                                fitting_basis_date = row.get('basis_date', row.get('analysis_basis_date', ind_end))
                                 fitting_basis_dt = pd.to_datetime(fitting_basis_date)
                                 
                                 st.markdown("---")
