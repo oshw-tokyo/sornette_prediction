@@ -3515,7 +3515,9 @@ class SymbolAnalysisDashboard:
                     cluster_subset = cluster_subset.head(max_results)
                     
                     # Display results count
-                    st.info(f"Showing {len(cluster_subset)} of {len(cluster_indices)} results from C{selected_cluster_id+1}")
+                    # Calculate total results in this cluster from cluster_predictions
+                    total_in_cluster = cluster_predictions[selected_cluster_id]['size']
+                    st.info(f"Showing {len(cluster_subset)} of {total_in_cluster} results from C{selected_cluster_id+1}")
                     
                     # Create cache for price data if not exists
                     if 'cluster_price_cache' not in st.session_state:
