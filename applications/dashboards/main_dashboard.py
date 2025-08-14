@@ -3556,15 +3556,31 @@ class SymbolAnalysisDashboard:
                                 st.markdown("---")
                                 st.markdown(f"#### Analysis #{idx+1} - Fitting Basis: {fitting_basis_dt.strftime('%Y-%m-%d')}")
                                 
-                                # Check cache for price data
-                                cache_key = f"{ind_symbol}_{ind_start}_{ind_end}"
+                                # Calculate predicted crash date for extended data fetch
+                                pred_date_for_fetch = None
+                                if pd.notna(row.get('tc')):
+                                    pred_date_for_fetch = self.convert_tc_to_real_date(
+                                        row['tc'], ind_start, ind_end
+                                    )
+                                
+                                # Extend end date to include future period (30 days after predicted crash or 60 days after fitting basis)
+                                extended_end = ind_end
+                                if pred_date_for_fetch:
+                                    extended_end_dt = pred_date_for_fetch + timedelta(days=30)
+                                    # Use the later date between original end and extended end
+                                    original_end_dt = pd.to_datetime(ind_end)
+                                    if extended_end_dt > original_end_dt:
+                                        extended_end = extended_end_dt.strftime('%Y-%m-%d')
+                                
+                                # Check cache for price data (with extended period)
+                                cache_key = f"{ind_symbol}_{ind_start}_{extended_end}"
                                 
                                 if cache_key in st.session_state.cluster_price_cache:
                                     # Use cached data
                                     individual_data = st.session_state.cluster_price_cache[cache_key]
                                 else:
-                                    # Fetch new data and cache it
-                                    individual_data = self.get_symbol_price_data(ind_symbol, ind_start, ind_end)
+                                    # Fetch new data with extended period and cache it
+                                    individual_data = self.get_symbol_price_data(ind_symbol, ind_start, extended_end)
                                     if individual_data is not None and not individual_data.empty:
                                         st.session_state.cluster_price_cache[cache_key] = individual_data
                                 
@@ -3607,16 +3623,49 @@ class SymbolAnalysisDashboard:
                                         ))
                                         
                                         # LPPL fit (after basis date) - Future Period
-                                        future_mask = individual_data.index > fitting_basis_dt
-                                        if future_mask.any():
-                                            individual_fig.add_trace(go.Scatter(
-                                                x=individual_data.index[future_mask],
-                                                y=individual_lppl['normalized_fitted'][future_mask],
-                                                mode='lines',
-                                                name='LPPL Fit (Prediction)',
-                                                line=dict(color='orange', width=2.5, dash='dot'),
-                                                opacity=0.8
-                                            ))
+                                        # Use compute_extended_lppl_fit for proper future projection
+                                        if individual_pred_date:
+                                            extended_lppl = self.compute_extended_lppl_fit(
+                                                individual_data['Close'], 
+                                                individual_params,
+                                                fitting_basis_dt,
+                                                individual_pred_date + timedelta(days=30)
+                                            )
+                                            
+                                            if extended_lppl and len(extended_lppl['future_dates']) > 0:
+                                                # Extended future period from compute_extended_lppl_fit
+                                                individual_fig.add_trace(go.Scatter(
+                                                    x=extended_lppl['future_dates'],
+                                                    y=extended_lppl['normalized_fitted'],
+                                                    mode='lines',
+                                                    name='LPPL Fit (Prediction)',
+                                                    line=dict(color='orange', width=2.5, dash='dot'),
+                                                    opacity=0.8
+                                                ))
+                                            else:
+                                                # Fallback to original method if extended computation fails
+                                                future_mask = individual_data.index > fitting_basis_dt
+                                                if future_mask.any():
+                                                    individual_fig.add_trace(go.Scatter(
+                                                        x=individual_data.index[future_mask],
+                                                        y=individual_lppl['normalized_fitted'][future_mask],
+                                                        mode='lines',
+                                                        name='LPPL Fit (Prediction)',
+                                                        line=dict(color='orange', width=2.5, dash='dot'),
+                                                        opacity=0.8
+                                                    ))
+                                        else:
+                                            # No prediction date, use simple future mask
+                                            future_mask = individual_data.index > fitting_basis_dt
+                                            if future_mask.any():
+                                                individual_fig.add_trace(go.Scatter(
+                                                    x=individual_data.index[future_mask],
+                                                    y=individual_lppl['normalized_fitted'][future_mask],
+                                                    mode='lines',
+                                                    name='LPPL Fit (Prediction)',
+                                                    line=dict(color='orange', width=2.5, dash='dot'),
+                                                    opacity=0.8
+                                                ))
                                         
                                         # Predicted crash date vertical line
                                         individual_pred_date = self.convert_tc_to_real_date(ind_tc, ind_start, ind_end)
@@ -3649,6 +3698,12 @@ class SymbolAnalysisDashboard:
                                             borderwidth=1
                                         )
                                         
+                                        # Set x-axis range to include future period
+                                        x_range_start = individual_data.index.min()
+                                        x_range_end = individual_data.index.max()
+                                        if individual_pred_date and individual_pred_date > x_range_end:
+                                            x_range_end = individual_pred_date + timedelta(days=30)
+                                        
                                         # Update layout
                                         individual_fig.update_layout(
                                             title=f"{ind_symbol} - Fitted on {fitting_basis_dt.strftime('%Y-%m-%d')} (R²={row.get('r_squared', 0):.4f})",
@@ -3660,7 +3715,8 @@ class SymbolAnalysisDashboard:
                                                 gridcolor='rgba(100, 100, 100, 0.2)',
                                                 showgrid=True,
                                                 gridwidth=1,
-                                                title="Date"
+                                                title="Date",
+                                                range=[x_range_start, x_range_end]
                                             ),
                                             yaxis=dict(
                                                 gridcolor='rgba(100, 100, 100, 0.2)',
