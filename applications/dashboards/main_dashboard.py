@@ -3495,10 +3495,11 @@ class SymbolAnalysisDashboard:
                 with st.spinner(f"Loading individual results for C{selected_cluster_id+1}..."):
                     # Get cluster data
                     cluster_data = cluster_predictions[selected_cluster_id]
-                    cluster_indices = cluster_data['indices']
                     
-                    # Get the actual data for this cluster
-                    cluster_subset = plot_data.iloc[cluster_indices].copy()
+                    # Get indices for this cluster from clustering_data
+                    # clustering_data already has the cluster assignments
+                    cluster_mask = clustering_data['cluster'] == selected_cluster_id
+                    cluster_subset = clustering_data[cluster_mask].copy()
                     
                     # Apply sorting
                     if "Date (Latest)" in sort_by:
