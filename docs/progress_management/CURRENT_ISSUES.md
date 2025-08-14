@@ -14,7 +14,7 @@
    - 解決したissueは「解決済みIssue」に移動（最新10件のみ保持）
    - 古い解決済みissueは archives/ にアーカイブ
    - **Issue IDは永続的な連番管理**（I + 3桁の数字、一度使用された番号は再利用禁止）
-   - **次回使用ID**: I060（2025-08-13時点・I059作成）
+   - **次回使用ID**: I062（2025-08-14時点・I061作成）
 
 3. **優先度の定義**
    - 🔴 Critical: システムが動作しない、予測が全く機能しない
@@ -32,12 +32,12 @@
 
 ## Issue統計サマリー
 
-- **総アクティブIssue数**: 42 （I052解決完了版）
+- **総アクティブIssue数**: 44 （I060追加版）
 - **Critical**: 1  
 - **High**: 7 
-- **Medium**: 34 
+- **Medium**: 36 
 - **Low**: 0
-- **今週新規**: 0 (安定期)
+- **今週新規**: 2 (I059, I060)
 - **平均解決時間**: 1.5日 (実績ベース・I052大規模実装反映)
 
 ---
@@ -98,8 +98,10 @@
 | I051 | Finnhub API時系列データ取得制限・無料プラン機能不足 | Finnhub API実装・接続テスト成功（AAPL価格取得・シンボル検索確認済み）・しかし時系列データ（stock/candle, crypto/candle）は403エラーで無料プラン制限・LPPL分析には過去365日の時系列データが必須のため利用不可・リアルタイム価格取得のみ可能だが分析価値限定的・有料プラン検討も費用対効果低い | 2025-08-10 | API統合・データ取得・コスト効率 | 🚫 利用不可 |
 | I053 | LPPL Fitting Plot タブの包括的機能改善・Interactive Individual Results実装 | 【現在の問題】銘柄切り替え後プロットバグ・個別フィッティング結果未表示・期間フィルタリング後表示問題・SESSION_STATE管理問題・【新規機能要求】**Interactive Individual Results実装**：Integrated Plots（旧Integrated Predictions）で特定データ選択時に対応Individual Resultプロット表示・☒ボタンでの削除機能・複数時点データ並列比較表示・**実装方式提案**：1)プロット内クリック選択（Plotlyコールバック）2)データテーブル行選択3)日付範囲スライダー選択4)チェックボックス一覧選択・**品質フィルタリング追加**：Min R²フィルタリング機能（Prediction Clustering同様）・その他フィルタリング拡張予定・多時点データ比較による予測トレンド分析機能の実現 | 2025-08-13 | ダッシュボード安定性・LPPL表示機能・ユーザビリティ・投資判断支援 | 🟠 High |
 | I055 | Clustering Analysis Settings統一とApplyボタン制御・パラメータ再編成 | Crash Prediction Clusteringタブのパラメータ制御改善・【Applyボタン統一】Display PeriodとClustering Parameters両方を単一Applyボタンで制御・【パラメータプレビュー】スライダー変更は即座に反映せずApply押下時に適用・【設定グループ化】Clustering Analysis Settingsとして全設定を統合・【ラベル改善】Display Period→Analysis Data Period（解析データの対象期間）に変更・**【パラメータ再編成要求】**：**Projection を Clustering Parameters から分離**→Display Settings（またはProjection Settings/Plot Settings）として独立配置・**Min Prediction Horizon を Clustering Parameters に追加**（現在のPrediction Horizon Filter位置）・**Projection は現在位置に Display Settings として配置**・**Projection範囲拡張**：現在の30-365日→30-3650日（10年先）に拡張・初期値1095日（3年）に変更し超長期投資判断支援・**【代替案：Projection削除検討】**：自動範囲調整（max_prediction_date + 60日マージン）によるProjectionフィルター完全削除・UI簡素化・他タブとの一貫性向上・ユーザビリティ改善・実装は再編成案 vs 削除案の2択検討・フィルタリング機能は不変でユーザー理解向上のための論理的再配置・設定値のプレビューと実際の適用値を明確に区別・ユーザー操作の一貫性向上 | 2025-08-13 | ダッシュボードUX・パラメータ管理・UI論理構造 | 🟡 Medium |
-| I058 | ダッシュボード包括的再編成・Clustering Analysis統合タブ実装 | **【大規模改修】** ダッシュボードタブ構造再編成とIndividual Results機能強化・**【タブ再編成】** Prediction Clustering→Clustering Analysis改名・LPPL Fitting Plot機能統合・**【クラスター選択型Individual Results】** クラスター選択→個別フィッティング結果表示（最大10件・日付/R²順ソート可能）・**【Crash Prediction Dataダイジェスト化】** Latest Analysis Details移動・スクリーニング機能化・**【API最適化】** 全期間データ一括取得・キャッシュ利用・**【歴史的検証統合（Want要件）】** Black Monday等の予測再現プロット（データ準備後実装）・段階的実装計画・対話的デバッグによる品質確保 | 2025-08-14 | ダッシュボードUX・タブ構造・データフロー | 🔴 Critical |
-| I059 | Analysis Period バー表示の期間反映機能不具合・Streamlitプログレスバー構造的限界 | 全タブのAnalysis Data Period機能で実装されたプログレスバーが期間選択を正しく反映しない問題・【修正後も残る問題】From側変更でもTo側のみ変更されるビジュアル表示・Streamlitプログレスバーは「開始位置」の概念がなく「長さのみ」表示・選択期間の位置情報が全く視覚化されない構造的限界・【パフォーマンス問題】補助機能にも関わらず処理時間が長すぎる・各タブ切替時に不要な遅延発生・UX悪化・【根本的結論】プログレスバーでの実装そのものが不適切・期間選択UI として機能しない・【代替実装必要】HTML/CSS水平バー・Plotly timeline・カスタムStreamlitコンポーネント・または簡素化してテキスト表示のみ・現在の実装は削除検討すべき | 2025-08-13 | ダッシュボードUI・期間選択UX・パフォーマンス・システム設計 | 🟠 High |
+| I058 | ダッシュボード包括的再編成・Clustering Analysis統合タブ実装 | **【大規模改修】** ダッシュボードタブ構造再編成とIndividual Results機能強化・**【タブ再編成】** Prediction Clustering→Clustering Analysis改名・LPPL Fitting Plot機能統合・**【クラスター選択型Individual Results】** クラスター選択→個別フィッティング結果表示（最大100件・日付/R²順ソート可能）・**【Crash Prediction Dataダイジェスト化】** Latest Analysis Details移動・スクリーニング機能化・**【API最適化】** 全期間データ一括取得・キャッシュ利用・**【歴史的検証統合（Want要件）】** Black Monday等の予測再現プロット（データ準備後実装）・段階的実装計画・対話的デバッグによる品質確保 | 2025-08-14 | ダッシュボードUX・タブ構造・データフロー | 🟢 実装90%完了 |
+| I059 | NASDACOMデータ重複表示問題調査 | ユーザー報告によるNASDACOMデータの重複表示問題・データベースレベルでは重複なし（309レコード、完全重複0）・表示層での問題の可能性高・Individual Fitting Results/Clustering Analysisでの表示確認必要・同一analysis_basis_dateでの複数レコード確認必要・表示時deduplication/DB制約/分析時防止の３つの解決策候補 | 2025-08-14 | ダッシュボード表示・データ整合性 | 🟡 Medium |
+| I060 | 不要コード調査・整理（Dead Code Cleanup） | Issue I058の大規模改修により生じたコメントアウトコード・未使用関数・不要インポートの調査と整理・main_dashboard.py（4400行→3000行目標）・LPPL Fitting Plotタブの完全削除・旧Individual Results実装の削除・使用されない関数の特定と削除・デバッグコードのクリーンアップ・git履歴での参照保持・論文再現テスト必須 | 2025-08-14 | コード品質・保守性・技術的負債 | 🟡 Medium |
+| I061 | Analysis Period バー表示の期間反映機能不具合・Streamlitプログレスバー構造的限界 | 全タブのAnalysis Data Period機能で実装されたプログレスバーが期間選択を正しく反映しない問題・【修正後も残る問題】From側変更でもTo側のみ変更されるビジュアル表示・Streamlitプログレスバーは「開始位置」の概念がなく「長さのみ」表示・選択期間の位置情報が全く視覚化されない構造的限界・【パフォーマンス問題】補助機能にも関わらず処理時間が長すぎる・各タブ切替時に不要な遅延発生・UX悪化・【根本的結論】プログレスバーでの実装そのものが不適切・期間選択UI として機能しない・【代替実装必要】HTML/CSS水平バー・Plotly timeline・カスタムStreamlitコンポーネント・または簡素化してテキスト表示のみ・現在の実装は削除検討すべき | 2025-08-13 | ダッシュボードUI・期間選択UX・パフォーマンス・システム設計 | 🟠 High |
 | I056 | 期間選択UIの視覚的改善（期間バー表示）【一旦停止】 | 全タブ共通の期間選択UI改善・【Plotly実装テスト済み】背景に全期間、前景に選択期間を表示するバー機能をテスト実装・【ユーザビリティ問題】Plotlyのインタラクティブ機能（ズーム/パン/ホバー）が予期しない動作を引き起こしUIの一貫性を損なう・【実装停止】ユーザー要求により一旦実装を削除し元の状態に復元・【代替案検討】Streamlit標準UI要素またはCSSベース表示での実装を検討中・機能自体は有用だが実装方式の見直しが必要 | 2025-08-13 | ダッシュボードUI・視覚的改善 | 🔄 停止中 |
 
 ---
