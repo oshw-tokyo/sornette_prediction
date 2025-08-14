@@ -2733,14 +2733,30 @@ class SymbolAnalysisDashboard:
                             line=dict(color='lightblue', width=2)
                         ))
                         
-                        # LPPL fit
+                        # Get fitting basis date for splitting past/future
+                        latest_basis_date = pd.to_datetime(latest.get('analysis_basis_date', latest_end))
+                        
+                        # LPPL fit (up to basis date)
+                        basis_mask = latest_price_data.index <= latest_basis_date
                         latest_fig.add_trace(go.Scatter(
-                            x=latest_price_data.index,
-                            y=latest_lppl['normalized_fitted'],
+                            x=latest_price_data.index[basis_mask],
+                            y=latest_lppl['normalized_fitted'][basis_mask],
                             mode='lines',
-                            name='LPPL Fit',
+                            name='LPPL Fit (Fitted Period)',
                             line=dict(color='red', width=2.5)
                         ))
+                        
+                        # LPPL fit (after basis date) - Future Period
+                        future_mask = latest_price_data.index > latest_basis_date
+                        if future_mask.any():
+                            latest_fig.add_trace(go.Scatter(
+                                x=latest_price_data.index[future_mask],
+                                y=latest_lppl['normalized_fitted'][future_mask],
+                                mode='lines',
+                                name='LPPL Fit (Future Period)',
+                                line=dict(color='orange', width=2.5, dash='dot'),
+                                opacity=0.8
+                            ))
                         
                         # Add predicted crash date line
                         if pd.notna(latest.get('tc')):
