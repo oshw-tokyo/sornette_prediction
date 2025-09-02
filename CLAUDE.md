@@ -36,6 +36,7 @@ ETH Zurich FCO（Financial Crisis Observatory）レベルの実装への移行�
   - `implementation_strategy_recommendation.md` - Boulder lppls活用戦略
   - `repository_management_advice.md` - リポジトリ管理戦略
   - `multi_window_fitting_explanation.md` - 複数ウィンドウ分析説明
+  - **`comparison_fco_vs_current_implementation.md`** - FCO方式と現在の実装の詳細比較 🆕
 - `docs/service_commercialization/` - 商用サービス化文書
   - `lppl_service_specification_v2.md` - サービス全体設計
   - `lppl_service_specification_simplified.md` - 個人トレーダー向け簡略版

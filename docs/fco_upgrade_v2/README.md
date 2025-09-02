@@ -32,6 +32,19 @@
 - バージョニング戦略
 - Boulder Investment Technologiesの成功事例
 
+### 5. **multi_window_fitting_explanation.md**
+- 複数ウィンドウフィッティングの詳細説明
+- FCO方式（126窓同時分析）の仕組み
+- よくある誤解と正しい理解
+- 実装例と効果の実証
+
+### 6. **comparison_fco_vs_current_implementation.md** 🆕
+- FCO方式と現在の実装の詳細比較
+- 統合型マルチウィンドウ vs 時系列蓄積型の違い
+- 統計的信頼性と情報の質の比較
+- ハイブリッドアプローチの提案
+- 具体例での動作比較
+
 ## 🎯 実装の優先順位
 
 ### Phase 1: 基礎実装（1-2週間）
