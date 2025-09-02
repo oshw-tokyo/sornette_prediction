@@ -17,11 +17,42 @@
 絶対に破損させてはいけません。
 ```
 
+## 🆕 **FCOレベルアップグレード計画（2025年1月策定）**
+
+### 📊 **大規模アップデート予定**
+
+ETH Zurich FCO（Financial Crisis Observatory）レベルの実装への移行を計画中。
+
+**主要アップグレード内容**：
+1. **DS-LPPLS Confidence/Trust指標の実装** ← 最優先
+2. **多重時間窓分析（126窓）** ← コア機能
+3. **商用サービス化対応**
+4. **日本・アジア市場特化**
+
+**詳細仕様書**：
+- `docs/fco_upgrade_v2/` - FCOレベルアップグレード文書群
+  - `ds_lppls_indicators_detailed_specification.md` - DS-LPPLS指標詳細
+  - `technical_implementation_plan.md` - 技術実装計画
+  - `implementation_strategy_recommendation.md` - Boulder lppls活用戦略
+  - `repository_management_advice.md` - リポジトリ管理戦略
+  - `multi_window_fitting_explanation.md` - 複数ウィンドウ分析説明
+- `docs/service_commercialization/` - 商用サービス化文書
+  - `lppl_service_specification_v2.md` - サービス全体設計
+  - `lppl_service_specification_simplified.md` - 個人トレーダー向け簡略版
+
+**参考実装**：
+- Boulder Investment Technologies: https://github.com/Boulder-Investment-Technologies/lppls (MIT License, 417+ stars)
+
 ### 🔒 保護対象
 - `core/validation/crash_validators/black_monday_1987_validator.py` （100/100スコア維持必須）
 - `core/fitting/` 以下のフィッティングアルゴリズム
 - 論文数式の実装（logarithm_periodic_func等）
 - 歴史的クラッシュ検証機能
+- **v1.5 Dashboard Clustering Analysis** （2025-08-14完成・Issue I058で広範なデバッグ済み）
+  - Individual Fitting Results統合表示
+  - Quality フィルター（4段階選択機能）
+  - Distance パラメータ最適化（デフォルト45日）
+  - 散布図右端を今日に固定する実装
 
 ### 📋 変更前必須チェック
 ```bash
@@ -274,12 +305,13 @@ COINGECKO_API_KEY=your_coingecko_api_key_here
 - **2000年ドットコムバブル検証** (定性的検証)
 - **tc→datetime変換** (時間精度対応、DB保存時実行済み)
 
-### 📊 **可視化システム (Symbol Filters Architecture v2 + Clustering Analytics)**
-- **Webダッシュボード**: Symbol Filters Architecture v2による直感的UI/UX
-- **銘柄選択システム**: フィルター・選択・期間の完全分離
-- **Apply Button制御**: 明示的更新制御による予測可能な動作
-- **リアルタイム状態表示**: Currently Selected Symbolによる即座フィードバック
-- **全データアクセス**: Symbol選択後に全履歴データ保証
+### 📊 **可視化システム (v1.5 Complete Dashboard with Clustering Analysis)**
+- **Webダッシュボード v1.5**: 完全統合されたClustering Analysis実装
+- **Clustering Analysis Tab**: 時間的クラスタリングによる高精度予測（DBSCAN実装・Quality フィルター付き）
+- **Individual Fitting Results**: クラスター内の詳細分析結果表示（Issue I058完全実装）
+- **Quality フィルター**: 4段階選択（全て表示/Unstable除外/Acceptable以上/High Qualityのみ）
+- **Distance パラメータ**: 最適化されたデフォルト値45日（クラスタリング精度向上）
+- **統一期間選択**: サイドバーからの全タブ共通期間コントロール
 - **PNG自動保存**: デフォルト無効化（Issue I032解決済み）
 - **メモリ効率**: 不要なファイル生成回避、セッション状態最適化
 
@@ -628,6 +660,8 @@ Symbol Analysis Dashboard (Symbol Filters Architecture v2)
 - **`core/validation/crash_validators/black_monday_1987_validator.py`** - 100/100スコア維持必須
 - **`infrastructure/database/integration_helpers.py`** - tc→日時変換ロジック（時間精度対応済み）
 - **`entry_points/main.py`** - 統一エントリーポイント
+- **Clustering Analysis Tab実装** - v1.5で完成度向上・広範なデバッグ済み（無闇な変更禁止）
+- **Sidebar Period Selection実装** - 全タブ統一期間選択システム（アップデート時は全タブ影響を考慮）
 - **`infrastructure/data_sources/market_data_catalog.json`** - 81銘柄カタログ定義（BAMLH0A0HYM2追加）
 
 ### 🔍 **変更前の必須確認事項**
@@ -660,6 +694,13 @@ cron job設定でentry_points/main.py呼び出し
 **注意**: 個別スケジューラー（nasdaq_scheduler.py, aapl_scheduler.py等）は**完全廃止済み**。カタログベースシステムでの統一管理が正式採用。
 
 ---
+
+## ⚠️ **文書整理状況（2025年9月）**
+
+**重要**: FCOレベルアップグレードに伴い、文書構造を大幅に再編成中。
+- workspace_for_claude/からdocs/以下への段階的移行を実施
+- 今後も精査・整理が必要
+- v2.0実装完了後に最終的な文書体系を確立予定
 
 ## 🔄 更新ルール
 

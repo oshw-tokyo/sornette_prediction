@@ -32,12 +32,13 @@
 
 ## Issue統計サマリー
 
-- **総アクティブIssue数**: 44 （I060追加版）
+- **総アクティブIssue数**: 43 （I058完了・I059,I060追加）
 - **Critical**: 1  
 - **High**: 7 
-- **Medium**: 36 
+- **Medium**: 35 
 - **Low**: 0
 - **今週新規**: 2 (I059, I060)
+- **今週完了**: 1 (I058)
 - **平均解決時間**: 1.5日 (実績ベース・I052大規模実装反映)
 
 ---
@@ -98,7 +99,6 @@
 | I051 | Finnhub API時系列データ取得制限・無料プラン機能不足 | Finnhub API実装・接続テスト成功（AAPL価格取得・シンボル検索確認済み）・しかし時系列データ（stock/candle, crypto/candle）は403エラーで無料プラン制限・LPPL分析には過去365日の時系列データが必須のため利用不可・リアルタイム価格取得のみ可能だが分析価値限定的・有料プラン検討も費用対効果低い | 2025-08-10 | API統合・データ取得・コスト効率 | 🚫 利用不可 |
 | I053 | LPPL Fitting Plot タブの包括的機能改善・Interactive Individual Results実装 | 【現在の問題】銘柄切り替え後プロットバグ・個別フィッティング結果未表示・期間フィルタリング後表示問題・SESSION_STATE管理問題・【新規機能要求】**Interactive Individual Results実装**：Integrated Plots（旧Integrated Predictions）で特定データ選択時に対応Individual Resultプロット表示・☒ボタンでの削除機能・複数時点データ並列比較表示・**実装方式提案**：1)プロット内クリック選択（Plotlyコールバック）2)データテーブル行選択3)日付範囲スライダー選択4)チェックボックス一覧選択・**品質フィルタリング追加**：Min R²フィルタリング機能（Prediction Clustering同様）・その他フィルタリング拡張予定・多時点データ比較による予測トレンド分析機能の実現 | 2025-08-13 | ダッシュボード安定性・LPPL表示機能・ユーザビリティ・投資判断支援 | 🟠 High |
 | I055 | Clustering Analysis Settings統一とApplyボタン制御・パラメータ再編成 | Crash Prediction Clusteringタブのパラメータ制御改善・【Applyボタン統一】Display PeriodとClustering Parameters両方を単一Applyボタンで制御・【パラメータプレビュー】スライダー変更は即座に反映せずApply押下時に適用・【設定グループ化】Clustering Analysis Settingsとして全設定を統合・【ラベル改善】Display Period→Analysis Data Period（解析データの対象期間）に変更・**【パラメータ再編成要求】**：**Projection を Clustering Parameters から分離**→Display Settings（またはProjection Settings/Plot Settings）として独立配置・**Min Prediction Horizon を Clustering Parameters に追加**（現在のPrediction Horizon Filter位置）・**Projection は現在位置に Display Settings として配置**・**Projection範囲拡張**：現在の30-365日→30-3650日（10年先）に拡張・初期値1095日（3年）に変更し超長期投資判断支援・**【代替案：Projection削除検討】**：自動範囲調整（max_prediction_date + 60日マージン）によるProjectionフィルター完全削除・UI簡素化・他タブとの一貫性向上・ユーザビリティ改善・実装は再編成案 vs 削除案の2択検討・フィルタリング機能は不変でユーザー理解向上のための論理的再配置・設定値のプレビューと実際の適用値を明確に区別・ユーザー操作の一貫性向上 | 2025-08-13 | ダッシュボードUX・パラメータ管理・UI論理構造 | 🟡 Medium |
-| I058 | ダッシュボード包括的再編成・Clustering Analysis統合タブ実装 | **【大規模改修】** ダッシュボードタブ構造再編成とIndividual Results機能強化・**【タブ再編成】** Prediction Clustering→Clustering Analysis改名・LPPL Fitting Plot機能統合・**【クラスター選択型Individual Results】** クラスター選択→個別フィッティング結果表示（最大100件・日付/R²順ソート可能）・**【Crash Prediction Dataダイジェスト化】** Latest Analysis Details移動・スクリーニング機能化・**【API最適化】** 全期間データ一括取得・キャッシュ利用・**【歴史的検証統合（Want要件）】** Black Monday等の予測再現プロット（データ準備後実装）・段階的実装計画・対話的デバッグによる品質確保 | 2025-08-14 | ダッシュボードUX・タブ構造・データフロー | 🟢 実装90%完了 |
 | I059 | NASDACOMデータ重複表示問題調査 | ユーザー報告によるNASDACOMデータの重複表示問題・データベースレベルでは重複なし（309レコード、完全重複0）・表示層での問題の可能性高・Individual Fitting Results/Clustering Analysisでの表示確認必要・同一analysis_basis_dateでの複数レコード確認必要・表示時deduplication/DB制約/分析時防止の３つの解決策候補 | 2025-08-14 | ダッシュボード表示・データ整合性 | 🟡 Medium |
 | I060 | 不要コード調査・整理（Dead Code Cleanup） | Issue I058の大規模改修により生じたコメントアウトコード・未使用関数・不要インポートの調査と整理・main_dashboard.py（4400行→3000行目標）・LPPL Fitting Plotタブの完全削除・旧Individual Results実装の削除・使用されない関数の特定と削除・デバッグコードのクリーンアップ・git履歴での参照保持・論文再現テスト必須 | 2025-08-14 | コード品質・保守性・技術的負債 | 🟡 Medium |
 | I061 | Analysis Period バー表示の期間反映機能不具合・Streamlitプログレスバー構造的限界 | 全タブのAnalysis Data Period機能で実装されたプログレスバーが期間選択を正しく反映しない問題・【修正後も残る問題】From側変更でもTo側のみ変更されるビジュアル表示・Streamlitプログレスバーは「開始位置」の概念がなく「長さのみ」表示・選択期間の位置情報が全く視覚化されない構造的限界・【パフォーマンス問題】補助機能にも関わらず処理時間が長すぎる・各タブ切替時に不要な遅延発生・UX悪化・【根本的結論】プログレスバーでの実装そのものが不適切・期間選択UI として機能しない・【代替実装必要】HTML/CSS水平バー・Plotly timeline・カスタムStreamlitコンポーネント・または簡素化してテキスト表示のみ・現在の実装は削除検討すべき | 2025-08-13 | ダッシュボードUI・期間選択UX・パフォーマンス・システム設計 | 🟠 High |
@@ -106,90 +106,6 @@
 
 ---
 
-### Issue I058: ダッシュボード包括的再編成・Clustering Analysis統合タブ実装 【Critical】
-
-**背景と目的**:
-現在のダッシュボード構造では、Prediction ClusteringとLPPL Fitting Plotが分離されており、クラスター分析結果と個別フィッティング結果の関連性が見えにくい。これを統合し、より直感的で包括的な分析フローを実現する。
-
-**実装要件**:
-
-**1. タブ構造再編成**:
-- **改名**: `Prediction Clustering` → `Clustering Analysis`
-- **機能統合**: LPPL Fitting PlotのIndividual Results機能を移動
-- **セクション構成**:
-  ```
-  📊 Clustering Analysis (統合タブ)
-  ├── Section 1: フィルタリング設定
-  ├── Section 2: クラスタリング分析（散布図・テーブル）
-  └── Section 3: Individual Results（クラスター選択ベース）
-  ```
-
-**2. クラスター選択型Individual Results**:
-- **選択UI**: プルダウンメニューでクラスター選択
-- **表示ボタン**: "Show Individual Fitting Results"
-- **表示制御**:
-  - 最大表示件数: 10件（可変）
-  - デフォルトソート: 日付順（最新優先）
-  - ソート切替: R²順対応
-- **データ表示**: 各フィッティングの期間・パラメータ・プロット
-
-**3. API最適化**:
-- **一括取得**: クラスター内全期間のデータを一度に取得
-- **キャッシュ利用**: 取得済みデータの再利用
-- **表示切替時**: API再呼び出し不要（キャッシュから表示）
-
-**4. Crash Prediction Dataダイジェスト化**:
-- **機能移動**: Latest Analysis DetailsをCrash Prediction Dataへ
-- **役割定義**: スクリーニング機能（概要把握→詳細分析への導線）
-- **表示内容**: 最新フィッティング結果の要約情報
-
-**5. 歴史的検証統合（Want要件）**:
-- **References連携**: Black Monday等の再現プロット
-- **データ準備**: 1987年期間のフィッティング実行後に実装
-- **表示形式**: Individual Results形式と統一
-
-**実装計画**:
-
-**Phase 1: 基盤準備（Day 1）**
-- [ ] Issue更新・TODO管理設定
-- [ ] 既存コードのバックアップ・ブランチ作成
-- [ ] 不要コードの識別・整理計画
-
-**Phase 2: タブ構造変更（Day 2-3）**
-- [ ] Clustering Analysisタブ作成
-- [ ] セクション構造実装
-- [ ] セッション状態管理の更新
-
-**Phase 3: Individual Results実装（Day 4-5）**
-- [ ] クラスター選択UI実装
-- [ ] データ取得・キャッシュ機能
-- [ ] プロット表示機能
-
-**Phase 4: 機能移動・統合（Day 6-7）**
-- [ ] Crash Prediction Dataへの機能移動
-- [ ] 既存LPPL Fitting Plotタブの処理
-- [ ] Analysis Period共通化
-
-**Phase 5: テスト・調整（Day 8）**
-- [ ] 対話的デバッグ（ログ監視）
-- [ ] パフォーマンス確認
-- [ ] UI/UX微調整
-
-**技術的考慮事項**:
-- **セッション管理**: タブ間のデータ連携強化
-- **メモリ管理**: 複数プロット同時表示時の制限
-- **エラー処理**: データ不足・API制限時のフォールバック
-- **パフォーマンス**: 初期表示速度の維持
-
-**成功基準**:
-- クラスター分析から個別結果への自然な流れ
-- API呼び出し回数の削減（50%以上）
-- レスポンス時間の改善（2秒以内）
-- ユーザビリティの向上（操作ステップ削減）
-
-**対応優先度**: Critical（ダッシュボード全体の使い勝手に大きく影響）
-
----
 
 ## 🚨 重要な修正作業時の注意事項
 
@@ -243,6 +159,7 @@
 
 | 解決日 | Issue ID | タイトル | 解決方法 | 解決時間 | 学習事項 |
 |--------|----------|---------|----------|----------|----------|
+| 2025-08-14 | I058 | ダッシュボード包括的再編成・Clustering Analysis統合タブ実装 | Clustering Analysis統合完全実装・Individual Fitting Results詳細表示機能・Quality フィルター4段階実装・Distance パラメータ最適化（デフォルト45日）・散布図右端今日固定・不要UI削除・メトリクスサイズ縮小・API キャッシュ最適化・論文再現100/100維持確認済み | 2.0日 | 段階的改善アプローチの成功。ユーザーフィードバックを即座に反映する対話的デバッグの有効性。複雑な機能を維持しつつUI簡素化する設計思想の確立。視覚的統一性（右端＝今日）により理解しやすさ向上 |
 | 2025-08-12 | I054 | Clustering回帰手法の改善・R²重み付き平均法実装 | R²-weighted linear regressionからR²-weighted average methodに改善実装・水平線表示（width=1）による可視性向上・境界線/塗りつぶし削除でクリーンUI・詳細統計表追加（Weighted/Simple STD, IQR）・numpy.int64型変換エラー修正・KeyError修正・全データ幅横線表示・統計的妥当性とUI可視性を両立 | 1.0日 | 統計手法の科学的妥当性は実装後の評価・改善が重要。ユーザーフィードバックによる可視性改善（細い線要求）は的確。複雑な可視化よりもシンプルで情報豊富な表示が効果的。numpy型変換は明示的int()処理で解決 |
 | 2025-08-13 | I052 | ✅ **クラッシュ予測クラスタリングタブ実装完了** | R²重み付きクラスタリング・統合UI・投資判断支援テーブル・包括的ヘルプシステム・統計的最適化パラメータ・ユーザー重視エラーハンドリング完全実装 | 3.0日 | 投資判断支援機能は科学的分析と実用性の両立が核心。統計的根拠に基づくパラメータ設定と具体的解決策提示型エラーハンドリングが重要 |
 | 2025-08-08 | I040 | Multi-Period Convergence Analysis機能問題・New Integrated Predictions期間対応不完全 | New Integrated Predictions全期間対応実装・Multi-Period Analysis固定期間化・Custom Periodタブ削除・filtered_dataエラー解決・期間説明明確化・データ不足時詳細案内追加 | 1.0日 | 固定期間とサイドバー期間の明確区別がユーザー理解に重要。データ不足時の具体的アドバイス提供により実用性向上。10色拡張により大量予測表示対応 |
