@@ -7,14 +7,25 @@
 - **プロジェクト直下汚染**: `./test_*.py`, `./debug_*.py` 等の作成を絶対禁止
 - **詳細**: [セクション5](#5-claude-ai専用ワークスペース必須遵守)を必読
 
-## 🚨 **最重要原則: 論文再現の絶対保護**
+## 🚨 **最重要原則: 論文再現の絶対保護 & 法的コンプライアンス**
 
-**⚠️ CRITICAL: この原則は他のすべての要求・変更に優先します**
+**⚠️ CRITICAL: これらの原則は他のすべての要求・変更に優先します**
 
+### 1. 科学的正確性の維持
 ```
 論文再現機能（特にSornette論文のLPPLモデル実装）は
 システムの科学的根幹であり、いかなる変更・改修においても
 絶対に破損させてはいけません。
+```
+
+### 2. 法的コンプライアンスの厳守 🔒
+```
+商用サービスとして提供する際は、金融商品取引法の
+投資助言業規制を回避するため、以下を厳守：
+- 「クラッシュ予測」等の表現を使用しない
+- 数値データのみ提供（投資判断を含まない）
+- ユーザーが追加分析を行う設計にする
+詳細: docs/service_commercialization/legally_compliant_service_specification.md
 ```
 
 ## 🆕 **FCOレベルアップグレード計画（2025年1月策定）**
@@ -38,8 +49,11 @@ ETH Zurich FCO（Financial Crisis Observatory）レベルの実装への移行�
   - `multi_window_fitting_explanation.md` - 複数ウィンドウ分析説明
   - **`comparison_fco_vs_current_implementation.md`** - FCO方式と現在の実装の詳細比較 🆕
 - `docs/service_commercialization/` - 商用サービス化文書
-  - `lppl_service_specification_v2.md` - サービス全体設計
-  - `lppl_service_specification_simplified.md` - 個人トレーダー向け簡略版
+  - **`sornette-legal-compliance-guide.md`** - 法的コンプライアンスガイド 🔒
+  - **`legally_compliant_service_specification.md`** - 法的準拠版仕様書（実装はこれに従う）✅
+  - `implementation_gap_analysis.md` - 現在実装と法的要件のギャップ分析 📊
+  - `lppl_service_specification_v2.md` - 初期構想版（参考のみ）
+  - `lppl_service_specification_simplified.md` - 簡略版（要修正）
 
 **参考実装**：
 - Boulder Investment Technologies: https://github.com/Boulder-Investment-Technologies/lppls (MIT License, 417+ stars)
