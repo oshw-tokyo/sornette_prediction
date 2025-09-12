@@ -4,46 +4,48 @@
 
 ## 📁 ドキュメント構成
 
-### 1. **ds_lppls_indicators_detailed_specification.md**
-- DS-LPPLS Confidence/Trust指標の詳細仕様
-- 正確な計算式（126時間窓での成功率）
-- フィルタリング条件（Damping ≥ 1.0等）
-- 実装可能なPythonコードサンプル
-- Boulder Investment Technologies実装への参照
+### 実装計画・分析 ⭐ NEW
+1. **fco_implementation_gap_analysis.md** 
+   - FCO実装ギャップ分析と実装要件
+   - 必須実装機能のチェックリスト
+   - 移行戦略と後方互換性
+   - 技術的課題と対策
 
-### 2. **technical_implementation_plan.md**
-- FCOレベル機能の完全な技術実装計画
-- MultiWindowLPPLAnalyzer実装例
-- DS-LPPLS指標の段階的実装
-- 日本市場向けカスタマイズ
-- パフォーマンス最適化戦略
+2. **boulder_integration_analysis.md**
+   - Boulder lpplsコード分析結果
+   - FCOとBoulderの関係性明確化
+   - LPPLS数式の互換性確認
+   - 統合の容易性評価
 
-### 3. **implementation_strategy_recommendation.md**
-- Boulder lpplsライブラリ活用戦略
-- ハイブリッドアプローチの推奨
-- 現在の実装との統合方法
-- リスク管理と移行計画
-- 日本市場向け最適化
+### 技術仕様
+3. **ds_lppls_indicators_detailed_specification.md**
+   - DS-LPPLS Confidence/Trust指標の詳細仕様
+   - 正確な計算式（126時間窓での成功率）
+   - フィルタリング条件（Damping ≥ 1.0等）
 
-### 4. **repository_management_advice.md**
-- リポジトリ管理戦略の推奨事項
-- ブランチ戦略 vs 新規リポジトリの比較
-- 段階的移行計画
-- バージョニング戦略
-- Boulder Investment Technologiesの成功事例
+4. **technical_implementation_plan.md**
+   - FCOレベル機能の完全な技術実装計画
+   - MultiWindowLPPLAnalyzer実装例
+   - DS-LPPLS指標の段階的実装
 
-### 5. **multi_window_fitting_explanation.md**
-- 複数ウィンドウフィッティングの詳細説明
-- FCO方式（126窓同時分析）の仕組み
-- よくある誤解と正しい理解
-- 実装例と効果の実証
+5. **comparison_fco_vs_current_implementation.md**
+   - FCO方式と現在の実装の詳細比較
+   - 統合型マルチウィンドウ vs 時系列蓄積型の違い
+   - 統計的信頼性と情報の質の比較
 
-### 6. **comparison_fco_vs_current_implementation.md** 🆕
-- FCO方式と現在の実装の詳細比較
-- 統合型マルチウィンドウ vs 時系列蓄積型の違い
-- 統計的信頼性と情報の質の比較
-- ハイブリッドアプローチの提案
-- 具体例での動作比較
+6. **multi_window_fitting_explanation.md**
+   - 複数ウィンドウフィッティングの詳細説明
+   - FCO方式（126窓同時分析）の仕組み
+
+### 戦略・管理
+7. **implementation_strategy_recommendation.md**
+   - Boulder lpplsライブラリ活用戦略
+   - ハイブリッドアプローチの推奨
+   - 現在の実装との統合方法
+
+8. **repository_management_advice.md**
+   - リポジトリ管理戦略の推奨事項
+   - ブランチ戦略 vs 新規リポジトリの比較
 
 ## 🎯 実装の優先順位
 

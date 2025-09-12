@@ -2,6 +2,25 @@
 
 このガイドに従って、あなた自身でLPPL市場クラッシュ予測分析を実行できます。
 
+## 🆕 FCO v2.0 アップデート（2024-09-12）
+
+### FCO（Financial Crisis Observatory）分析エンジン
+
+**多重時間窓分析（126窓）によるDS-LPPLS指標が利用可能になりました。**
+
+```bash
+# 従来のLPPL分析（既存データベース: results/analysis_results.db）
+python entry_points/main.py analyze NASDAQCOM --period 2y
+
+# FCO分析（新データベース: results/fco_analysis_results.db）
+python entry_points/main.py analyze NASDAQCOM --period 2y --fco
+```
+
+**DS-LPPLS Confidence指標**:
+- 126個の時間窓での分析成功率（0-100%）
+- 30%以上: バブル兆候あり
+- 50%以上: 強いバブル兆候
+
 ## 📋 目次
 1. [環境構築](#環境構築)
 2. [基本的な市場分析](#基本的な市場分析)

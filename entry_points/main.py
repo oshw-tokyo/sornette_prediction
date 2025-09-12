@@ -73,9 +73,18 @@ def launch_dashboard(dashboard_type='main'):
             'applications/dashboards/main_dashboard.py' 
         ])
 
-def run_analysis(symbol, period='1y'):
-    """Run LPPL analysis on specified symbol"""
-    print(f"📊 Running LPPL analysis: {symbol} ({period})")
+def run_analysis(symbol, period='1y', use_fco=False):
+    """Run LPPL analysis on specified symbol
+    
+    Args:
+        symbol: 銘柄コードまたは'ALL'/'MARKET'
+        period: 分析期間
+        use_fco: FCOエンジンを使用するか（デフォルト: False）
+    """
+    if use_fco:
+        print(f"🎯 Running FCO analysis: {symbol} ({period})")
+    else:
+        print(f"📊 Running LPPL analysis: {symbol} ({period})")
     
     if symbol.upper() == 'ALL':
         # 全銘柄包括解析（カタログベース）
@@ -95,16 +104,120 @@ def run_analysis(symbol, period='1y'):
         return run_analysis('ALL')
     else:
         # 個別銘柄解析
-        try:
-            from applications.examples.simple_symbol_analysis import analyze_symbol
-            print(f"🎯 個別銘柄解析: {symbol}")
-            result = analyze_symbol(symbol, period)
-            if result:
-                print(f"✅ {symbol} analysis completed")
-            return True
-        except Exception as e:
-            print(f"❌ Symbol analysis error: {e}")
-            return False
+        if use_fco:
+            # FCOエンジンを使用した解析
+            try:
+                from core.fitting.fco_engine import FCOEngine
+                from infrastructure.database.fco_results_database import FCOResultsDatabase
+                from infrastructure.data_sources.unified_data_client import UnifiedDataClient
+                
+                print(f"🎯 FCO個別銘柄解析: {symbol}")
+                
+                # データ取得
+                from datetime import datetime, timedelta
+                data_client = UnifiedDataClient()
+                
+                # 期間をパース
+                end_date = datetime.now()
+                if period == '1y':
+                    start_date = end_date - timedelta(days=365)
+                elif period == '2y':
+                    start_date = end_date - timedelta(days=730)
+                elif period == '3y':
+                    start_date = end_date - timedelta(days=1095)
+                elif period == '5y':
+                    start_date = end_date - timedelta(days=1825)
+                else:
+                    start_date = end_date - timedelta(days=365)
+                
+                # データ取得（タプル形式: (DataFrame, source_name)）
+                data, source = data_client.get_data_with_fallback(
+                    symbol, 
+                    start_date.strftime('%Y-%m-%d'),
+                    end_date.strftime('%Y-%m-%d')
+                )
+                
+                if data is None:
+                    print(f"❌ データ取得失敗: {symbol}")
+                    return False
+                    
+                # DataFrameから価格データを抽出
+                if 'close' in data.columns:
+                    prices = data['close'].values
+                elif 'Close' in data.columns:
+                    prices = data['Close'].values
+                elif 'value' in data.columns:
+                    prices = data['value'].values
+                else:
+                    # 最初の数値列を使用
+                    prices = data.iloc[:, 0].values
+                    
+                metadata = {
+                    'source': source,
+                    'start_date': start_date.strftime('%Y-%m-%d'),
+                    'end_date': end_date.strftime('%Y-%m-%d')
+                }
+                
+                if prices is None or len(prices) < 200:
+                    print(f"❌ データ不足: {symbol} ({len(prices) if prices is not None else 0}点)")
+                    return False
+                
+                # FCO分析実行
+                engine = FCOEngine(use_parallel=True, max_workers=4)
+                result = engine.compute_ds_lppls_confidence(prices)
+                
+                # 結果表示
+                print(f"\n--- FCO分析結果 ---")
+                print(f"DS-LPPLS Confidence (正): {result.ds_lppls_confidence:.2%}")
+                print(f"DS-LPPLS Confidence (負): {result.ds_lppls_confidence_neg:.2%}")
+                print(f"バブルタイプ: {result.bubble_type}")
+                
+                if result.predicted_tc:
+                    print(f"予測臨界時間: {result.predicted_tc:.3f}")
+                    print(f"標準偏差: {result.tc_std:.3f}")
+                
+                # データベース保存
+                db = FCOResultsDatabase()
+                db_result = {
+                    'symbol': symbol,
+                    'analysis_basis_date': metadata.get('end_date'),
+                    'data_source': metadata.get('source'),
+                    'data_period_start': metadata.get('start_date'),
+                    'data_period_end': metadata.get('end_date'),
+                    'data_points': len(prices),
+                    'ds_lppls_confidence': result.ds_lppls_confidence,
+                    'ds_lppls_confidence_neg': result.ds_lppls_confidence_neg,
+                    'bubble_type': result.bubble_type,
+                    'predicted_tc': result.predicted_tc,
+                    'tc_std': result.tc_std,
+                    'scenario_probability': result.scenario_probability,
+                    'num_windows': result.metadata.get('num_windows', 0),
+                    'filter_m_range': [0.1, 0.9],
+                    'filter_omega_range': [2.0, 25.0]
+                }
+                
+                analysis_id = db.save_fco_analysis(db_result)
+                print(f"✅ FCO分析結果をDBに保存 (ID: {analysis_id})")
+                
+                return True
+                
+            except Exception as e:
+                print(f"❌ FCO analysis error: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
+        else:
+            # 従来のLPPL解析
+            try:
+                from applications.examples.simple_symbol_analysis import analyze_symbol
+                print(f"🎯 個別銘柄解析: {symbol}")
+                result = analyze_symbol(symbol, period)
+                if result:
+                    print(f"✅ {symbol} analysis completed")
+                return True
+            except Exception as e:
+                print(f"❌ Symbol analysis error: {e}")
+                return False
 
 def run_validation(crash_type='all'):
     """Run historical crash validation"""
@@ -425,6 +538,7 @@ Examples:
     analysis_parser = subparsers.add_parser('analyze', help='Run LPPL analysis')
     analysis_parser.add_argument('symbol', help='Symbol to analyze (ALL for all symbols, MARKET for market analysis, or specific symbol)')
     analysis_parser.add_argument('--period', default='1y', help='Analysis period (1y, 2y, 3y, 5y)')
+    analysis_parser.add_argument('--fco', action='store_true', help='Use FCO multi-window analysis engine')
     
     # Validation commands
     validate_parser = subparsers.add_parser('validate', help='Run validation tests')
@@ -488,7 +602,7 @@ Examples:
     if args.command == 'dashboard':
         launch_dashboard(args.type)
     elif args.command == 'analyze':
-        run_analysis(args.symbol, args.period)
+        run_analysis(args.symbol, args.period, use_fco=args.fco)
     elif args.command == 'validate':
         run_validation(args.crash)
     elif args.command == 'scheduled-analysis':
