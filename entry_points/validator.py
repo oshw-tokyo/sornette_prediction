@@ -18,22 +18,42 @@ project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
 def run_1987_validation():
-    """Run 1987 Black Monday validation"""
-    print("🎯 Running 1987 Black Monday Validation...")
+    """Run 1987 Black Monday validation (LPPL version)"""
+    print("🎯 Running 1987 Black Monday Validation (LPPL)...")
     
     try:
         from core.validation.crash_validators.black_monday_1987_validator import main as validate_1987
         result = validate_1987()
         
         if result:
-            print("✅ 1987 Black Monday Validation: PASSED (100/100 score)")
+            print("✅ 1987 Black Monday LPPL Validation: PASSED (100/100 score)")
             return True
         else:
-            print("❌ 1987 Black Monday Validation: FAILED")
+            print("❌ 1987 Black Monday LPPL Validation: FAILED")
             return False
             
     except Exception as e:
-        print(f"❌ 1987 validation error: {e}")
+        print(f"❌ 1987 LPPL validation error: {e}")
+        return False
+
+def run_1987_fco_validation():
+    """Run 1987 Black Monday validation (FCO version)"""
+    print("🎯 Running 1987 Black Monday Validation (FCO)...")
+    
+    try:
+        from core.validation.crash_validators.black_monday_1987_fco_validator import BlackMonday1987FCOValidator
+        validator = BlackMonday1987FCOValidator(use_cache=True)
+        result = validator.validate()
+        
+        if result:
+            print("✅ 1987 Black Monday FCO Validation: PASSED")
+            return True
+        else:
+            print("❌ 1987 Black Monday FCO Validation: FAILED")
+            return False
+            
+    except Exception as e:
+        print(f"❌ 1987 FCO validation error: {e}")
         return False
 
 def run_2000_validation():

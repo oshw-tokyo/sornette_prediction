@@ -13,6 +13,14 @@ from lppls.lppls import LPPLS
 # 既存の実装との互換性のため
 from .fitter import LogarithmPeriodicFitter
 
+# DS-LPPLS Confidence拡張実装
+try:
+    from core.fco_indicators.ds_lppls_confidence import DSLPPLSConfidenceCalculator
+    HAS_ENHANCED_CONFIDENCE = True
+except ImportError:
+    HAS_ENHANCED_CONFIDENCE = False
+    logger.warning("Enhanced DS-LPPLS Confidence calculator not available")
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,17 +55,29 @@ class FCOEngine:
     FILTER_OMEGA_MIN = 2.0
     FILTER_OMEGA_MAX = 25.0
     
-    def __init__(self, use_parallel: bool = True, max_workers: int = 8):
+    def __init__(self, use_parallel: bool = True, max_workers: int = 8, use_enhanced_confidence: bool = True):
         """
         Args:
             use_parallel: 並列処理を使用するか
             max_workers: 並列処理のワーカー数
+            use_enhanced_confidence: 拡張DS-LPPLS計算を使用するか
         """
         self.use_parallel = use_parallel
         self.max_workers = max_workers
+        self.use_enhanced_confidence = use_enhanced_confidence and HAS_ENHANCED_CONFIDENCE
         
         # 論文再現テスト用に既存実装も保持
         self.classic_fitter = LogarithmPeriodicFitter()
+        
+        # 拡張DS-LPPLS計算機（利用可能な場合）
+        if self.use_enhanced_confidence:
+            self.enhanced_calculator = DSLPPLSConfidenceCalculator(
+                max_window=self.WINDOW_MAX,
+                min_window=self.WINDOW_MIN,
+                step_size=self.WINDOW_STEP,
+                n_workers=max_workers
+            )
+            logger.info(f"FCOEngine initialized with enhanced confidence calculator")
         
         logger.info(f"FCOEngine initialized (parallel={use_parallel}, workers={max_workers})")
     
@@ -151,36 +171,89 @@ class FCOEngine:
         Returns:
             FCO分析結果
         """
-        # 最新の指標値を取得
-        if len(indicators) > 0:
-            latest = indicators.iloc[-1]
-            pos_conf = latest.get('pos_conf', 0.0)
-            neg_conf = latest.get('neg_conf', 0.0)
+        # 手動でDS-LPPLS計算（indicatorsが正しく機能しない場合の対策）
+        positive_count = 0
+        negative_count = 0
+        qualified_fits = []
+        all_window_fits = []  # 全窓結果を保存（移行戦略に従う）
+        tc_values = []
+        total_windows = 0
+        
+        # resultsの構造を正しく解析
+        for result_dict in raw_results:
+            if isinstance(result_dict, dict) and 'res' in result_dict:
+                total_windows += 1
+                fits = result_dict.get('res', [])
+                t1 = result_dict.get('t1', 0)
+                t2 = result_dict.get('t2', 0)
+                window_size = t2 - t1 if t2 > t1 else 0
+                
+                if isinstance(fits, list):
+                    for fit in fits:
+                        if isinstance(fit, dict):
+                            m = fit.get('m', 0)
+                            w = fit.get('w', 0) 
+                            tc = fit.get('tc', 0)
+                            
+                            # Damping計算
+                            damping = abs(m) * abs(w) / (2 * np.pi)
+                            
+                            # FCOフィルタリング条件
+                            is_qualified = (
+                                damping >= self.FILTER_DAMPING_MIN and
+                                self.FILTER_M_MIN <= m <= self.FILTER_M_MAX and
+                                self.FILTER_OMEGA_MIN <= w <= self.FILTER_OMEGA_MAX and
+                                tc > t2  # 未来のtc
+                            )
+                            
+                            # 全窓結果を保存（データベース移行戦略に従う）
+                            window_fit = {
+                                **fit,  # 既存のフィットパラメータ
+                                'window_size': window_size,
+                                'window_start_idx': t1,
+                                'window_end_idx': t2,
+                                'damping': damping,
+                                'is_qualified': is_qualified
+                            }
+                            all_window_fits.append(window_fit)
+                            
+                            if is_qualified:
+                                qualified_fits.append(fit)
+                                tc_values.append(tc)
+                                if m > 0:
+                                    positive_count += 1
+                                else:
+                                    negative_count += 1
+                                break  # 各窓から最初の適合フィットのみ使用
+        
+        # DS-LPPLS信頼度計算
+        if total_windows > 0:
+            pos_conf = positive_count / total_windows
+            neg_conf = negative_count / total_windows
         else:
-            pos_conf = 0.0
-            neg_conf = 0.0
+            # indicatorsから取得（フォールバック）
+            if len(indicators) > 0:
+                latest = indicators.iloc[-1]
+                pos_conf = latest.get('pos_conf', 0.0)
+                neg_conf = latest.get('neg_conf', 0.0)
+            else:
+                pos_conf = 0.0
+                neg_conf = 0.0
         
         # バブルタイプを判定
         if pos_conf > 0.3:  # FCO閾値: 30%以上で中程度のバブル
-            bubble_type = 'positive'
+            bubble_type = 'positive_bubble'
         elif neg_conf > 0.3:
-            bubble_type = 'negative'
+            bubble_type = 'negative_bubble'
+        elif pos_conf > 0.05:  # 5%以上で弱いシグナル
+            bubble_type = 'weak_positive'
         else:
-            bubble_type = 'none'
-        
-        # tc値のクラスタリング（簡易版）
-        # TODO: k-meansクラスタリング実装
-        tc_values = []
-        for result_set in raw_results:
-            if isinstance(result_set, list):
-                for res in result_set:
-                    if isinstance(res, dict) and res.get('is_qualified', False):
-                        tc_values.append(res.get('tc', 0))
+            bubble_type = 'no_bubble'
         
         if tc_values:
             predicted_tc = np.median(tc_values)
             tc_std = np.std(tc_values)
-            scenario_probability = len(tc_values) / (len(window_sizes) if 'window_sizes' in locals() else 126)
+            scenario_probability = len(tc_values) / total_windows if total_windows > 0 else 0.0
         else:
             predicted_tc = None
             tc_std = None
@@ -193,10 +266,12 @@ class FCOEngine:
             predicted_tc=predicted_tc,
             tc_std=tc_std,
             scenario_probability=scenario_probability,
-            window_results=raw_results if isinstance(raw_results, list) else [],
+            window_results=all_window_fits,  # 全窓結果を保存（移行戦略に従う）
             bubble_type=bubble_type,
             metadata={
-                'num_windows': len(indicators),
+                'num_windows': total_windows,
+                'qualified_fits': len(qualified_fits),
+                'total_fits': len(all_window_fits),
                 'analysis_date': pd.Timestamp.now().isoformat()
             }
         )

@@ -175,6 +175,25 @@ class FCOResultsDatabase:
             else:
                 data = result
             
+            # window_resultsを保存用に準備（詳細はfco_window_fitsテーブルに保存）
+            window_results_full = data.get('window_results', [])
+            
+            # NumPy型をPython型に変換する関数
+            def convert_numpy_types(obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, (np.integer, np.int64, np.int32)):
+                    return int(obj)
+                elif isinstance(obj, (np.floating, np.float64, np.float32)):
+                    return float(obj)
+                elif isinstance(obj, (np.bool_, np.bool8)):
+                    return bool(obj)
+                elif isinstance(obj, dict):
+                    return {key: convert_numpy_types(val) for key, val in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy_types(item) for item in obj]
+                return obj
+            
             # JSON形式のフィールドを文字列化
             if isinstance(data.get('filter_m_range'), (list, tuple)):
                 data['filter_m_range'] = json.dumps(data['filter_m_range'])
@@ -182,11 +201,13 @@ class FCOResultsDatabase:
                 data['filter_omega_range'] = json.dumps(data['filter_omega_range'])
             if isinstance(data.get('confidence_interval'), (list, tuple)):
                 data['confidence_interval'] = json.dumps(data['confidence_interval'])
-            if isinstance(data.get('window_results'), list):
-                # 大容量データは圧縮して保存
-                data['window_results'] = json.dumps(data['window_results'][:100])  # 最初の100件のみ
+            if isinstance(window_results_full, list):
+                # NumPy型を変換してから全窓データを保存（移行戦略に従い全データ保存）
+                window_results_converted = convert_numpy_types(window_results_full)
+                data['window_results'] = json.dumps(window_results_converted)
             if isinstance(data.get('metadata'), dict):
-                data['metadata'] = json.dumps(data['metadata'])
+                metadata_converted = convert_numpy_types(data['metadata'])
+                data['metadata'] = json.dumps(metadata_converted)
             
             # INSERT OR REPLACE（重複時は更新）
             cursor.execute('''
@@ -236,6 +257,35 @@ class FCOResultsDatabase:
             ))
             
             analysis_id = cursor.lastrowid
+            
+            # 個別窓フィッティング結果を保存（全126窓）
+            if window_results_full:
+                for window in window_results_full:
+                    # Boulder lppls形式から必要なパラメータを抽出
+                    cursor.execute('''
+                        INSERT INTO fco_window_fits (
+                            analysis_id, window_size, window_start_idx, window_end_idx,
+                            tc, m, w, a, b, c1, c2,
+                            r_squared, rmse, damping, is_qualified
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        analysis_id,
+                        window.get('window_size'),
+                        window.get('window_start_idx', 0),
+                        window.get('window_end_idx'),
+                        window.get('tc'),
+                        window.get('m'),  # beta相当
+                        window.get('w'),  # omega相当
+                        window.get('a'),
+                        window.get('b'),
+                        window.get('c1'),
+                        window.get('c2'),
+                        window.get('r_squared', window.get('res', {}).get('r_squared')),
+                        window.get('rmse', window.get('res', {}).get('rmse')),
+                        window.get('damping', window.get('res', {}).get('damping')),
+                        window.get('is_qualified', True)  # FCOフィルタ通過済み
+                    ))
+            
             conn.commit()
             
             return analysis_id
@@ -273,6 +323,30 @@ class FCOResultsDatabase:
                         except:
                             pass
                 return result
+            return None
+    
+    def get_analysis_by_date(self, symbol: str, analysis_date: str) -> Optional[pd.Series]:
+        """
+        特定銘柄・日付の分析結果を取得
+        
+        Args:
+            symbol: 銘柄コード
+            analysis_date: 分析基準日
+            
+        Returns:
+            分析結果（存在しない場合はNone）
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            query = """
+            SELECT * FROM fco_analysis_results
+            WHERE symbol = ? AND analysis_basis_date = ?
+            LIMIT 1
+            """
+            
+            df = pd.read_sql_query(query, conn, params=[symbol, analysis_date])
+            
+            if len(df) > 0:
+                return df.iloc[0]
             return None
     
     def get_high_confidence_bubbles(self, 
@@ -352,6 +426,27 @@ class FCOResultsDatabase:
             
             conn.commit()
     
+    def get_window_fits(self, analysis_id: int) -> pd.DataFrame:
+        """
+        指定分析IDの全窓フィッティング結果を取得
+        
+        Args:
+            analysis_id: 分析ID
+        
+        Returns:
+            窓フィッティング結果のDataFrame
+        """
+        query = '''
+            SELECT * FROM fco_window_fits
+            WHERE analysis_id = ?
+            ORDER BY window_size, window_start_idx
+        '''
+        
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(query, conn, params=(analysis_id,))
+        
+        return df
+    
     def get_confidence_history(self, symbol: str, 
                               start_date: Optional[str] = None,
                               end_date: Optional[str] = None) -> pd.DataFrame:
@@ -383,6 +478,29 @@ class FCOResultsDatabase:
         
         with sqlite3.connect(self.db_path) as conn:
             df = pd.read_sql_query(query, conn, params=params)
+        
+        return df
+    
+    def get_analysis_history(self, symbol: str, limit: int = 100) -> pd.DataFrame:
+        """
+        指定銘柄の分析履歴を取得
+        
+        Args:
+            symbol: 銘柄コード
+            limit: 取得件数上限
+        
+        Returns:
+            分析履歴のDataFrame
+        """
+        query = '''
+            SELECT * FROM fco_analysis_results
+            WHERE symbol = ?
+            ORDER BY analysis_basis_date DESC
+            LIMIT ?
+        '''
+        
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(query, conn, params=(symbol, limit))
         
         return df
 

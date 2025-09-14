@@ -192,8 +192,11 @@ def run_analysis(symbol, period='1y', use_fco=False):
                     'tc_std': result.tc_std,
                     'scenario_probability': result.scenario_probability,
                     'num_windows': result.metadata.get('num_windows', 0),
+                    'num_qualified_fits': result.metadata.get('qualified_fits', 0),
                     'filter_m_range': [0.1, 0.9],
-                    'filter_omega_range': [2.0, 25.0]
+                    'filter_omega_range': [2.0, 25.0],
+                    'window_results': result.window_results,  # 全窓結果を渡す
+                    'metadata': result.metadata
                 }
                 
                 analysis_id = db.save_fco_analysis(db_result)
@@ -219,18 +222,30 @@ def run_analysis(symbol, period='1y', use_fco=False):
                 print(f"❌ Symbol analysis error: {e}")
                 return False
 
-def run_validation(crash_type='all'):
+def run_validation(crash_type='all', use_fco=False):
     """Run historical crash validation"""
-    print(f"🎯 Running validation: {crash_type}")
+    engine_type = "FCO" if use_fco else "LPPL"
+    print(f"🎯 Running validation: {crash_type} (Engine: {engine_type})")
     
     if crash_type in ['1987', 'all']:
         try:
-            from core.validation.crash_validators.black_monday_1987_validator import main as validate_1987
-            result = validate_1987()
-            if result:
-                print("✅ 1987 Black Monday validation: PASSED")
+            if use_fco:
+                # FCO版バリデーション
+                from core.validation.crash_validators.black_monday_1987_fco_validator import BlackMonday1987FCOValidator
+                validator = BlackMonday1987FCOValidator(use_cache=True)
+                result = validator.validate()
+                if result:
+                    print("✅ 1987 Black Monday FCO validation: PASSED")
+                else:
+                    print("❌ 1987 Black Monday FCO validation: FAILED")
             else:
-                print("❌ 1987 Black Monday validation: FAILED")
+                # LPPL版バリデーション
+                from core.validation.crash_validators.black_monday_1987_validator import main as validate_1987
+                result = validate_1987()
+                if result:
+                    print("✅ 1987 Black Monday LPPL validation: PASSED")
+                else:
+                    print("❌ 1987 Black Monday LPPL validation: FAILED")
         except Exception as e:
             print(f"❌ 1987 validation error: {e}")
     
@@ -245,8 +260,110 @@ def run_validation(crash_type='all'):
         except Exception as e:
             print(f"❌ 2000 validation error: {e}")
 
+def run_fco_daily(args):
+    """FCO日次分析の実行（V3: 自動更新・リトライ機能付き）"""
+    if not args.fco_action:
+        print("❌ サブコマンドが必要です")
+        print("📊 利用可能なコマンド:")
+        print("   python entry_points/main.py fco-daily run     # FCO日次分析実行（自動更新付き）")
+        print("   python entry_points/main.py fco-daily update  # データ更新のみ実行")
+        print("   python entry_points/main.py fco-daily check   # データ利用可能状況確認")
+        print("   python entry_points/main.py fco-daily status  # 状態確認")
+        print("   python entry_points/main.py fco-daily retry   # 失敗した更新を再試行")
+        return False
+    
+    try:
+        from applications.analysis_tools.fco_daily_scheduler_v3 import FCODailySchedulerV3
+        scheduler = FCODailySchedulerV3()
+        
+        if args.fco_action == 'run':
+            print("🚀 FCO日次分析を実行します（V3: 自動更新付き）...")
+            symbols = args.symbols if hasattr(args, 'symbols') and args.symbols else None
+            skip_update = args.skip_update if hasattr(args, 'skip_update') else False
+            result = scheduler.run_daily_analysis(symbols=symbols, skip_update=skip_update)
+            if 'successful' in result:
+                return len(result['successful']) > 0
+            return False
+            
+        elif args.fco_action == 'update':
+            print("📥 市場データを更新します...")
+            symbols = args.symbols if hasattr(args, 'symbols') and args.symbols else None
+            results = scheduler.update_market_data(symbols=symbols)
+            success_count = sum(1 for v in results.values() if v)
+            print(f"✅ 更新完了: {success_count}/{len(results)}銘柄成功")
+            return success_count > 0
+            
+        elif args.fco_action == 'check':
+            print("📊 全履歴キャッシュ利用可能状況を確認します...")
+            availability = scheduler.check_data_availability()
+            available = sum(1 for v in availability.values() if v['available'])
+            print(f"\n✅ {available}/{len(availability)}銘柄が利用可能")
+            return available > 0
+            
+        elif args.fco_action == 'status':
+            print("📊 FCOスケジューラー状態:")
+            import json
+            print(json.dumps(scheduler.state, indent=2, default=str))
+            return True
+            
+        elif args.fco_action == 'retry':
+            print("🔄 失敗した更新を再試行します...")
+            results = scheduler.retry_failed_updates()
+            if results:
+                success_count = sum(1 for v in results.values() if v)
+                print(f"✅ 再試行完了: {success_count}/{len(results)}銘柄成功")
+                return success_count > 0
+            else:
+                print("📊 再試行対象なし")
+                return True
+            
+        elif args.fco_action == 'test':
+            print("🧪 FCOテストモード: 3銘柄で実行します...")
+            test_symbols = ['SP500', 'NASDAQCOM', 'BTC']
+            result = scheduler.run_daily_analysis(symbols=test_symbols, skip_update=True)
+            if 'successful' in result:
+                return len(result['successful']) > 0
+            return False
+            
+        elif args.fco_action == 'historical':
+            print("⚠️ historical コマンドは廃止されました")
+            print("📊 代わりに以下を使用してください:")
+            print("   python entry_points/main.py market-data download --full  # 全履歴ダウンロード")
+            print("   python entry_points/main.py fco-daily run                # FCO分析実行")
+            return False
+            
+            # 以下は削除予定（互換性のため一時的に残す）
+            if False and args.download:
+                print("📥 マーケットデータをダウンロード中...")
+                symbols = args.symbols if hasattr(args, 'symbols') and args.symbols else None
+                cache_files = analyzer.download_all_market_data(years=2, symbols=symbols)
+                print(f"✅ {len(cache_files)}銘柄のデータをキャッシュしました")
+            
+            # 過去データ分析
+            if args.analyze:
+                periods = analyzer.generate_weekly_periods(weeks=args.weeks)
+                print(f"📅 分析期間: {periods[0]} 〜 {periods[-1]} ({len(periods)}週)")
+                
+                symbols = args.symbols if hasattr(args, 'symbols') and args.symbols else None
+                results = analyzer.analyze_historical_periods(periods, symbols)
+                
+                print(f"\n✅ 分析完了: {results['successful']}件成功")
+                return results['successful'] > 0
+            
+            if not args.download and not args.analyze:
+                print("⚠️ --download または --analyze オプションを指定してください")
+                return False
+            
+            return True
+            
+    except Exception as e:
+        print(f"❌ FCO日次分析エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def run_scheduled_analysis(args):
-    """定期解析システムの実行"""
+    """LPPL定期解析システムの実行"""
     if not args.scheduled_action:
         print("❌ サブコマンドが必要です")
         print("📊 利用可能なコマンド:")
@@ -481,6 +598,113 @@ def run_scheduled_analysis(args):
         print(f"❌ 定期解析システムエラー: {e}")
         return False
 
+def run_market_data(args):
+    """市場データ管理の実行（新アーキテクチャ）"""
+    if not args.market_action:
+        print("❌ サブコマンドが必要です")
+        print("📊 利用可能なコマンド:")
+        print("   python entry_points/main.py market-data download  # データダウンロード")
+        print("   python entry_points/main.py market-data update    # 差分更新")
+        print("   python entry_points/main.py market-data stats     # 統計表示")
+        return False
+    
+    try:
+        from infrastructure.market_data.data_downloader import MarketDataDownloader
+        downloader = MarketDataDownloader()
+        
+        if args.market_action == 'download':
+            print("📥 市場データダウンロード開始...")
+            results = downloader.download_all_symbols(
+                symbols=args.symbols if hasattr(args, 'symbols') else None,
+                years=args.years if hasattr(args, 'years') else 2
+            )
+            success_count = sum(1 for v in results.values() if v)
+            print(f"✅ 完了: {success_count}/{len(results)}銘柄成功")
+            return success_count > 0
+            
+        elif args.market_action == 'update':
+            print("🔄 最新データ差分更新...")
+            results = downloader.update_latest_data(
+                symbols=args.symbols if hasattr(args, 'symbols') else None
+            )
+            success_count = sum(1 for v in results.values() if v)
+            print(f"✅ 更新: {success_count}/{len(results)}銘柄成功")
+            return success_count > 0
+            
+        elif args.market_action == 'stats':
+            print("📊 データ統計:")
+            stats = downloader.get_data_stats()
+            import json
+            print(json.dumps(stats, indent=2, default=str))
+            return True
+            
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def run_fco_analyze(args):
+    """FCO分析の実行（ローカルデータ専用）"""
+    if not args.fco_analyze_action:
+        print("❌ サブコマンドが必要です")
+        print("📊 利用可能なコマンド:")
+        print("   python entry_points/main.py fco-analyze run         # 分析実行")
+        print("   python entry_points/main.py fco-analyze historical  # 過去分析")
+        print("   python entry_points/main.py fco-analyze status      # 状態確認")
+        return False
+    
+    try:
+        from applications.analysis_tools.fco_daily_analyzer import FCODailyAnalyzer
+        analyzer = FCODailyAnalyzer()
+        
+        if args.fco_analyze_action == 'run':
+            print("🔬 FCO分析実行...")
+            result = analyzer.run_daily_analysis(
+                symbols=args.symbols if hasattr(args, 'symbols') else None,
+                analysis_date=args.date if hasattr(args, 'date') else None
+            )
+            print(f"✅ 完了: {result['total_success']}銘柄成功")
+            return result['total_success'] > 0
+            
+        elif args.fco_analyze_action == 'historical':
+            print("📅 過去期間分析...")
+            
+            # デフォルト期間設定
+            if hasattr(args, 'periods') and args.periods:
+                periods = args.periods
+            else:
+                # 過去4週間の土曜日
+                from datetime import datetime, timedelta
+                today = datetime.now()
+                periods = []
+                for i in range(4):
+                    date = today - timedelta(weeks=i)
+                    days_to_saturday = (5 - date.weekday()) % 7
+                    saturday = date + timedelta(days=days_to_saturday)
+                    periods.append(saturday.strftime('%Y-%m-%d'))
+                periods.reverse()
+            
+            result = analyzer.analyze_historical(
+                periods=periods,
+                symbols=args.symbols if hasattr(args, 'symbols') else None
+            )
+            print(f"✅ 総分析: {result['total_analyses']}件完了")
+            return result['total_success'] > 0
+            
+        elif args.fco_analyze_action == 'status':
+            print("📊 FCO分析状態:")
+            status = analyzer.get_status()
+            import json
+            print(json.dumps(status, indent=2, default=str))
+            return True
+            
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def run_dev_tools(check_env=False, debug_viz=False):
     """Run development tools"""
     if check_env:
@@ -544,9 +768,76 @@ Examples:
     validate_parser = subparsers.add_parser('validate', help='Run validation tests')
     validate_parser.add_argument('--crash', choices=['1987', '2000', 'all'], default='all',
                                 help='Crash validation to run')
+    validate_parser.add_argument('--fco', action='store_true',
+                                help='Use FCO engine for validation (default: LPPL)')
     
-    # Scheduled Analysis commands
-    scheduled_parser = subparsers.add_parser('scheduled-analysis', help='定期解析システム')
+    # FCO Daily Analysis commands
+    fco_daily_parser = subparsers.add_parser('fco-daily', help='FCO日次分析システム')
+    fco_daily_subparsers = fco_daily_parser.add_subparsers(dest='fco_action', help='FCO日次分析コマンド')
+    
+    # FCO run subcommand
+    fco_run_parser = fco_daily_subparsers.add_parser('run', help='FCO日次分析実行（自動更新付き）')
+    fco_run_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    fco_run_parser.add_argument('--skip-update', action='store_true', help='データ更新をスキップ')
+    
+    # FCO update subcommand (new)
+    fco_update_parser = fco_daily_subparsers.add_parser('update', help='市場データ更新のみ実行')
+    fco_update_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    
+    # FCO retry subcommand
+    fco_retry_parser = fco_daily_subparsers.add_parser('retry', help='失敗した更新の再試行')
+    
+    # FCO check subcommand (new)
+    fco_check_parser = fco_daily_subparsers.add_parser('check', help='データ利用可能状況確認')
+    
+    # FCO status subcommand
+    fco_status_parser = fco_daily_subparsers.add_parser('status', help='FCO分析状態確認')
+    
+    # FCO test subcommand
+    fco_test_parser = fco_daily_subparsers.add_parser('test', help='FCOテスト実行（3銘柄のみ）')
+    
+    # FCO historical subcommand (deprecated - kept for compatibility)
+    fco_historical_parser = fco_daily_subparsers.add_parser('historical', help='FCO過去データ蓄積（旧版）')
+    fco_historical_parser.add_argument('--download', action='store_true', help='マーケットデータをダウンロード')
+    fco_historical_parser.add_argument('--analyze', action='store_true', help='過去データを分析')
+    fco_historical_parser.add_argument('--weeks', type=int, default=12, help='分析する週数（デフォルト: 12週）')
+    fco_historical_parser.add_argument('--symbols', nargs='+', help='対象銘柄（省略時は全銘柄）')
+    
+    # Market Data commands (new architecture)
+    market_parser = subparsers.add_parser('market-data', help='市場データ管理（新アーキテクチャ）')
+    market_subparsers = market_parser.add_subparsers(dest='market_action', help='市場データコマンド')
+    
+    # Market download subcommand
+    market_download_parser = market_subparsers.add_parser('download', help='市場データダウンロード')
+    market_download_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    market_download_parser.add_argument('--years', type=int, default=2, help='取得年数')
+    
+    # Market update subcommand
+    market_update_parser = market_subparsers.add_parser('update', help='最新データ差分更新')
+    market_update_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    
+    # Market stats subcommand
+    market_stats_parser = market_subparsers.add_parser('stats', help='データ統計表示')
+    
+    # FCO Analysis commands (new architecture - cache only)
+    fco_analysis_parser = subparsers.add_parser('fco-analyze', help='FCO分析（ローカルデータ専用）')
+    fco_analysis_subparsers = fco_analysis_parser.add_subparsers(dest='fco_analyze_action', help='FCO分析コマンド')
+    
+    # FCO analyze subcommand
+    fco_analyze_run_parser = fco_analysis_subparsers.add_parser('run', help='FCO分析実行')
+    fco_analyze_run_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    fco_analyze_run_parser.add_argument('--date', help='分析基準日 (YYYY-MM-DD)')
+    
+    # FCO historical analysis subcommand
+    fco_analyze_hist_parser = fco_analysis_subparsers.add_parser('historical', help='過去期間分析')
+    fco_analyze_hist_parser.add_argument('--periods', nargs='+', help='分析期間リスト')
+    fco_analyze_hist_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    
+    # FCO analyzer status subcommand
+    fco_analyze_status_parser = fco_analysis_subparsers.add_parser('status', help='分析状態確認')
+    
+    # Scheduled Analysis commands (LPPL)
+    scheduled_parser = subparsers.add_parser('scheduled-analysis', help='LPPL定期解析システム')
     scheduled_subparsers = scheduled_parser.add_subparsers(dest='scheduled_action', help='定期解析コマンド')
     
     # run subcommand
@@ -604,9 +895,15 @@ Examples:
     elif args.command == 'analyze':
         run_analysis(args.symbol, args.period, use_fco=args.fco)
     elif args.command == 'validate':
-        run_validation(args.crash)
+        run_validation(args.crash, use_fco=args.fco if hasattr(args, 'fco') else False)
     elif args.command == 'scheduled-analysis':
         run_scheduled_analysis(args)
+    elif args.command == 'fco-daily':
+        run_fco_daily(args)
+    elif args.command == 'market-data':
+        run_market_data(args)
+    elif args.command == 'fco-analyze':
+        run_fco_analyze(args)
     elif args.command == 'dev':
         run_dev_tools(args.check_env, args.debug_viz)
 

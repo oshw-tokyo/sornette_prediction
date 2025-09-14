@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+"""
+FCO過去データ蓄積ツール
+シンプルで効率的な実装を優先
+"""
+
+import sys
+import os
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple
+import logging
+import json
+import time
+import pandas as pd
+import numpy as np
+
+# プロジェクトルートをパスに追加
+project_root = Path(__file__).parent.parent.parent
+sys.path.append(str(project_root))
+
+from core.fitting.fco_engine import FCOEngine
+from infrastructure.database.fco_results_database import FCOResultsDatabase
+from infrastructure.data_sources.unified_data_client import UnifiedDataClient
+
+# ロギング設定
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+class FCOHistoricalAnalyzer:
+    """FCO過去データ蓄積クラス（シンプル実装）"""
+    
+    def __init__(self, cache_dir: str = "results/market_data_cache"):
+        """
+        初期化
+        
+        Args:
+            cache_dir: マーケットデータキャッシュディレクトリ
+        """
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.db = FCOResultsDatabase()
+        self.data_client = UnifiedDataClient()
+        self.engine = FCOEngine(use_parallel=True, max_workers=4)
+        
+        # カタログから銘柄リスト取得
+        self.symbols = self._load_symbols_from_catalog()
+    
+    def _load_symbols_from_catalog(self) -> List[str]:
+        """カタログから銘柄リストを読み込み"""
+        try:
+            catalog_path = project_root / "infrastructure" / "data_sources" / "market_data_catalog.json"
+            with open(catalog_path, 'r', encoding='utf-8') as f:
+                catalog = json.load(f)
+            
+            symbols = list(catalog.get('symbols', {}).keys())
+            logger.info(f"📊 カタログから{len(symbols)}銘柄を読み込み")
+            return symbols
+        except Exception as e:
+            logger.error(f"❌ カタログ読み込みエラー: {e}")
+            return []
+    
+    def download_all_market_data(self, years: int = 2, symbols: Optional[List[str]] = None) -> Dict[str, str]:
+        """
+        全銘柄の市場データを一括ダウンロード（API効率化）
+        
+        Args:
+            years: 取得する年数
+            symbols: 対象銘柄（Noneなら全銘柄）
+        
+        Returns:
+            銘柄別のキャッシュファイルパス
+        """
+        if symbols is None:
+            symbols = self.symbols
+        
+        logger.info("=" * 60)
+        logger.info(f"📥 マーケットデータ一括ダウンロード開始")
+        logger.info(f"   対象: {len(symbols)}銘柄 × {years}年分")
+        logger.info("=" * 60)
+        
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365 * years)
+        
+        cache_files = {}
+        
+        for i, symbol in enumerate(symbols, 1):
+            cache_file = self.cache_dir / f"{symbol}_{years}y.parquet"
+            
+            # キャッシュが存在する場合はスキップ
+            if cache_file.exists():
+                logger.info(f"[{i}/{len(symbols)}] ✓ {symbol} - キャッシュ使用")
+                cache_files[symbol] = str(cache_file)
+                continue
+            
+            logger.info(f"[{i}/{len(symbols)}] 📊 {symbol} をダウンロード中...")
+            
+            try:
+                df, source = self.data_client.get_data_with_fallback(
+                    symbol,
+                    start_date=start_date.strftime('%Y-%m-%d'),
+                    end_date=end_date.strftime('%Y-%m-%d')
+                )
+                
+                if df is not None and not df.empty:
+                    # メタデータを追加
+                    df.attrs['symbol'] = symbol
+                    df.attrs['source'] = source
+                    df.attrs['download_date'] = datetime.now().isoformat()
+                    
+                    # Parquet形式で保存（効率的）
+                    df.to_parquet(cache_file)
+                    cache_files[symbol] = str(cache_file)
+                    
+                    logger.info(f"  ✅ 保存完了: {len(df)}日分 from {source}")
+                else:
+                    logger.warning(f"  ❌ データ取得失敗")
+                    
+            except Exception as e:
+                logger.error(f"  ❌ エラー: {e}")
+            
+            # API制限対策（必要最小限の待機）
+            if i < len(symbols):
+                time.sleep(0.2)  # 200ms待機
+        
+        logger.info(f"\n✅ ダウンロード完了: {len(cache_files)}/{len(symbols)}銘柄")
+        return cache_files
+    
+    def analyze_historical_periods(self, 
+                                  periods: List[str],
+                                  symbols: Optional[List[str]] = None) -> Dict:
+        """
+        指定期間でのFCO分析実行（キャッシュデータ使用）
+        
+        Args:
+            periods: 分析基準日のリスト（'YYYY-MM-DD'形式）
+            symbols: 対象銘柄（Noneなら全銘柄）
+        
+        Returns:
+            実行結果サマリー
+        """
+        if symbols is None:
+            symbols = self.symbols
+        
+        logger.info("=" * 60)
+        logger.info(f"🔬 過去データFCO分析開始")
+        logger.info(f"   銘柄数: {len(symbols)}")
+        logger.info(f"   期間数: {len(periods)}")
+        logger.info("=" * 60)
+        
+        results = {
+            'total_analyses': 0,
+            'successful': 0,
+            'skipped': 0,
+            'failed': 0,
+            'details': []
+        }
+        
+        for period_idx, analysis_date in enumerate(periods, 1):
+            logger.info(f"\n📅 期間 {period_idx}/{len(periods)}: {analysis_date}")
+            
+            analysis_date_obj = pd.to_datetime(analysis_date)
+            
+            for symbol_idx, symbol in enumerate(symbols, 1):
+                # 既存データチェック（重複回避）
+                existing = self.db.get_analysis_by_date(symbol, analysis_date)
+                if existing is not None:
+                    results['skipped'] += 1
+                    logger.debug(f"  [{symbol_idx}/{len(symbols)}] {symbol} - スキップ（既存）")
+                    continue
+                
+                # キャッシュファイル読み込み
+                cache_file = self.cache_dir / f"{symbol}_2y.parquet"
+                if not cache_file.exists():
+                    results['failed'] += 1
+                    logger.warning(f"  [{symbol_idx}/{len(symbols)}] {symbol} - キャッシュなし")
+                    continue
+                
+                try:
+                    # データ読み込みと期間フィルタ
+                    df = pd.read_parquet(cache_file)
+                    
+                    # 分析基準日までのデータを抽出（2年分）
+                    end_date = analysis_date_obj
+                    start_date = end_date - timedelta(days=730)
+                    
+                    # インデックスが日付型でない場合の処理
+                    if not isinstance(df.index, pd.DatetimeIndex):
+                        df.index = pd.to_datetime(df.index)
+                    
+                    df_period = df[(df.index >= start_date) & (df.index <= end_date)]
+                    
+                    if len(df_period) < 250:  # 最低限のデータ数
+                        results['failed'] += 1
+                        logger.warning(f"  [{symbol_idx}/{len(symbols)}] {symbol} - データ不足")
+                        continue
+                    
+                    # 価格データ抽出
+                    if 'Close' in df_period.columns:
+                        prices = df_period['Close'].values
+                    elif 'close' in df_period.columns:
+                        prices = df_period['close'].values
+                    else:
+                        raise ValueError(f"価格カラムが見つかりません")
+                    
+                    # FCO分析実行
+                    fco_result = self.engine.compute_ds_lppls_confidence(prices)
+                    
+                    # データベース保存
+                    db_data = {
+                        'symbol': symbol,
+                        'analysis_basis_date': analysis_date,
+                        'data_source': df.attrs.get('source', 'cached'),
+                        'data_period_start': start_date.strftime('%Y-%m-%d'),
+                        'data_period_end': end_date.strftime('%Y-%m-%d'),
+                        'data_points': len(prices),
+                        'ds_lppls_confidence': fco_result.ds_lppls_confidence,
+                        'ds_lppls_confidence_neg': fco_result.ds_lppls_confidence_neg,
+                        'bubble_type': fco_result.bubble_type,
+                        'predicted_tc': fco_result.predicted_tc,
+                        'tc_std': fco_result.tc_std,
+                        'scenario_probability': fco_result.scenario_probability,
+                        'num_windows': fco_result.metadata.get('num_windows', 0),
+                        'num_qualified_fits': fco_result.metadata.get('qualified_fits', 0),
+                        'window_results': fco_result.window_results,
+                        'metadata': fco_result.metadata
+                    }
+                    
+                    analysis_id = self.db.save_fco_analysis(db_data)
+                    
+                    # Confidence履歴も保存
+                    self.db.save_confidence_history(
+                        symbol=symbol,
+                        timestamp=analysis_date_obj,
+                        price=prices[-1],
+                        confidence=fco_result.ds_lppls_confidence,
+                        confidence_neg=fco_result.ds_lppls_confidence_neg,
+                        bubble_status=fco_result.bubble_type
+                    )
+                    
+                    results['successful'] += 1
+                    results['total_analyses'] += 1
+                    
+                    logger.info(f"  [{symbol_idx}/{len(symbols)}] {symbol} - ✅ Conf={fco_result.ds_lppls_confidence:.1%}")
+                    
+                except Exception as e:
+                    results['failed'] += 1
+                    logger.error(f"  [{symbol_idx}/{len(symbols)}] {symbol} - ❌ {e}")
+        
+        # サマリー表示
+        logger.info("\n" + "=" * 60)
+        logger.info("📊 過去データ分析完了")
+        logger.info(f"  総分析数: {results['total_analyses']}")
+        logger.info(f"  成功: {results['successful']}")
+        logger.info(f"  スキップ: {results['skipped']}")
+        logger.info(f"  失敗: {results['failed']}")
+        logger.info("=" * 60)
+        
+        return results
+    
+    def generate_weekly_periods(self, weeks: int = 12) -> List[str]:
+        """
+        週次分析期間を生成（土曜日基準）
+        
+        Args:
+            weeks: 遡る週数
+        
+        Returns:
+            分析基準日のリスト
+        """
+        periods = []
+        today = datetime.now()
+        
+        # 直近の土曜日を見つける
+        days_to_saturday = (5 - today.weekday()) % 7
+        if days_to_saturday == 0 and today.hour >= 18:  # 土曜日の18時以降
+            last_saturday = today
+        else:
+            last_saturday = today - timedelta(days=(today.weekday() + 2) % 7)
+        
+        # 週次で遡る
+        for i in range(weeks):
+            period_date = last_saturday - timedelta(weeks=i)
+            periods.append(period_date.strftime('%Y-%m-%d'))
+        
+        periods.reverse()  # 古い順にソート
+        return periods
+
+
+def main():
+    """メイン実行関数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='FCO Historical Analysis Tool')
+    parser.add_argument('--download', action='store_true', 
+                       help='マーケットデータをダウンロード')
+    parser.add_argument('--analyze', action='store_true',
+                       help='過去データを分析')
+    parser.add_argument('--weeks', type=int, default=12,
+                       help='分析する週数（デフォルト: 12週）')
+    parser.add_argument('--symbols', nargs='+',
+                       help='対象銘柄（省略時は全銘柄）')
+    
+    args = parser.parse_args()
+    
+    analyzer = FCOHistoricalAnalyzer()
+    
+    # データダウンロード
+    if args.download:
+        cache_files = analyzer.download_all_market_data(years=2)
+        print(f"✅ {len(cache_files)}銘柄のデータをキャッシュしました")
+    
+    # 過去データ分析
+    if args.analyze:
+        periods = analyzer.generate_weekly_periods(weeks=args.weeks)
+        print(f"📅 分析期間: {periods[0]} 〜 {periods[-1]} ({len(periods)}週)")
+        
+        symbols = args.symbols if args.symbols else None
+        results = analyzer.analyze_historical_periods(periods, symbols)
+        
+        print(f"\n✅ 分析完了: {results['successful']}件成功")
+
+
+if __name__ == "__main__":
+    main()

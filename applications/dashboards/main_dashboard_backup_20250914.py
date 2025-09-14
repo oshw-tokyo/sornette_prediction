@@ -35,7 +35,6 @@ except ImportError:
 
 from infrastructure.database.results_database import ResultsDatabase
 from infrastructure.data_sources.unified_data_client import UnifiedDataClient
-from infrastructure.visualization.fco_dashboard_components import FCODashboardComponents
 
 class SymbolAnalysisDashboard:
     """Symbol-Based Analysis Dashboard"""
@@ -44,7 +43,6 @@ class SymbolAnalysisDashboard:
         self.db = ResultsDatabase()
         self.market_catalog = self.load_market_catalog()
         self.data_client = UnifiedDataClient()
-        self.fco_components = FCODashboardComponents()  # FCOコンポーネント追加
         
         # 🔧 API効率化: 価格データキャッシュ（セッション内有効）
         if 'price_data_cache' not in st.session_state:
@@ -4330,74 +4328,11 @@ class SymbolAnalysisDashboard:
             - **Trading Grade**: High quality + recent data validation
             """)
     
-    def render_sidebar_fco_simple(self):
-        """
-        FCO専用のシンプルなサイドバー
-        Symbol Filtersを使わず、直接銘柄選択のみ
-        """
-        with st.sidebar:
-            st.header("🎯 FCO Symbol Selection")
-            
-            # カタログから銘柄情報を取得
-            # カタログ構造: {"symbols": {"SYMBOL": {"name": ..., "category": ...}}}
-            symbols_dict = self.market_catalog.get('symbols', {})
-            
-            # カテゴリーごとに銘柄を整理
-            categories_map = {}
-            for symbol, info in symbols_dict.items():
-                if isinstance(info, dict):
-                    category = info.get('category', 'Other')
-                    if category not in categories_map:
-                        categories_map[category] = []
-                    categories_map[category].append({
-                        'symbol': symbol,
-                        'name': info.get('name', symbol)
-                    })
-            
-            # カテゴリー選択
-            if categories_map:
-                selected_category = st.selectbox(
-                    "📂 Category",
-                    list(categories_map.keys()),
-                    index=0
-                )
-                
-                # 銘柄リスト作成
-                symbols_in_category = []
-                if selected_category and selected_category in categories_map:
-                    for item in categories_map[selected_category]:
-                        symbols_in_category.append(f"{item['symbol']} - {item['name']}")
-                
-                # 銘柄選択
-                if symbols_in_category:
-                    selected_item = st.selectbox(
-                        "📈 Symbol",
-                        symbols_in_category
-                    )
-                    
-                    # シンボルのみ抽出
-                    if selected_item:
-                        selected_symbol = selected_item.split(' - ')[0]
-                        
-                        # 選択ボタン
-                        if st.button("🔍 Analyze", type="primary", use_container_width=True):
-                            st.session_state.fco_selected_symbol = selected_symbol
-                        
-                        # 現在選択中の銘柄を保持
-                        if 'fco_selected_symbol' not in st.session_state:
-                            st.session_state.fco_selected_symbol = None
-                        
-                        return st.session_state.get('fco_selected_symbol')
-            else:
-                st.error("Market catalog is empty or invalid")
-            
-            return None
-    
     def run(self):
         """Main dashboard execution"""
         
-        st.title("📊 Market Analysis Dashboard")
-        st.markdown("*FCO Multi-Window & LPPL Analysis*")
+        st.title("📊 LPPL Market Analysis Dashboard")
+        st.markdown("*Symbol-based analysis with trading position prioritization*")
         
         # CSS for reducing metric display sizes globally (2025-08-14)
         st.markdown("""
@@ -4417,103 +4352,58 @@ class SymbolAnalysisDashboard:
         </style>
         """, unsafe_allow_html=True)
         
-        # タブ状態を確認（FCOタブが選択されているか）
-        # Streamlitではタブのインデックスを直接取得できないため、
-        # まず全体構造を表示し、FCOタブでは簡素化されたサイドバーを使用
-        
-        # FCO専用のシンプルなサイドバーを使用
-        selected_symbol = self.render_sidebar_fco_simple()
+        # Render new sidebar (v2) - Symbol選択のみ
+        selected_symbol = self.render_sidebar_v2()
         
         if selected_symbol is None:
-            # 初期画面でユーザーガイドを表示（FCO用にシンプル化）
+            # 初期画面でユーザーガイドを表示
             st.info("""
-            ### 📋 Getting Started with FCO Analysis
+            ### 📋 Getting Started
             
             Please use the sidebar to:
-            1. **📂 Select Category**: Choose a market category
-            2. **📈 Select Symbol**: Choose a symbol and click "Analyze"
+            1. **🎛️ Symbol Filters**: Set filters to find symbols of interest
+            2. **📈 Select Symbol**: Choose a symbol and click "Select Symbol"
             
-            FCO analysis provides daily updates with 126-window analysis.
+            After selecting a symbol, each tab will have its own Display Period settings.
             """)
-            # 空のタブ構造を表示（ユーザーに構造を見せる）
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                "🆕 FCO Analysis",
-                "📊 Overview & Screening",
-                "🎯 Clustering Analysis",
-                "📋 Parameters",
-                "📚 References"
-            ])
-            with tab1:
-                st.info("Select a symbol to view FCO analysis")
             return
         
-        # Main content tabs - FCO優先配置（2025-09-14）
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "🆕 FCO Analysis",               # 1. FCO多重時間窓分析（最優先）
-            "📊 Overview & Screening",      # 2. 概要・スクリーニング・導入確認
-            "🎯 Clustering Analysis",       # 3. クラスタリング分析
-            "📋 Parameters",                # 4. パラメータ詳細
-            "📚 References"                 # 5. 参照情報
+        # 🆕 選択銘柄の全データ取得（各タブで個別にフィルタリング）
+        with st.spinner(f"Loading all analysis data for {selected_symbol}..."):
+            # 全データ取得（フィルタリングは各タブで実施）
+            analysis_data = self.get_symbol_analysis_data(selected_symbol, limit=None, period_selection=None)
+        
+        if analysis_data.empty:
+            st.warning(f"No analysis data found for {selected_symbol}")
+            return
+        
+        # 🎯 フィルタリング完了 - 新システムで全て処理済み
+        
+        # Main content tabs - Issue I058実装（2025-08-14）
+        # Phase 2: タブ構造変更 - LPPL Fitting Plotタブ削除、Clustering Analysis改名
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Overview & Screening",      # 1. 概要・スクリーニング・導入確認（Enhanced with Latest Analysis）
+            "🎯 Clustering Analysis",       # 2. クラスタリング分析（旧Prediction Clustering, Enhanced with Individual Results）
+            "📋 Parameters",                # 3. パラメータ詳細（変更なし）
+            "📚 References"                 # 4. 参照情報（変更なし）
         ])
         
         with tab1:
-            # FCO分析タブ（最優先表示・独立動作）
-            # Overview & Screening を先に表示（データ確認用）
-            self.fco_components.render_overview_screening_tab(selected_symbol)
+            self.render_prediction_data_tab(selected_symbol, analysis_data)
         
         with tab2:
-            # LPPLデータを遅延読み込み（このタブが表示された時のみ）
-            if 'lppl_data_loaded' not in st.session_state:
-                st.session_state.lppl_data_loaded = False
-            
-            if not st.session_state.lppl_data_loaded:
-                with st.spinner(f"Loading LPPL analysis data for {selected_symbol}..."):
-                    analysis_data = self.get_symbol_analysis_data(selected_symbol, limit=None, period_selection=None)
-                    st.session_state.lppl_analysis_data = analysis_data
-                    st.session_state.lppl_data_loaded = True
-            else:
-                analysis_data = st.session_state.lppl_analysis_data
-            
-            if analysis_data.empty:
-                st.warning(f"No LPPL analysis data found for {selected_symbol}")
-            else:
-                self.render_prediction_data_tab(selected_symbol, analysis_data)
+            # Issue I058: Clustering Analysis統合タブ（旧Prediction Clustering）
+            self.render_clustering_analysis_tab(selected_symbol, analysis_data)
+        
+        # Issue I058: LPPL Fitting Plotタブは削除（機能は他タブへ移動）
+        # with tab3:
+        #     self.render_price_predictions_tab(selected_symbol, analysis_data)
         
         with tab3:
-            # 既存のLPPLデータを使用
-            if 'lppl_analysis_data' in st.session_state:
-                analysis_data = st.session_state.lppl_analysis_data
-            else:
-                analysis_data = pd.DataFrame()
-            
-            if not analysis_data.empty:
-                self.render_clustering_analysis_tab(selected_symbol, analysis_data)
-            else:
-                st.info("Please visit the Overview tab first to load LPPL data")
+            self.render_parameters_tab(selected_symbol, analysis_data)
         
         with tab4:
-            # 既存のLPPLデータを使用
-            if 'lppl_analysis_data' in st.session_state:
-                analysis_data = st.session_state.lppl_analysis_data
-            else:
-                analysis_data = pd.DataFrame()
-            
-            if not analysis_data.empty:
-                self.render_parameters_tab(selected_symbol, analysis_data)
-            else:
-                st.info("Please visit the Overview tab first to load LPPL data")
-        
-        with tab5:
-            # 既存のLPPLデータを使用
-            if 'lppl_analysis_data' in st.session_state:
-                analysis_data = st.session_state.lppl_analysis_data
-            else:
-                analysis_data = pd.DataFrame()
-            
-            if not analysis_data.empty:
-                self.render_references_tab(selected_symbol, analysis_data)
-            else:
-                st.info("Please visit the Overview tab first to load LPPL data")
+            self.render_references_tab(selected_symbol, analysis_data)
 
 def main():
     """Main execution function"""

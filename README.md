@@ -19,7 +19,13 @@ python entry_points/main.py validate --crash 1987
 
 **目的**: Sornette対数周期パワー法則（LPPL）モデルを用いて金融市場のクラッシュを事前に予測し、実際の取引で収益を上げるシステムの構築
 
-**現在のステータス**: 安定版v1.0（80銘柄・FRED優先原則+Twelve Data補完・論文再現保護）
+**現在のステータス**: FCO v2.0実装完了（2025-09-12）- DS-LPPLS指標・126窓分析・Boulder lppls統合
+
+### 🆕 FCO v2.0 アップグレード完了
+- **DS-LPPLS Confidence指標**: 多重時間窓での統計的信頼度評価
+- **126窓並列分析**: 125-750日の範囲で包括的分析
+- **Boulder lppls統合**: MITライセンスのオープンソース実装活用
+- **1987年検証**: FCO方式でも100/100スコア維持確認
 
 ### 🎯 安定版v1.0 データソース戦略
 
@@ -62,6 +68,8 @@ sornette_prediction/
 │
 ├── core/                          # 科学的中核（保護対象）
 │   ├── fitting/                  # LPPLフィッティング（論文再現）
+│   │   ├── fitter.py             # 既存LPPL実装
+│   │   └── fco_engine.py         # 🆕 FCOエンジン（DS-LPPLS）
 │   ├── sornette_theory/          # 理論実装
 │   └── validation/               # 歴史的検証（100/100スコア保護）
 │
