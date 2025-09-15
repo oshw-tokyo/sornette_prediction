@@ -1,0 +1,437 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Symbol Selection -->
+<div class="card">
+    <div class="card-title">Symbol Selection</div>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <select id="symbolSelect" class="button button-secondary" style="padding: 0.5rem;">
+            <option value="">Select a symbol...</option>
+            {% for symbol in symbols %}
+            <option value="{{ symbol }}">{{ symbol }}</option>
+            {% endfor %}
+        </select>
+        <button id="loadDataBtn" class="button" onclick="loadSymbolData()">
+            Load Data
+        </button>
+        <div id="loadingIndicator" class="loading" style="display: none;"></div>
+    </div>
+</div>
+
+<!-- Summary Statistics -->
+<div id="summarySection" style="display: none;">
+    <h2 style="margin: 1.5rem 0 1rem; font-size: 1.5rem; color: #1f2937;">Analysis Summary</h2>
+    <div class="grid">
+        <div class="stat-card">
+            <div class="stat-label">Latest DS-LPPLS Confidence</div>
+            <div class="stat-value" id="latestConfidence">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Bubble Type</div>
+            <div class="stat-value" id="bubbleType">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Predicted Critical Time</div>
+            <div class="stat-value" id="predictedTc">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Analysis Count</div>
+            <div class="stat-value" id="analysisCount">-</div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<div id="tabSection" style="display: none;">
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="switchTab('timeseries')">Time Series</button>
+        <button class="nav-tab" onclick="switchTab('details')">Analysis Details</button>
+        <button class="nav-tab" onclick="switchTab('historical')">Historical Data</button>
+    </div>
+    
+    <!-- Tab Content -->
+    <div id="timeseries-content" class="tab-content">
+        <div class="card">
+            <div class="card-title">DS-LPPLS Confidence Over Time</div>
+            <div class="chart-container" id="confidenceChart">
+                <canvas id="confidenceCanvas"></canvas>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">DS-LPPLS Trust Indicator</div>
+            <div class="chart-container" id="trustChart">
+                <canvas id="trustCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div id="details-content" class="tab-content" style="display: none;">
+        <div class="card">
+            <div class="card-title">Latest Analysis Details</div>
+            <table class="table" id="detailsTable">
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div id="historical-content" class="tab-content" style="display: none;">
+        <div class="card">
+            <div class="card-title">Historical Analysis Results</div>
+            <div style="margin-bottom: 1rem;">
+                <button class="button button-secondary" onclick="exportData()">Export CSV</button>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="table" id="historicalTable">
+                    <thead>
+                        <tr>
+                            <th>Analysis Date</th>
+                            <th>DS-LPPLS Confidence</th>
+                            <th>DS-LPPLS Trust</th>
+                            <th>Bubble Type</th>
+                            <th>Predicted Tc</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error/Success Messages -->
+<div id="messageArea"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let currentSymbol = null;
+let currentData = null;
+let confidenceChart = null;
+let trustChart = null;
+
+function showMessage(message, type = 'error') {
+    const messageArea = document.getElementById('messageArea');
+    messageArea.innerHTML = `
+        <div class="${type}-message">
+            ${message}
+        </div>
+    `;
+    setTimeout(() => {
+        messageArea.innerHTML = '';
+    }, 5000);
+}
+
+function switchTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Update content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.style.display = 'none';
+    });
+    document.getElementById(`${tabName}-content`).style.display = 'block';
+}
+
+async function loadSymbolData() {
+    const symbolSelect = document.getElementById('symbolSelect');
+    const symbol = symbolSelect.value;
+    
+    if (!symbol) {
+        showMessage('Please select a symbol', 'error');
+        return;
+    }
+    
+    currentSymbol = symbol;
+    document.getElementById('loadingIndicator').style.display = 'inline-block';
+    
+    try {
+        // Fetch summary
+        const summaryResponse = await fetch(`/api/v1/fco/symbols/${symbol}/summary`);
+        if (!summaryResponse.ok) throw new Error('Failed to fetch summary');
+        const summary = await summaryResponse.json();
+        
+        // Fetch time series
+        const timeseriesResponse = await fetch(`/api/v1/fco/symbols/${symbol}/timeseries`);
+        if (!timeseriesResponse.ok) throw new Error('Failed to fetch time series');
+        const timeseries = await timeseriesResponse.json();
+        
+        // Fetch latest analysis
+        const latestResponse = await fetch(`/api/v1/fco/symbols/${symbol}/latest`);
+        if (!latestResponse.ok) throw new Error('Failed to fetch latest analysis');
+        const latest = await latestResponse.json();
+        
+        // Fetch historical
+        const historicalResponse = await fetch(`/api/v1/fco/symbols/${symbol}/historical?limit=100`);
+        if (!historicalResponse.ok) throw new Error('Failed to fetch historical data');
+        const historical = await historicalResponse.json();
+        
+        currentData = {
+            summary,
+            timeseries,
+            latest,
+            historical
+        };
+        
+        updateUI();
+        
+        document.getElementById('summarySection').style.display = 'block';
+        document.getElementById('tabSection').style.display = 'block';
+        
+        showMessage(`Successfully loaded data for ${symbol}`, 'success');
+        
+    } catch (error) {
+        showMessage(`Error loading data: ${error.message}`, 'error');
+    } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+function updateUI() {
+    if (!currentData) return;
+    
+    // Update summary
+    const summary = currentData.summary;
+    document.getElementById('latestConfidence').textContent = 
+        summary.latest_confidence ? `${(summary.latest_confidence * 100).toFixed(1)}%` : 'N/A';
+    
+    const bubbleTypeEl = document.getElementById('bubbleType');
+    bubbleTypeEl.textContent = summary.latest_bubble_type || 'N/A';
+    bubbleTypeEl.className = 'stat-value';
+    if (summary.latest_bubble_type === 'positive') {
+        bubbleTypeEl.innerHTML = '<span class="badge badge-danger">Positive Bubble</span>';
+    } else if (summary.latest_bubble_type === 'negative') {
+        bubbleTypeEl.innerHTML = '<span class="badge badge-success">Negative Bubble</span>';
+    }
+    
+    document.getElementById('predictedTc').textContent = 
+        summary.latest_predicted_tc ? new Date(summary.latest_predicted_tc).toLocaleDateString() : 'N/A';
+    document.getElementById('analysisCount').textContent = summary.total_analyses || 0;
+    
+    // Update charts
+    updateCharts();
+    
+    // Update details table
+    updateDetailsTable();
+    
+    // Update historical table
+    updateHistoricalTable();
+}
+
+function updateCharts() {
+    const timeseries = currentData.timeseries;
+    
+    // Prepare data
+    const labels = timeseries.dates.map(d => new Date(d).toLocaleDateString());
+    
+    // Update confidence chart
+    const confidenceCtx = document.getElementById('confidenceCanvas').getContext('2d');
+    
+    if (confidenceChart) {
+        confidenceChart.destroy();
+    }
+    
+    confidenceChart = new Chart(confidenceCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'DS-LPPLS Confidence (Positive)',
+                data: timeseries.confidence_values.map(v => v * 100),
+                borderColor: 'rgb(239, 68, 68)',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.1
+            }, {
+                label: 'DS-LPPLS Confidence (Negative)',
+                data: timeseries.confidence_neg_values.map(v => v * 100),
+                borderColor: 'rgb(34, 197, 94)',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Confidence (%)'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Update trust chart
+    const trustCtx = document.getElementById('trustCanvas').getContext('2d');
+    
+    if (trustChart) {
+        trustChart.destroy();
+    }
+    
+    trustChart = new Chart(trustCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'DS-LPPLS Trust',
+                data: timeseries.trust_values.map(v => v * 100),
+                borderColor: 'rgb(79, 70, 229)',
+                backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Trust (%)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateDetailsTable() {
+    const latest = currentData.latest;
+    const tbody = document.querySelector('#detailsTable tbody');
+    
+    const fields = [
+        ['Symbol', latest.symbol],
+        ['Analysis Basis Date', new Date(latest.analysis_basis_date).toLocaleDateString()],
+        ['Data Period Start', new Date(latest.data_period_start).toLocaleDateString()],
+        ['Data Period End', new Date(latest.data_period_end).toLocaleDateString()],
+        ['DS-LPPLS Confidence', `${(latest.ds_lppls_confidence * 100).toFixed(2)}%`],
+        ['DS-LPPLS Confidence (Neg)', `${(latest.ds_lppls_confidence_neg * 100).toFixed(2)}%`],
+        ['DS-LPPLS Trust', `${(latest.ds_lppls_trust * 100).toFixed(2)}%`],
+        ['Bubble Type', latest.bubble_type],
+        ['Predicted Tc', latest.predicted_tc ? new Date(latest.predicted_tc).toLocaleDateString() : 'N/A'],
+        ['Number of Fits', latest.number_of_fits],
+        ['Analysis Date', new Date(latest.analysis_date).toLocaleString()]
+    ];
+    
+    tbody.innerHTML = fields.map(([label, value]) => `
+        <tr>
+            <td style="font-weight: 600;">${label}</td>
+            <td>${value}</td>
+        </tr>
+    `).join('');
+}
+
+function updateHistoricalTable() {
+    const historical = currentData.historical;
+    const tbody = document.querySelector('#historicalTable tbody');
+    
+    tbody.innerHTML = historical.map((row, index) => `
+        <tr>
+            <td>${new Date(row.analysis_basis_date).toLocaleDateString()}</td>
+            <td>${(row.ds_lppls_confidence * 100).toFixed(1)}%</td>
+            <td>${(row.ds_lppls_trust * 100).toFixed(1)}%</td>
+            <td>${row.bubble_type}</td>
+            <td>${row.predicted_tc ? new Date(row.predicted_tc).toLocaleDateString() : 'N/A'}</td>
+            <td>
+                <button class="button button-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" 
+                        onclick="deleteAnalysis(${row.id})">
+                    Delete
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function deleteAnalysis(id) {
+    if (!confirm('Are you sure you want to delete this analysis?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/v1/fco/analysis/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('Failed to delete analysis');
+        
+        showMessage('Analysis deleted successfully', 'success');
+        loadSymbolData();  // Reload data
+        
+    } catch (error) {
+        showMessage(`Error deleting analysis: ${error.message}`, 'error');
+    }
+}
+
+function exportData() {
+    if (!currentData || !currentData.historical) {
+        showMessage('No data to export', 'error');
+        return;
+    }
+    
+    // Convert to CSV
+    const headers = ['Analysis Date', 'DS-LPPLS Confidence', 'DS-LPPLS Trust', 'Bubble Type', 'Predicted Tc'];
+    const rows = currentData.historical.map(row => [
+        row.analysis_basis_date,
+        row.ds_lppls_confidence,
+        row.ds_lppls_trust,
+        row.bubble_type,
+        row.predicted_tc || ''
+    ]);
+    
+    const csv = [
+        headers.join(','),
+        ...rows.map(row => row.join(','))
+    ].join('\n');
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fco_analysis_${currentSymbol}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showMessage('Data exported successfully', 'success');
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Auto-select first symbol if available
+    const symbolSelect = document.getElementById('symbolSelect');
+    if (symbolSelect.options.length > 1) {
+        symbolSelect.selectedIndex = 1;
+    }
+});
+</script>
+{% endblock %}
