@@ -107,6 +107,14 @@ export const FCOScatterPlot: React.FC<FCOScatterPlotProps> = ({
         `Trust: ${trustValues[i].toFixed(2)}%`
       ),
       hovertemplate: '%{text}<extra></extra>',
+      hoverlabel: {
+        bgcolor: 'rgba(31, 41, 55, 0.95)',  // Dark gray background for readability
+        bordercolor: 'rgba(255, 255, 255, 0.2)',
+        font: {
+          color: '#fff',
+          size: 14
+        }
+      },
       name: showNegative ? 'Negative Bubble' : 'Positive Bubble'
     }]
 

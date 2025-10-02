@@ -132,6 +132,14 @@ export const FCOClusteringPlot: React.FC<FCOClusteringPlotProps> = ({
           `Confidence: ${((p.ds_lppls_confidence || 0) * 100).toFixed(2)}%`
         ),
         hovertemplate: '%{text}<extra></extra>',
+        hoverlabel: {
+          bgcolor: 'rgba(31, 41, 55, 0.95)',  // Dark gray background for readability
+          bordercolor: 'rgba(255, 255, 255, 0.2)',
+          font: {
+            color: '#fff',
+            size: 14
+          }
+        },
         legendgroup: `cluster${cluster.clusterId}`,
         showlegend: true
       })
@@ -160,6 +168,14 @@ export const FCOClusteringPlot: React.FC<FCOClusteringPlotProps> = ({
               `Avg Confidence: ${cluster.avgConfidence.toFixed(2)}%<br>` +
               `Center Date: ${centerDate.toISOString().split('T')[0]}`,
         hovertemplate: '%{text}<extra></extra>',
+        hoverlabel: {
+          bgcolor: 'rgba(31, 41, 55, 0.95)',  // Dark gray background for readability
+          bordercolor: 'rgba(255, 255, 255, 0.2)',
+          font: {
+            color: '#fff',
+            size: 14
+          }
+        },
         legendgroup: `cluster${cluster.clusterId}`,
         showlegend: false
       })
@@ -193,7 +209,15 @@ export const FCOClusteringPlot: React.FC<FCOClusteringPlotProps> = ({
           `Predicted: ${p.predicted_crash_date}<br>` +
           `Confidence: ${((p.ds_lppls_confidence || 0) * 100).toFixed(2)}%`
         ),
-        hovertemplate: '%{text}<extra></extra>'
+        hovertemplate: '%{text}<extra></extra>',
+        hoverlabel: {
+          bgcolor: 'rgba(31, 41, 55, 0.95)',  // Dark gray background for readability
+          bordercolor: 'rgba(255, 255, 255, 0.2)',
+          font: {
+            color: '#fff',
+            size: 14
+          }
+        }
       })
     }
 
