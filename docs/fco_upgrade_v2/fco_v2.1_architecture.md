@@ -11,7 +11,7 @@ FCO v2.1は、商用SaaS提供を目的とした、スケーラブルなWebア�
 │  React App (Next.js)                                        │
 │  ├── TypeScript                                             │
 │  ├── Tailwind CSS                                           │
-│  ├── Recharts/Plotly.js                                     │
+│  ├── Plotly.js (Square Aspect Ratio Charts)                │
 │  └── TanStack Query (Data Fetching)                         │
 └──────────────────────┬──────────────────────────────────────┘
                        │ HTTPS/WSS
@@ -54,14 +54,13 @@ FCO v2.1は、商用SaaS提供を目的とした、スケーラブルなWebア�
 
 ```
 fco-dashboard-frontend/
-├── app/                        # Next.js App Router
-│   ├── layout.tsx             # Root layout
-│   ├── page.tsx               # Home page
+├── pages/                      # Next.js Pages Router (枯れた技術優先)
+│   ├── _app.tsx               # App wrapper
+│   ├── _document.tsx          # HTML document
+│   ├── index.tsx              # Home page
 │   ├── dashboard/
-│   │   ├── page.tsx           # Dashboard main
-│   │   └── [symbol]/
-│   │       └── page.tsx       # Symbol detail
-│   └── api/                   # API routes (BFF pattern)
+│   │   └── index.tsx          # Dashboard main
+│   └── api/                   # API routes (if needed)
 │       └── auth/
 ├── components/
 │   ├── ui/                    # shadcn/ui components
@@ -70,9 +69,9 @@ fco-dashboard-frontend/
 │   │   ├── dialog.tsx
 │   │   └── [other shadcn components]
 │   ├── charts/
-│   │   ├── FCOConfidenceChart.tsx  # Recharts
-│   │   ├── LPPLPredictionChart.tsx  # Plotly.js
-│   │   └── ClusteringAnalysis.tsx   # Recharts + API
+│   │   ├── FCOScatterPlot.tsx      # Plotly.js - Square aspect ratio
+│   │   ├── FCOClusteringPlot.tsx   # Plotly.js - Square aspect ratio
+│   │   └── [Future charts]          # Recharts for time-series
 │   ├── filters/
 │   │   ├── DateRangePicker.tsx
 │   │   ├── SymbolSelector.tsx
@@ -297,8 +296,117 @@ services:
 - Performance degradation
 - Security incidents
 
+## 🔧 Implementation Status (2025-01-15)
+
+### ✅ Completed Components
+
+#### Backend (FastAPI)
+- **API Structure**: Full RESTful API implementation
+- **Database Integration**: SQLite with relative path resolution
+- **Service Layer**: FCOService wrapping existing Python logic
+- **Data Models**: Pydantic models for type validation
+- **Endpoints**: All core FCO analysis endpoints operational
+
+#### Frontend (React/Next.js)
+- **Project Setup**: Next.js 14 with Pages Router
+- **UI Components**: Basic layout and symbol selector
+- **API Client**: Axios-based client with TypeScript
+- **Styling**: Tailwind CSS with dark theme
+- **Type Definitions**: Complete TypeScript interfaces
+
+### 🚧 In Progress
+
+#### Frontend Development
+- **Chart Components**: Implementing Recharts for data visualization
+- **Real-time Updates**: WebSocket integration for live data
+- **Advanced Filters**: Date range and quality filters
+- **Responsive Design**: Mobile-first approach
+
+#### Backend Enhancement
+- **Authentication**: JWT implementation pending
+- **Caching Layer**: Redis integration planned
+- **Background Tasks**: Celery for long-running analyses
+
+### 📋 Pending Implementation
+
+1. **Production Infrastructure**
+   - Docker containerization
+   - CI/CD pipeline setup
+   - Environment configuration
+   - SSL/TLS certificates
+
+2. **Advanced Features**
+   - Export functionality (CSV/PDF)
+   - Email notifications
+   - User preferences storage
+   - Multi-language support
+
+3. **Performance Optimization**
+   - Database query optimization
+   - Frontend code splitting
+   - Image optimization
+   - API response caching
+
+## 🐛 Issues Resolved
+
+### Symbol Name Display Issue
+**Problem**: API returning string arrays instead of objects
+**Solution**: Modified `get_available_symbols()` to return `{symbol, name}` objects
+```python
+return [
+    {'symbol': symbol[0], 'name': symbol_map.get(symbol[0], symbol[0])}
+    for symbol in symbols
+]
+```
+
+### Path Resolution Issue
+**Problem**: Hardcoded absolute paths breaking portability
+**Solution**: Implemented relative path resolution using pathlib
+```python
+from pathlib import Path
+current_dir = Path(__file__).resolve().parent
+project_root = current_dir.parent.parent.parent
+db_path = project_root / "results" / "fco_analysis_results.db"
+```
+
+### Module Resolution Error
+**Problem**: Next.js couldn't resolve `@/styles/globals.css`
+**Solution**: Ensured proper file structure and tsconfig paths
+
+### Port Conflict
+**Problem**: Port 3000 was occupied
+**Solution**: Configured Next.js to use port 3001
+
+## 📚 Lessons Learned
+
+1. **Path Management**: Always use pathlib for cross-platform compatibility
+2. **API Design**: Return consistent object structures, not primitive arrays
+3. **Type Safety**: Leverage TypeScript to catch errors early
+4. **Error Messages**: Provide clear, actionable error messages
+5. **Documentation**: Keep architecture docs in sync with implementation
+
+## 🎯 Next Implementation Steps
+
+### Immediate Priority (Week 1)
+1. Complete chart components with real data
+2. Implement WebSocket for real-time updates
+3. Add loading states and error boundaries
+4. Create comprehensive test suite
+
+### Short Term (Week 2-3)
+1. Authentication system implementation
+2. User preference storage
+3. Export functionality
+4. Mobile responsive design
+
+### Medium Term (Month 1-2)
+1. Production deployment setup
+2. Performance optimization
+3. Monitoring and alerting
+4. Documentation and training materials
+
 ---
 
-**Document Version**: 1.0
-**Created**: 2025-09-14
-**Status**: Active Architecture for v2.1
+**Document Version**: 1.1
+**Last Updated**: 2025-01-15
+**Status**: Active Architecture for v2.1 - Implementation in Progress
