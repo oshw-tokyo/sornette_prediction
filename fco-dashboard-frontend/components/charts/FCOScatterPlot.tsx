@@ -55,21 +55,21 @@ export const FCOScatterPlot: React.FC<FCOScatterPlotProps> = ({
         size: 12,
         color: confidenceValues,
         colorscale: showNegative ? [
-          // Blue gradient for negative bubble
-          [0, '#001f3f'],    // Dark blue
-          [0.2, '#003d7a'],
-          [0.4, '#0074d9'],
-          [0.6, '#4192ff'],
-          [0.8, '#7abfff'],
-          [1, '#b3d9ff']     // Light blue
+          // Viridis-like gradient for negative bubble (blue to yellow-green)
+          [0, '#440154'],    // Very dark purple-blue
+          [0.2, '#31688e'],  // Dark blue
+          [0.4, '#35b779'],  // Teal-green
+          [0.6, '#6ece58'],  // Light green
+          [0.8, '#b5de2b'],  // Yellow-green
+          [1, '#fde725']     // Bright yellow
         ] : [
-          // Red-Orange gradient for positive bubble
-          [0, '#4a0e0e'],    // Dark red
-          [0.2, '#7f1e1e'],
-          [0.4, '#cc3333'],
-          [0.6, '#ff6633'],
-          [0.8, '#ff9966'],
-          [1, '#ffcc99']     // Light orange
+          // Viridis gradient for positive bubble (standard scientific colormap)
+          [0, '#440154'],    // Very dark purple (low confidence)
+          [0.2, '#414487'],  // Dark blue-purple
+          [0.4, '#2a788e'],  // Blue
+          [0.6, '#22a884'],  // Teal
+          [0.8, '#7ad151'],  // Green-yellow
+          [1, '#fde725']     // Bright yellow (high confidence)
         ],
         showscale: true,
         // IMPORTANT: Always display 0-100% scale regardless of actual data values
