@@ -54,6 +54,11 @@ export const FCOScatterPlot: React.FC<FCOScatterPlotProps> = ({
       marker: {
         size: 12,
         color: confidenceValues,
+        // ⚠️ IMPORTANT: DO NOT CHANGE THIS COLOR GRADIENT
+        // This is the scientific Viridis colormap - a perceptually uniform,
+        // colorblind-friendly gradient that clearly shows low (dark) to high (bright) values.
+        // User specifically requested this gradient for clarity (2025-01-15).
+        // Dark purple = Low confidence, Bright yellow = High confidence
         colorscale: showNegative ? [
           // Viridis-like gradient for negative bubble (blue to yellow-green)
           [0, '#440154'],    // Very dark purple-blue
