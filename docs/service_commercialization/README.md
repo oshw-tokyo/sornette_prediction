@@ -27,14 +27,18 @@
 - 優先順位付けされたアクションアイテム
 - 科学的正確性を維持しつつ法的リスクを排除
 
-### 4. **lppl_service_specification_v2.md** 
-- 初期構想版（参考資料）
-- 日本・アジア市場向けサービス設計
-- ※法的リスクが高い要素を含むため要修正
+### 4. **archives/high_risk_business_plans/** ⚠️ アーカイブ済み（2025-10-08）
+- **lppl_service_specification_v2.md** (626行)
+  - 初期構想版ビジネスプラン
+  - ⚠️ 法的リスク極めて高い（投資助言的表現多数）
+  - GitHub公開厳禁
 
-### 5. **lppl_service_specification_simplified.md**
-- 個人トレーダー向け簡略版（参考資料）
-- ※「クラッシュ予測」等の表現は使用禁止
+- **lppl_service_specification_simplified.md** (182行)
+  - 簡略版ビジネスプラン
+  - ⚠️ 法的リスク高い（同様の投資助言的表現）
+  - GitHub公開厳禁
+
+**詳細**: `archives/high_risk_business_plans/README.md` 参照
 
 ## 🎯 サービス概要
 

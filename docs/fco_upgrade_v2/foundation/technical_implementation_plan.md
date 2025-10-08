@@ -13,185 +13,19 @@ result = selector.perform_comprehensive_fitting(data[-365:])
 ```
 
 #### FCO準拠の新実装
-```python
-# 新規作成: core/fitting/multi_window_analyzer.py
+#### FCO準拠実装（✅ `core/fitting/fco_engine.py`実装済み）
 
-import numpy as np
-import pandas as pd
-from typing import List, Dict, Tuple, Optional
-from dataclasses import dataclass
-from concurrent.futures import ProcessPoolExecutor
-import itertools
+多重時間窓分析システムは既に`core/fitting/fco_engine.py`で実装済みです。Boulder Investment Technologiesの`lppls`ライブラリを活用し、以下の機能を提供しています：
 
-@dataclass
-class WindowConfig:
-    """時間窓の設定"""
-    name: str
-    min_days: int
-    max_days: int
-    step_days: int
-    
-    def generate_windows(self, data_length: int) -> List[Tuple[int, int]]:
-        """指定範囲内の全時間窓を生成"""
-        windows = []
-        for length in range(self.min_days, min(self.max_days + 1, data_length), self.step_days):
-            for start in range(0, data_length - length + 1, self.step_days):
-                windows.append((start, start + length))
-        return windows
+- **FCO標準の126時間窓分析**: 125-750日の複数時間窓でのLPPLSフィッティング
+- **DS-LPPLS Confidence指標**: 複数窓でのフィッティング成功率ベースの信頼度評価
+- **柔軟な窓サイズ設定**: データサイズに応じた最適な時間窓生成
+- **品質フィルタリング**: Damping条件（β×ω ≥ 1.0）等のFCO準拠フィルター
 
-class MultiWindowLPPLAnalyzer:
-    """FCO準拠の多重時間窓LPPL分析システム"""
-    
-    def __init__(self):
-        # FCO標準の3スケール時間窓設定
-        self.window_configs = [
-            WindowConfig("super_short", 100, 200, 10),  # 超短期
-            WindowConfig("short", 150, 300, 15),        # 短期
-            WindowConfig("long", 500, 1500, 50),        # 長期
-        ]
-        
-        # 既存のフィッターを再利用
-        from core.fitting.fitter import LogarithmPeriodicFitter
-        self.fitter = LogarithmPeriodicFitter()
-        
-    def analyze_all_windows(self, 
-                           prices: pd.Series,
-                           parallel: bool = True) -> Dict:
-        """全時間窓での包括的分析"""
-        
-        all_results = []
-        data_length = len(prices)
-        
-        # 各スケールでの分析
-        for config in self.window_configs:
-            windows = config.generate_windows(data_length)
-            
-            if parallel:
-                # 並列処理で高速化
-                with ProcessPoolExecutor(max_workers=4) as executor:
-                    futures = []
-                    for start, end in windows:
-                        future = executor.submit(
-                            self._fit_single_window,
-                            prices.iloc[start:end],
-                            config.name,
-                            (start, end)
-                        )
-                        futures.append(future)
-                    
-                    for future in futures:
-                        result = future.result()
-                        if result is not None:
-                            all_results.append(result)
-            else:
-                # 逐次処理
-                for start, end in windows:
-                    result = self._fit_single_window(
-                        prices.iloc[start:end],
-                        config.name,
-                        (start, end)
-                    )
-                    if result is not None:
-                        all_results.append(result)
-        
-        # 結果の統合と評価
-        return self._integrate_results(all_results)
-    
-    def _fit_single_window(self, 
-                          window_data: pd.Series,
-                          scale_name: str,
-                          window_range: Tuple[int, int]) -> Optional[Dict]:
-        """単一時間窓でのフィッティング"""
-        try:
-            # 既存のフィッターを使用
-            t, y = self.fitter.prepare_data(window_data.values)
-            result = self.fitter.fit_with_multiple_initializations(t, y, n_tries=5)
-            
-            if result.success and result.r_squared > 0.5:  # 基本的な品質フィルタ
-                return {
-                    'scale': scale_name,
-                    'window': window_range,
-                    'tc': result.parameters['tc'],
-                    'beta': result.parameters['beta'],
-                    'omega': result.parameters['omega'],
-                    'r_squared': result.r_squared,
-                    'rmse': result.residuals,
-                    'window_days': window_range[1] - window_range[0]
-                }
-        except Exception as e:
-            print(f"Fitting failed for window {window_range}: {e}")
-        
-        return None
-    
-    def _integrate_results(self, results: List[Dict]) -> Dict:
-        """複数時間窓の結果を統合"""
-        if not results:
-            return {'success': False, 'message': 'No successful fits'}
-        
-        df = pd.DataFrame(results)
-        
-        # DS-LPPLS Confidence指標の計算
-        confidence_by_scale = {}
-        for scale in df['scale'].unique():
-            scale_df = df[df['scale'] == scale]
-            confidence_by_scale[scale] = len(scale_df) / self._expected_windows(scale)
-        
-        overall_confidence = np.mean(list(confidence_by_scale.values()))
-        
-        # k-meansクラスタリングによるtc予測の統合
-        from sklearn.cluster import KMeans
-        
-        tc_values = df['tc'].values.reshape(-1, 1)
-        weights = df['r_squared'].values  # R²で重み付け
-        
-        # 最適クラスタ数の決定（エルボー法の簡易版）
-        n_clusters = min(5, len(tc_values) // 10 + 1)
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-        clusters = kmeans.fit_predict(tc_values, sample_weight=weights)
-        
-        # 最大クラスタの統計
-        cluster_sizes = np.bincount(clusters)
-        main_cluster = np.argmax(cluster_sizes)
-        main_cluster_mask = clusters == main_cluster
-        
-        main_tc_values = tc_values[main_cluster_mask].flatten()
-        main_weights = weights[main_cluster_mask]
-        
-        # 重み付き統計
-        tc_mean = np.average(main_tc_values, weights=main_weights)
-        tc_std = np.sqrt(np.average((main_tc_values - tc_mean)**2, weights=main_weights))
-        
-        # シナリオ確率（最大クラスタの占有率）
-        scenario_probability = len(main_tc_values) / len(tc_values)
-        
-        return {
-            'success': True,
-            'total_fits': len(results),
-            'ds_lppls_confidence': overall_confidence,
-            'confidence_by_scale': confidence_by_scale,
-            'tc_prediction': {
-                'mean': tc_mean,
-                'std': tc_std,
-                'scenario_probability': scenario_probability,
-                'cluster_size': len(main_tc_values)
-            },
-            'all_results': df,
-            'quality_metrics': {
-                'mean_r_squared': df['r_squared'].mean(),
-                'median_r_squared': df['r_squared'].median(),
-                'successful_scales': len(confidence_by_scale)
-            }
-        }
-    
-    def _expected_windows(self, scale: str) -> int:
-        """各スケールの期待される窓数（正規化用）"""
-        scale_expected = {
-            'super_short': 50,
-            'short': 40,
-            'long': 20
-        }
-        return scale_expected.get(scale, 30)
-```
+**実装ファイル**:
+- `core/fitting/fco_engine.py`: 標準FCOエンジン
+- `core/fitting/fco_engine_flexible.py`: データサイズ適応型FCOエンジン
+
 
 ### 1.2 DS-LPPLS Trust指標（ブートストラップ法）
 
@@ -534,162 +368,9 @@ class FCOStyleReportGenerator:
         return np.mean(trusts) if trusts else 0.0
 ```
 
-## 2. 日本市場データ統合
+## 2. アラート配信システム
 
-### 2.1 JPXデータフィード接続
-
-```python
-# 新規作成: infrastructure/data_sources/jpx_client.py
-
-import requests
-import pandas as pd
-from typing import Optional, List, Dict
-from datetime import datetime, timedelta
-import json
-
-class JPXDataClient:
-    """日本取引所グループ（JPX）データクライアント"""
-    
-    def __init__(self, api_key: str, api_secret: str):
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.base_url = "https://api.jpx.co.jp/v1"
-        self.session = requests.Session()
-        self._authenticate()
-        
-    def _authenticate(self):
-        """認証処理"""
-        # JPX APIの認証実装（仕様に基づく）
-        pass
-    
-    def get_nikkei225_components(self) -> List[str]:
-        """日経225構成銘柄取得"""
-        endpoint = f"{self.base_url}/indices/nikkei225/components"
-        response = self.session.get(endpoint)
-        
-        if response.status_code == 200:
-            return response.json()['components']
-        else:
-            raise Exception(f"Failed to get Nikkei 225 components: {response.status_code}")
-    
-    def get_historical_data(self,
-                          symbol: str,
-                          start_date: datetime,
-                          end_date: datetime,
-                          interval: str = 'daily') -> pd.DataFrame:
-        """過去データ取得"""
-        
-        endpoint = f"{self.base_url}/prices/historical"
-        params = {
-            'symbol': symbol,
-            'from': start_date.strftime('%Y-%m-%d'),
-            'to': end_date.strftime('%Y-%m-%d'),
-            'interval': interval
-        }
-        
-        response = self.session.get(endpoint, params=params)
-        
-        if response.status_code == 200:
-            data = response.json()
-            df = pd.DataFrame(data['prices'])
-            df['date'] = pd.to_datetime(df['date'])
-            df.set_index('date', inplace=True)
-            return df
-        else:
-            raise Exception(f"Failed to get historical data: {response.status_code}")
-    
-    def get_realtime_price(self, symbol: str) -> Dict:
-        """リアルタイム価格取得"""
-        endpoint = f"{self.base_url}/prices/realtime/{symbol}"
-        response = self.session.get(endpoint)
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return None
-    
-    def get_market_statistics(self) -> Dict:
-        """市場統計情報"""
-        endpoint = f"{self.base_url}/market/statistics"
-        response = self.session.get(endpoint)
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return None
-```
-
-### 2.2 Yahoo Finance Japan統合（バックアップ）
-
-```python
-# 新規作成: infrastructure/data_sources/yahoo_japan_client.py
-
-import yfinance as yf
-import pandas as pd
-from typing import Optional
-from datetime import datetime, timedelta
-
-class YahooJapanClient:
-    """Yahoo Finance Japan データクライアント（バックアップ用）"""
-    
-    def __init__(self):
-        # Yahoo Finance は.T サフィックスで東証銘柄にアクセス
-        self.suffix = '.T'
-        
-    def get_stock_data(self,
-                      code: str,
-                      start_date: datetime,
-                      end_date: datetime) -> Optional[pd.DataFrame]:
-        """株価データ取得"""
-        
-        # 銘柄コードに東証サフィックス追加
-        ticker = f"{code}{self.suffix}"
-        
-        try:
-            stock = yf.Ticker(ticker)
-            df = stock.history(start=start_date, end=end_date)
-            
-            if not df.empty:
-                # カラム名を統一
-                df = df.rename(columns={
-                    'Open': 'open',
-                    'High': 'high',
-                    'Low': 'low',
-                    'Close': 'close',
-                    'Volume': 'volume'
-                })
-                return df
-            
-        except Exception as e:
-            print(f"Failed to fetch data for {ticker}: {e}")
-            
-        return None
-    
-    def get_index_data(self, index_code: str, period: str = '1y') -> Optional[pd.DataFrame]:
-        """指数データ取得"""
-        
-        index_mapping = {
-            'N225': '^N225',      # 日経225
-            'TOPIX': '^TOPX',     # TOPIX
-            'MOTHERS': '^MTHR',   # マザーズ
-        }
-        
-        ticker = index_mapping.get(index_code, index_code)
-        
-        try:
-            index = yf.Ticker(ticker)
-            df = index.history(period=period)
-            return df
-            
-        except Exception as e:
-            print(f"Failed to fetch index data for {ticker}: {e}")
-            
-        return None
-```
-
-## 3. アラート配信システム
-
-### 3.1 LINE Notify統合
+### 2.1 LINE Notify統合
 
 ```python
 # 新規作成: infrastructure/notifications/line_notifier.py
@@ -761,9 +442,9 @@ class LINENotifier:
         return self.send_alert(message, image_url=chart_url, sticker=sticker)
 ```
 
-## 4. パフォーマンス最適化
+## 3. パフォーマンス最適化
 
-### 4.1 分散処理とキャッシング
+### 3.1 分散処理とキャッシング
 
 ```python
 # 新規作成: infrastructure/optimization/parallel_processor.py
@@ -842,172 +523,24 @@ class OptimizedProcessor:
         return results
 ```
 
-## 5. API サーバー実装
+## 4. API サーバー実装（✅ `fco-api/app/main.py`実装済み）
 
-```python
-# 新規作成: applications/api/main.py
+FastAPIベースのRESTful APIサーバーは既に`fco-api/app/main.py`で実装済みです。以下の機能を提供しています：
 
-from fastapi import FastAPI, HTTPException, Depends, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import Optional, List, Dict
-import jwt
-from datetime import datetime, timedelta
+- **FCO分析エンドポイント**: 多重時間窓LPPLS分析のREST API
+- **データベース統合**: SQLiteベースのFCO分析結果管理
+- **Pydanticモデル**: 型安全なデータバリデーション
+- **CORS対応**: Reactフロントエンドとの統合
 
-app = FastAPI(title="LPPL Prediction API", version="1.0.0")
-security = HTTPBearer()
+**実装ファイル**:
+- `fco-api/app/main.py`: FastAPIアプリケーション
+- `fco-api/app/models/`: Pydanticモデル定義
+- `fco-api/app/api/v1/endpoints/`: APIエンドポイント
 
-class PredictionRequest(BaseModel):
-    symbol: str
-    period_days: Optional[int] = 365
-    confidence_threshold: Optional[float] = 0.5
 
-class PredictionResponse(BaseModel):
-    symbol: str
-    tc_prediction: float
-    tc_days: int
-    confidence: float
-    trust: float
-    risk_level: str
-    analysis_date: datetime
+## 5. 統合テストとデプロイメント
 
-class JWTBearer(HTTPBearer):
-    def __init__(self, auto_error: bool = True):
-        super(JWTBearer, self).__init__(auto_error=auto_error)
-        
-    async def __call__(self, request: Request):
-        credentials: HTTPAuthorizationCredentials = await super(JWTBearer, self).__call__(request)
-        if credentials:
-            if not credentials.scheme == "Bearer":
-                raise HTTPException(status_code=403, detail="Invalid authentication scheme.")
-            if not self.verify_jwt(credentials.credentials):
-                raise HTTPException(status_code=403, detail="Invalid token or expired token.")
-            return credentials.credentials
-        else:
-            raise HTTPException(status_code=403, detail="Invalid authorization code.")
-    
-    def verify_jwt(self, jwtoken: str) -> bool:
-        try:
-            payload = jwt.decode(jwtoken, SECRET_KEY, algorithms=["HS256"])
-            return True
-        except:
-            return False
-
-@app.post("/api/v1/predict", response_model=PredictionResponse)
-async def predict_crash(
-    request: PredictionRequest,
-    token: str = Depends(JWTBearer())
-):
-    """単一銘柄のクラッシュ予測"""
-    
-    try:
-        # データ取得
-        from infrastructure.data_sources.unified_data_client import UnifiedDataClient
-        client = UnifiedDataClient()
-        data = client.get_historical_data(
-            request.symbol,
-            period_days=request.period_days
-        )
-        
-        # 分析実行
-        from core.fitting.multi_window_analyzer import MultiWindowLPPLAnalyzer
-        from core.fitting.trust_calculator import TrustIndicatorCalculator
-        
-        analyzer = MultiWindowLPPLAnalyzer()
-        trust_calc = TrustIndicatorCalculator()
-        
-        # 多重時間窓分析
-        result = analyzer.analyze_all_windows(data['close'])
-        
-        # Trust指標計算
-        trust_result = trust_calc.calculate_trust(
-            data['close'],
-            result,
-            result['all_results']
-        )
-        
-        # リスクレベル判定
-        tc_mean = result['tc_prediction']['mean']
-        if tc_mean < 1.1:
-            risk_level = "CRITICAL"
-        elif tc_mean < 1.3:
-            risk_level = "HIGH"
-        elif tc_mean < 1.5:
-            risk_level = "MEDIUM"
-        else:
-            risk_level = "LOW"
-        
-        # tc を日数に変換
-        current_t = 1.0  # 現在時点
-        tc_days = int((tc_mean - current_t) * request.period_days)
-        
-        return PredictionResponse(
-            symbol=request.symbol,
-            tc_prediction=tc_mean,
-            tc_days=tc_days,
-            confidence=result['ds_lppls_confidence'],
-            trust=trust_result['trust'],
-            risk_level=risk_level,
-            analysis_date=datetime.now()
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v1/markets/japan")
-async def get_japan_markets(token: str = Depends(JWTBearer())):
-    """日本市場の銘柄リスト"""
-    
-    markets = {
-        "indices": ["N225", "TOPIX", "MOTHERS", "JPX400"],
-        "major_stocks": [
-            "7203",  # トヨタ
-            "6758",  # ソニー
-            "9984",  # ソフトバンクグループ
-            "6861",  # キーエンス
-            "8306",  # 三菱UFJ
-        ],
-        "sectors": [
-            "automobiles",
-            "technology",
-            "finance",
-            "retail",
-            "pharmaceuticals"
-        ]
-    }
-    
-    return markets
-
-@app.post("/api/v1/batch-analysis")
-async def batch_analysis(
-    symbols: List[str],
-    token: str = Depends(JWTBearer())
-):
-    """複数銘柄の一括分析"""
-    
-    from infrastructure.optimization.parallel_processor import OptimizedProcessor
-    
-    processor = OptimizedProcessor()
-    
-    # データ取得
-    data_dict = {}
-    for symbol in symbols:
-        # データ取得処理
-        pass
-    
-    # 並列処理
-    results = processor.process_multiple_symbols(symbols, data_dict)
-    
-    return results
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-```
-
-## 6. 統合テストとデプロイメント
-
-### 6.1 統合テスト
+### 5.1 統合テスト
 
 ```python
 # 新規作成: tests/integration/test_fco_compliance.py
@@ -1104,7 +637,7 @@ if __name__ == '__main__':
     unittest.main()
 ```
 
-### 6.2 デプロイメントスクリプト
+### 5.2 デプロイメントスクリプト
 
 ```yaml
 # docker-compose.yml

@@ -51,7 +51,7 @@ def calculate_prediction_validity_period(tc_value: float, data_window_days: int)
 
 **仮定的問題**:
 - 毎日分析すると予測が日々変化し、投資判断が困難
-- 週次分析だと重要な転換点を見逃す可能性
+- 日次分析だと重要な転換点を見逃す可能性
 
 **理論的解決策**:
 ```python
@@ -106,7 +106,7 @@ def analyze_market_crash_consensus(symbol_predictions: Dict[str, float]) -> Dict
 3. **時間劣化**: 予測有効期限の自動管理
 
 ### C. **推奨される実装方針**
-- **基本頻度**: 週次実行（土曜日朝）で安定性と実用性のバランス
+- **基本頻度**: 日次実行（土曜日朝）で安定性と実用性のバランス
 - **緊急モード**: 市場異常時の日次実行オプション
 - **品質管理**: 予測安定性・市場合意度の自動評価機能
 
@@ -117,7 +117,7 @@ def analyze_market_crash_consensus(symbol_predictions: Dict[str, float]) -> Dict
 **変更後**: 時系列分析履歴の蓄積
 ```sql
 -- 予想されるデータ増加量
--- 16銘柄 × 週次実行 × 52週 = 年間832レコード
+-- 16銘柄 × 日次実行 × 52週 = 年間832レコード
 -- 3年運用で約2,500レコード (許容範囲内)
 ```
 

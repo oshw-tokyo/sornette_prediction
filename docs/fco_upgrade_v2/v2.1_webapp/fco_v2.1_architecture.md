@@ -4,6 +4,27 @@
 
 FCO v2.1は、商用SaaS提供を目的とした、スケーラブルなWebアプリケーションアーキテクチャです。
 
+### ⚠️ 重要: Boulder LPPLSライブラリとの関係性
+
+**FCO v2.1は、Boulder Investment Technologies のLPPLSライブラリを基盤として使用しています。**
+
+1. **コア計算の保護原則**
+   - Boulder LPPLSライブラリ（`lppls`）のコア計算機能は**一切変更しない**
+   - 数学的フィッティングアルゴリズムは信頼性が実証済みのため保護対象
+   - FCO標準の126窓分析（125-750日、5日刻み）をそのまま使用
+
+2. **アプリケーション層での拡張**
+   - Boulder LPPLSには含まれていない機能のみを独自実装：
+     - `bubble_type`判定（FCO公式基準: 30%/5%閾値）
+     - データベース保存機能
+     - 可視化コンポーネント
+     - WebAPI/WebSocket通信
+   - これらは可視化・商用化のための**正当な拡張**
+
+3. **実装の参照関係**
+   - `core/fitting/fco_engine.py` - Boulder LPPLSを使用（Line 11: `from lppls.lppls import LPPLS`）
+   - 詳細は`docs/fco_upgrade_v2/boulder_integration_analysis.md`を参照
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Client Layer (Browser)                   │

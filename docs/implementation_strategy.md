@@ -100,7 +100,7 @@ analysis_results:
 schedule_config:
   - schedule_name (TEXT): 'fred_weekly', 'alpha_vantage_daily'
   - frequency (TEXT): 'weekly', 'daily' 
-  - day_of_week (INTEGER): 実行曜日（週次の場合）
+  - day_of_week (INTEGER): 実行曜日（日次の場合）
   - symbols (JSON): 対象銘柄リスト
   - auto_backfill_limit (INTEGER): 自動バックフィル日数制限
 ```

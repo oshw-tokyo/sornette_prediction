@@ -1,8 +1,11 @@
-# 安定版戦略 v2 - FRED優先 + Twelve Data補完
+# 現在のAPI戦略 - FRED優先 + Twelve Data補完
 
-**決定日**: 2025-08-10  
-**バージョン**: v1.0-stable  
+**策定日**: 2025-08-10
+**最終更新**: 2025-10-08
+**バージョン**: v1.0-stable
 **基本方針**: FRED優先原則 + Twelve Dataによる補完・拡張
+
+> **注**: このドキュメントは現在適用中のAPI戦略を記載しています。過去の試行・評価記録は [evaluation_history.md](evaluation_history.md) を参照してください。
 
 ## 🎯 データソース優先順位
 

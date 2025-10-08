@@ -142,12 +142,12 @@ python entry_points/main.py scheduled-analysis status
 
 ### **4. 手動バックフィル (`backfill`)**
 ```bash
-# 週次スケジュールのバックフィル（曜日自動調整）
+# 日次スケジュールのバックフィル（曜日自動調整）
 python entry_points/main.py scheduled-analysis backfill \
   --start 2024-01-01 --schedule fred_weekly
 
 # 特徴:
-# - 週次スケジュールは指定日を適切な曜日（土曜日）に自動調整
+# - 日次スケジュールは指定日を適切な曜日（土曜日）に自動調整
 # - バックフィルバッチIDによる実行追跡
 # - 科学的整合性確保（同一曜日での分析基準日）
 ```
@@ -172,9 +172,9 @@ python entry_points/main.py scheduled-analysis cleanup --days 90
 
 ## 💡 **実装済み運用例**
 
-### **シナリオ1: 週次スケジュールの通常運用**
+### **シナリオ1: 日次スケジュールの通常運用**
 ```bash
-# 毎週土曜日の実行（手動またはcron）
+# 毎日土曜日の実行（手動またはcron）
 python entry_points/main.py scheduled-analysis run --schedule fred_weekly
 
 # 実際の動作（2025-08-05確認済み）:
@@ -237,7 +237,7 @@ python entry_points/main.py scheduled-analysis status
 - **ユーザー理解性**: 何をどの頻度で実行するかが明確
 
 ### **2. 科学的整合性の確保**
-- **曜日整合性**: 週次分析の基準日曜日統一（土曜日）
+- **曜日整合性**: 日次分析の基準日曜日統一（土曜日）
 - **分析基準日概念**: フィッティング期間最終日の明確な定義
 - **メタデータ管理**: 曜日・頻度情報による適切なデータ分類
 

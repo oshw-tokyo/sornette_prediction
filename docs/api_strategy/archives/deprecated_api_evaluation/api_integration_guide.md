@@ -249,7 +249,7 @@ data, source = self.data_client.get_data_with_fallback(symbol, start, end)
 制限考慮 = "FRED中心で制限なし、高速実行可能"
 ```
 
-### Profile B: 包括分析（週次実行）
+### Profile B: 包括分析（日次実行）
 ```python
 推奨銘柄 = [
     # FRED (制限なし)

@@ -30,7 +30,7 @@ t2 < tc < t2 + dt  # 予測が未来であること
 
 | 観点 | FCO方式 | 現在の実装 | ギャップ |
 |------|---------|------------|----------|
-| **分析単位** | 1回で126窓同時 | 週次で1窓ずつ | 統計的意味が異なる |
+| **分析単位** | 1回で126窓同時 | 日次で1窓ずつ | 統計的意味が異なる |
 | **時間窓構成** | 125-750日の多様な窓 | 固定365日窓 | 多重スケール分析なし |
 | **統合方法** | Confidence指標で統合 | 後からGUIでクラスタリング | リアルタイム指標なし |
 | **クラスタリング** | k-means | DBSCAN | アルゴリズム差異 |
@@ -147,7 +147,7 @@ class HybridFCOEngine:
 ### 5.1 段階的移行計画
 
 **Step 1: 並行運用期間（1ヶ月）**
-- 現在の週次分析を継続
+- 現在の日次分析を継続
 - FCO方式を別トラックで実装
 - 結果を比較・検証
 
@@ -158,7 +158,7 @@ class HybridFCOEngine:
 
 **Step 3: FCO主導移行（3ヶ月目）**
 - FCO方式をデフォルトに
-- 週次分析は補助的に維持
+- 日次分析は補助的に維持
 - 完全移行の準備
 
 ### 5.2 後方互換性の維持
@@ -167,7 +167,7 @@ class HybridFCOEngine:
 class BackwardCompatibleAnalyzer:
     def analyze(self, symbol, method='hybrid'):
         if method == 'legacy':
-            # 現在の週次分析
+            # 現在の日次分析
             return self.weekly_analysis(symbol)
         elif method == 'fco':
             # FCO方式

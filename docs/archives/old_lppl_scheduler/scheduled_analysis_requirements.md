@@ -175,7 +175,7 @@ def run_backfill_analysis(start_date: str, end_date: str,
     """
     batch_id = f"backfill_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     
-    # 週次で過去データを分析
+    # 日次で過去データを分析
     current_date = datetime.strptime(start_date, '%Y-%m-%d')
     end = datetime.strptime(end_date, '%Y-%m-%d')
     
