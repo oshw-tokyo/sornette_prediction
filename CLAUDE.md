@@ -1,9 +1,34 @@
 # Claude Code Instructions - 中核ファイル優先参照指示
 
-## 🧪 **セッション開始時必読: workspace_for_claude必須使用**
+## 🚀 **新セッション開始時の必須確認事項**
 
-**⚠️ 新セッション開始時は必ず以下を確認・遵守すること**:
-- **実験・調査・テスト**: 必ず `workspace_for_claude/` で実行
+**⚠️ CRITICAL: 新しいセッションを開始する際は、必ず以下の手順に従ってください**
+
+### 📋 **セッション開始チェックリスト**
+
+1. **プロジェクト理解の再構築**
+   ```
+   必須読み込み順序:
+   1. このCLAUDE.mdファイル全体を読み込む
+   2. docs/progress_management/CURRENT_PROGRESS.md - 現在の進捗確認
+   3. docs/progress_management/CURRENT_ISSUES.md - アクティブな課題確認
+   4. git log --oneline -10 で最近のコミット確認
+   ```
+
+2. **前回セッションの作業確認**
+   - 前回のセッションが途中で終了した可能性を考慮
+   - 中途半端な実装がないかチェック
+   - ユーザーから前回の作業内容の説明がある場合は、それを優先的に理解
+
+3. **実装状態の確認**
+   - フロントエンド: `fco-dashboard-frontend/` の状態
+   - バックエンド: `fco-api/` の状態
+   - データベース: FCO分析結果の保存状況
+   - 依存関係: package.json、requirements.txt の確認
+
+### 🧪 **workspace_for_claude必須使用**
+
+**実験・調査・テストは必ず `workspace_for_claude/` で実行**:
 - **プロジェクト直下汚染**: `./test_*.py`, `./debug_*.py` 等の作成を絶対禁止
 - **詳細**: [セクション5](#5-claude-ai専用ワークスペース必須遵守)を必読
 
@@ -27,6 +52,76 @@
 - ユーザーが追加分析を行う設計にする
 詳細: docs/service_commercialization/legally_compliant_service_specification.md
 ```
+
+## 🔄 **実運用データフロー検証の必須原則**
+
+**⚠️ CRITICAL: FCO v2.1の実装・デバッグ時は必ず以下のデータフローを検証**
+
+### **End-to-End データフロー検証チェックリスト**
+
+```
+生データ取得 → FCO分析 → データベース保存 → API提供 → フロントエンド表示
+     ↓            ↓           ↓              ↓           ↓
+   必須検証     必須検証    必須検証      必須検証    必須検証
+```
+
+### **各段階での検証ポイント**
+
+1. **生データ取得段階**
+   - **⚠️ 注意: APIアクセス制限のため、実装中はFREDデータのみで検証**
+   - データソース（FRED優先）が正しく動作しているか
+   - 取得期間・頻度が適切か（過度なAPI呼び出しを避ける）
+   - エラーハンドリングが機能しているか
+   - **実装完了後、本番環境でのみ全データソース検証を実施**
+
+2. **FCO分析段階**
+   - Boulder LPPLSライブラリのコア計算が変更されていないか
+   - DS-LPPLS Confidence計算が正しいか
+   - bubble_type判定がFCO公式基準（30%/5%）に準拠しているか
+   - predicted_tc → predicted_crash_date変換が正しいか
+
+3. **データベース保存段階**
+   - analysis_basis_date（分析基準日）が正しく設定されているか
+   - predicted_crash_dateがNULLになっていないか
+   - bubble_typeが適切に保存されているか
+   - 重複データが防止されているか
+
+4. **API提供段階**
+   - エンドポイントが正しいデータを返しているか
+   - フィルタリング条件が適切か
+   - データ型・形式が仕様通りか
+
+5. **フロントエンド表示段階**
+   - データが正しく可視化されているか
+   - 不可能な状態（Fitting Date > Crash Date）が表示されていないか
+   - NULL/undefined値が適切に処理されているか
+   - 全データポイントが表示されているか
+
+### **実装時の必須確認コマンド**
+
+```bash
+# データフロー検証スクリプト（workspace_for_claude/に作成して実行）
+# ⚠️ 注意: 開発中はFREDデータのみで検証し、APIアクセス数を節約
+python workspace_for_claude/verify_data_flow.py --fred-only
+
+# 各段階の個別確認（必要に応じて実行）
+python workspace_for_claude/check_database.py         # DB保存確認（ローカルのみ）
+python workspace_for_claude/check_api_response.py     # API確認（ローカルのみ）
+
+# 本番環境でのみ実行する完全検証
+# python workspace_for_claude/verify_data_flow.py --full  # 全データソース検証
+```
+
+### **Issue発生時の対応**
+
+データフローの問題を検出した場合：
+1. 即座に`docs/progress_management/CURRENT_ISSUES.md`に記録
+2. 影響範囲を特定し、優先度を設定
+3. 根本原因を調査（workspace_for_claude/で実験）
+4. 修正を実装・テスト
+5. データフロー全体の再検証を実施
+
+**この原則は他のすべての実装作業に優先し、常に遵守すること。**
 
 ## 🚀 **FCO v2.1 技術スタック移行中（2025年9月14日開始）**
 
@@ -92,6 +187,10 @@ Claude Codeは実装の各段階で、要件が不明瞭な場合は
 - `core/fitting/` 以下のフィッティングアルゴリズム
 - 論文数式の実装（logarithm_periodic_func等）
 - 歴史的クラッシュ検証機能
+- **Boulder LPPLSライブラリのコア計算**（`lppls`パッケージの数学的処理は一切変更禁止）
+  - bubble_type判定はアプリケーション層での適切な拡張（変更可）
+  - FCO公式基準の閾値（30%/5%）は維持必須
+  - 詳細：`workspace_for_claude/boulder_lppls_diff_analysis.md`
 - **v1.5 Dashboard Clustering Analysis** （2025-08-14完成・Issue I058で広範なデバッグ済み）
   - Individual Fitting Results統合表示
   - Quality フィルター（4段階選択機能）
@@ -420,7 +519,9 @@ Symbol Filters → Symbol Selection → Apply → ALL Data Access → Display Pe
 
 ### 【重要】毎回の作業開始時の必須手順
 
-Claude Codeが作業を開始する際は、**必ず以下の順序**で情報を確認すること：
+**⚠️ 注意: 新セッション開始時は、このセクションではなく、ファイル冒頭の「🚀 新セッション開始時の必須確認事項」セクションを参照してください。**
+
+Claude Codeが継続作業を行う際は、**必ず以下の順序**で情報を確認すること：
 
 #### 1. 中核情報の優先読み込み
 ```
@@ -740,6 +841,23 @@ cron job設定でentry_points/main.py呼び出し
 ```
 
 **注意**: 個別スケジューラー（nasdaq_scheduler.py, aapl_scheduler.py等）は**完全廃止済み**。カタログベースシステムでの統一管理が正式採用。
+
+### FCO Historical分析の頻度設定
+
+**本番要件**: `--frequency daily`（日次営業日ベース）
+```bash
+python entry_points/main.py fco-analyze historical --start-date 1977-01-02 --symbols SP500 --frequency daily
+```
+
+**現在の開発状況**（2025-10-10時点）:
+- ⚠️ **一時的に`--frequency weekly`を使用中**（計算時間短縮のため）
+- SP500全期間解析を週次で実行中（約8.5時間予定）
+- 完了後、`--frequency daily`に切り替えて本番相当のデータを生成予定
+
+**理由**:
+- 市場営業日ごとの毎日FCO分析が要件（CURRENT_ISSUES.md I117参照）
+- 開発段階では週次で効率的にテスト
+- 本番移行時に日次へ切り替え（Issue I120のスキップ機能実装後）
 
 ---
 

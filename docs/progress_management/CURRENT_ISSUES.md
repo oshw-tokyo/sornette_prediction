@@ -67,6 +67,48 @@ TeslaとGoogleのFCO分析結果が1-2件のみ
 
 ---
 
+### I120: Historical分析での解析済みデータスキップ機能未実装
+**作成日**: 2025-10-10
+**優先度**: 高
+**担当**: バックエンド開発
+**状態**: 📋 計画中
+
+**内容**:
+Historical分析（`fco-analyze historical`）で解析済みデータのスキップ機能が正しく動作していない
+- `force=True`が固定されているため、常に再解析が実行される
+- チェック条件が`analysis_date`（実行日時）ベースで、`analysis_basis_date`（分析基準日）ベースではない
+- 週次 → 日次切り替え時に、既存の週次データを無駄に再解析する
+
+**影響**:
+- 日次解析実行時に約17,808期間すべてを再解析（推定所要時間：約60時間）
+- 計算リソースの無駄遣い
+- データベースの不要な更新負荷
+
+**必要な修正**:
+1. `entry_points/main.py:742`の`force=True`を削除または`--force`オプションで制御
+2. `fco_service.py:199-206`のチェック条件を`analysis_basis_date`ベースに変更
+3. `FCOResultsDatabase`に`get_analysis_by_date(symbol, analysis_basis_date)`メソッド追加（既存）
+4. historical分析ループで各期間の解析前にDB確認処理を追加
+
+**実装例**:
+```python
+# entry_points/main.py内のhistorical分析ループ
+for period_end in periods:
+    # 既存分析をチェック
+    existing = fco_service.db.get_analysis_by_date(symbol, period_end)
+    if existing and not force:
+        print(f"  ⏭️  スキップ: {period_end}（既存）")
+        continue
+
+    # 新規分析実行
+    result = fco_service.run_new_analysis(...)
+```
+
+**優先度根拠**:
+現在SP500の週次解析実行中（約8.5時間予定）。完了後に日次解析を実行する際、この機能がないと既存の週次データを含む全期間を再解析することになり、時間とリソースの大幅な無駄が発生する。
+
+---
+
 ### I119: 全126窓データ保存実装
 **作成日**: 2025-10-08
 **優先度**: 高

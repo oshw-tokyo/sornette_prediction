@@ -10,14 +10,15 @@ from app.models.fco import (
     FCOAnalysisList,
     FCOSymbolSummary,
     FCOTimeSeriesData,
-    FCOHistoricalQuery
+    FCOHistoricalQuery,
+    FCOTimeSeriesWithPrice
 )
 from app.services.fco_service import FCOService
 
 router = APIRouter(prefix="/fco", tags=["FCO Analysis"])
 
 
-@router.get("/symbols", response_model=List[str])
+@router.get("/symbols", response_model=List[dict])
 async def get_available_symbols():
     """Get list of available symbols with FCO analysis"""
     service = FCOService()
@@ -74,11 +75,65 @@ async def get_time_series_data(
     """Get time series data for visualization"""
     service = FCOService()
     data = service.get_time_series_data(symbol, start_date, end_date)
-    
-    if not data.dates:
+
+    if not data or not data.get('dates'):
         raise HTTPException(status_code=404, detail=f"No time series data found for {symbol}")
-    
+
+    # Convert dict to FCOTimeSeriesData
+    return FCOTimeSeriesData(
+        dates=data.get('dates', []),
+        confidences=data.get('confidences', []),
+        confidence_neg_values=data.get('confidence_neg_values'),
+        predicted_tc_values=data.get('predicted_tc_values')
+    )
+
+
+@router.get("/analysis/{symbol}/price-series/{analysis_id}", response_model=FCOTimeSeriesWithPrice)
+async def get_price_series_with_lppl(
+    symbol: str,
+    analysis_id: int,
+    days_before: int = Query(365, description="Days of price data before analysis date")
+):
+    """Get price data with LPPL fit for a specific analysis"""
+    service = FCOService()
+    data = service.get_price_series_with_lppl(symbol, analysis_id, days_before)
+
+    if not data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No price data found for {symbol} analysis {analysis_id}"
+        )
+
+    # Convert dict to FCOTimeSeriesWithPrice if needed
+    if isinstance(data, dict):
+        return FCOTimeSeriesWithPrice(
+            dates=data.get('dates', []),
+            prices=data.get('prices', []),
+            log_prices=data.get('log_prices', []),
+            lppl_fit=data.get('lppl_fit'),
+            confidence=data.get('confidence', 0.0),
+            trust=data.get('trust'),
+            predicted_crash_date=data.get('predicted_crash_date', ''),
+            analysis_basis_date=data.get('analysis_basis_date', ''),
+            symbol=data.get('symbol', symbol),
+            bubble_type=data.get('bubble_type', 'positive'),
+            lppl_params=data.get('lppl_params')
+        )
     return data
+
+
+@router.get("/analysis/all", response_model=List[dict])
+async def get_all_analyses(
+    limit: int = Query(1000, le=10000, description="Maximum number of results")
+):
+    """Get all FCO analyses for all symbols (for visualization)"""
+    service = FCOService()
+    analyses = service.get_all_analyses(limit)
+
+    if not analyses:
+        return []  # Return empty list instead of 404 for no data
+
+    return analyses
 
 
 @router.post("/analysis/{symbol}/run")

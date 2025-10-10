@@ -14,25 +14,34 @@ interface ClusterResult {
 
 interface FCOClusteringPlotProps {
   data: FCOAnalysis[]
-  minClusterSize?: number
-  maxClusterDistance?: number  // in days
 }
 
 export const FCOClusteringPlot: React.FC<FCOClusteringPlotProps> = ({
-  data,
-  minClusterSize = 3,
-  maxClusterDistance = 45
+  data
 }) => {
   const [selectedCluster, setSelectedCluster] = useState<number | null>(null)
+  const [minClusterSize, setMinClusterSize] = useState(3)
+  const [maxClusterDistance, setMaxClusterDistance] = useState(30)  // in days
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.3)  // 30% minimum confidence
 
   const clusters = useMemo(() => {
     if (!data || data.length === 0) return []
 
+    // Filter out data without required fields and apply confidence threshold
+    const validData = data.filter(d =>
+      d.predicted_crash_date &&
+      d.analysis_basis_date &&
+      d.ds_lppls_confidence !== null &&
+      d.ds_lppls_confidence >= confidenceThreshold
+    )
+
+    if (validData.length === 0) return []
+
     // Convert dates to timestamps for clustering
-    const points = data.map(d => ({
+    const points = validData.map(d => ({
       ...d,
-      xTime: new Date(d.predicted_crash_date).getTime(),
-      yTime: new Date(d.analysis_basis_date).getTime()
+      xTime: new Date(d.predicted_crash_date!).getTime(),
+      yTime: new Date(d.analysis_basis_date!).getTime()
     }))
 
     // Simple density-based clustering
@@ -86,7 +95,7 @@ export const FCOClusteringPlot: React.FC<FCOClusteringPlotProps> = ({
     }
 
     return clusters.sort((a, b) => b.avgConfidence - a.avgConfidence)
-  }, [data, minClusterSize, maxClusterDistance])
+  }, [data, minClusterSize, maxClusterDistance, confidenceThreshold])
 
   const plotData = useMemo(() => {
     const traces: any[] = []
@@ -144,41 +153,40 @@ export const FCOClusteringPlot: React.FC<FCOClusteringPlotProps> = ({
         showlegend: true
       })
 
-      // Add cluster center
+      // Add cluster center as vertical line spanning entire plot
       const centerDate = new Date(cluster.centerX)
-      const centerFittingDate = new Date(cluster.centerY)
+      const centerDateStr = centerDate.toISOString().split('T')[0]
 
-      traces.push({
-        x: [centerDate.toISOString().split('T')[0]],
-        y: [centerFittingDate.toISOString().split('T')[0]],
-        mode: 'markers',
-        type: 'scatter',
-        name: `Center ${cluster.clusterId + 1}`,
-        marker: {
-          size: 20,
-          color,
-          symbol: 'star',
+      // Get overall Y range from ALL data points for consistent vertical lines
+      const allYDates = data
+        .filter(d => d.analysis_basis_date)
+        .map(d => new Date(d.analysis_basis_date!).getTime())
+
+      if (allYDates.length > 0) {
+        const globalMinY = new Date(Math.min(...allYDates))
+        const globalMaxY = new Date(Math.max(...allYDates))
+
+        // Add vertical line for cluster center spanning full height
+        traces.push({
+          x: [centerDateStr, centerDateStr],
+          y: [globalMinY.toISOString().split('T')[0], globalMaxY.toISOString().split('T')[0]],
+          mode: 'lines',
+          type: 'scatter',
+          name: `Center ${cluster.clusterId + 1}`,
           line: {
-            color: '#fff',
-            width: 2
-          }
-        },
-        text: `Cluster Center ${cluster.clusterId + 1}<br>` +
-              `Size: ${cluster.points.length} predictions<br>` +
-              `Avg Confidence: ${cluster.avgConfidence.toFixed(2)}%<br>` +
-              `Center Date: ${centerDate.toISOString().split('T')[0]}`,
-        hovertemplate: '%{text}<extra></extra>',
-        hoverlabel: {
-          bgcolor: 'rgba(31, 41, 55, 0.95)',  // Dark gray background for readability
-          bordercolor: 'rgba(255, 255, 255, 0.2)',
-          font: {
-            color: '#fff',
-            size: 14
-          }
-        },
-        legendgroup: `cluster${cluster.clusterId}`,
-        showlegend: false
-      })
+            color,
+            width: 3,
+            dash: 'dashdot'
+          },
+          hovertemplate:
+            `Cluster ${cluster.clusterId + 1} Center<br>` +
+            `Predicted Crash: ${centerDateStr}<br>` +
+            `${cluster.points.length} predictions<br>` +
+            `Avg Confidence: ${cluster.avgConfidence.toFixed(2)}%<extra></extra>`,
+          legendgroup: `cluster${cluster.clusterId}`,
+          showlegend: false
+        })
+      }
     })
 
     // Add unclustered points
@@ -331,6 +339,56 @@ export const FCOClusteringPlot: React.FC<FCOClusteringPlotProps> = ({
 
   return (
     <div className="w-full">
+      {/* Clustering Parameters Control */}
+      <div className="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+        <h3 className="text-lg font-semibold mb-4 text-white">Clustering Parameters</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Cluster Distance (days)
+            </label>
+            <input
+              type="range"
+              min="10"
+              max="90"
+              value={maxClusterDistance}
+              onChange={(e) => setMaxClusterDistance(parseInt(e.target.value))}
+              className="w-full"
+            />
+            <span className="text-xs text-gray-400">{maxClusterDistance} days</span>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Min Cluster Size
+            </label>
+            <input
+              type="range"
+              min="2"
+              max="10"
+              value={minClusterSize}
+              onChange={(e) => setMinClusterSize(parseInt(e.target.value))}
+              className="w-full"
+            />
+            <span className="text-xs text-gray-400">{minClusterSize} points</span>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Min Confidence
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="0.9"
+              step="0.1"
+              value={confidenceThreshold}
+              onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
+              className="w-full"
+            />
+            <span className="text-xs text-gray-400">{(confidenceThreshold * 100).toFixed(0)}%</span>
+          </div>
+        </div>
+      </div>
+
       {/* Cluster Statistics */}
       <div className="mb-4 p-4 bg-gray-800 rounded-lg">
         <h3 className="text-lg font-semibold mb-2 text-white">Cluster Summary</h3>
@@ -352,8 +410,10 @@ export const FCOClusteringPlot: React.FC<FCOClusteringPlotProps> = ({
             </p>
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Min Cluster Size</p>
-            <p className="text-2xl font-bold text-purple-400">{minClusterSize}</p>
+            <p className="text-gray-400 text-sm">Total Valid Points</p>
+            <p className="text-2xl font-bold text-purple-400">
+              {data.filter(d => d.ds_lppls_confidence && d.ds_lppls_confidence >= confidenceThreshold).length}
+            </p>
           </div>
         </div>
       </div>

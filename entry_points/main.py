@@ -614,8 +614,16 @@ def run_market_data(args):
         
         if args.market_action == 'download':
             print("📥 市場データダウンロード開始...")
+            # カンマ区切りの文字列をリストに変換
+            symbols_list = None
+            if hasattr(args, 'symbols') and args.symbols:
+                if isinstance(args.symbols, str):
+                    symbols_list = [s.strip() for s in args.symbols.split(',')]
+                else:
+                    symbols_list = args.symbols
+
             results = downloader.download_all_symbols(
-                symbols=args.symbols if hasattr(args, 'symbols') else None,
+                symbols=symbols_list,
                 years=args.years if hasattr(args, 'years') else 2
             )
             success_count = sum(1 for v in results.values() if v)
@@ -624,8 +632,16 @@ def run_market_data(args):
             
         elif args.market_action == 'update':
             print("🔄 最新データ差分更新...")
+            # カンマ区切りの文字列をリストに変換
+            symbols_list = None
+            if hasattr(args, 'symbols') and args.symbols:
+                if isinstance(args.symbols, str):
+                    symbols_list = [s.strip() for s in args.symbols.split(',')]
+                else:
+                    symbols_list = args.symbols
+
             results = downloader.update_latest_data(
-                symbols=args.symbols if hasattr(args, 'symbols') else None
+                symbols=symbols_list
             )
             success_count = sum(1 for v in results.values() if v)
             print(f"✅ 更新: {success_count}/{len(results)}銘柄成功")
@@ -669,9 +685,77 @@ def run_fco_analyze(args):
             
         elif args.fco_analyze_action == 'historical':
             print("📅 過去期間分析...")
-            
-            # デフォルト期間設定
-            if hasattr(args, 'periods') and args.periods:
+
+            # --start-dateが指定された場合は期間リストを生成
+            if hasattr(args, 'start_date') and args.start_date:
+                from datetime import datetime, timedelta
+
+                start = datetime.strptime(args.start_date, '%Y-%m-%d')
+                if hasattr(args, 'end_date') and args.end_date:
+                    end = datetime.strptime(args.end_date, '%Y-%m-%d')
+                else:
+                    end = datetime.now() - timedelta(days=1)  # 昨日まで
+
+                # 頻度に応じて期間リストを生成
+                frequency = args.frequency if hasattr(args, 'frequency') else 'weekly'
+                periods = []
+                current = start
+
+                if frequency == 'weekly':
+                    # 週次: 毎週土曜日
+                    while current <= end:
+                        days_to_saturday = (5 - current.weekday()) % 7
+                        saturday = current + timedelta(days=days_to_saturday)
+                        if saturday <= end:
+                            periods.append(saturday.strftime('%Y-%m-%d'))
+                        current += timedelta(weeks=1)
+                else:  # daily
+                    # 日次: 毎日
+                    while current <= end:
+                        periods.append(current.strftime('%Y-%m-%d'))
+                        current += timedelta(days=1)
+
+                print(f"📊 生成された期間: {len(periods)}件 ({periods[0]} 〜 {periods[-1]})")
+
+                # FCOServiceを使用した直接分析
+                sys.path.insert(0, str(project_root / 'fco-api'))
+                from app.services.fco_service import FCOService
+                fco_service = FCOService()
+
+                symbols = args.symbols if hasattr(args, 'symbols') and args.symbols else ['SP500']
+                total_success = 0
+                total_failed = 0
+
+                for symbol in symbols:
+                    print(f"\n🎯 {symbol} の分析開始...")
+                    for i, period_end in enumerate(periods, 1):
+                        try:
+                            end_date = datetime.strptime(period_end, '%Y-%m-%d').date()
+                            period_days = (end_date - start.date()).days
+
+                            print(f"  [{i}/{len(periods)}] {period_end} まで ({period_days}日間)")
+
+                            result = fco_service.run_new_analysis(
+                                symbol=symbol,
+                                period=period_days,
+                                end_date=end_date,
+                                force=True,
+                                use_external_api=False  # ローカルDBから読み込む
+                            )
+
+                            print(f"    ✅ Confidence: {result.get('ds_lppls_confidence', 0):.2%}, " +
+                                  f"Bubble: {result.get('bubble_type', 'N/A')}")
+                            total_success += 1
+
+                        except Exception as e:
+                            print(f"    ❌ エラー: {e}")
+                            total_failed += 1
+
+                print(f"\n✅ 分析完了: {total_success}件成功, {total_failed}件失敗")
+                return total_success > 0
+
+            # 既存の期間リスト指定方式
+            elif hasattr(args, 'periods') and args.periods:
                 periods = args.periods
             else:
                 # 過去4週間の土曜日
@@ -684,7 +768,7 @@ def run_fco_analyze(args):
                     saturday = date + timedelta(days=days_to_saturday)
                     periods.append(saturday.strftime('%Y-%m-%d'))
                 periods.reverse()
-            
+
             result = analyzer.analyze_historical(
                 periods=periods,
                 symbols=args.symbols if hasattr(args, 'symbols') else None
@@ -809,12 +893,12 @@ Examples:
     
     # Market download subcommand
     market_download_parser = market_subparsers.add_parser('download', help='市場データダウンロード')
-    market_download_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    market_download_parser.add_argument('--symbols', help='対象銘柄（カンマ区切り）')
     market_download_parser.add_argument('--years', type=int, default=2, help='取得年数')
     
     # Market update subcommand
     market_update_parser = market_subparsers.add_parser('update', help='最新データ差分更新')
-    market_update_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    market_update_parser.add_argument('--symbols', help='対象銘柄（カンマ区切り）')
     
     # Market stats subcommand
     market_stats_parser = market_subparsers.add_parser('stats', help='データ統計表示')
@@ -832,6 +916,9 @@ Examples:
     fco_analyze_hist_parser = fco_analysis_subparsers.add_parser('historical', help='過去期間分析')
     fco_analyze_hist_parser.add_argument('--periods', nargs='+', help='分析期間リスト')
     fco_analyze_hist_parser.add_argument('--symbols', nargs='+', help='対象銘柄')
+    fco_analyze_hist_parser.add_argument('--start-date', help='開始日 (YYYY-MM-DD) - 指定時は期間リスト生成')
+    fco_analyze_hist_parser.add_argument('--end-date', help='終了日 (YYYY-MM-DD、省略時は昨日)')
+    fco_analyze_hist_parser.add_argument('--frequency', choices=['weekly', 'daily'], default='weekly', help='分析頻度')
     
     # FCO analyzer status subcommand
     fco_analyze_status_parser = fco_analysis_subparsers.add_parser('status', help='分析状態確認')

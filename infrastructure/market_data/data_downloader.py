@@ -21,6 +21,11 @@ sys.path.append(str(project_root))
 
 from infrastructure.data_sources.unified_data_client import UnifiedDataClient
 
+# FCO APIのPriceDataServiceをインポート
+fco_api_path = project_root / "fco-api"
+sys.path.insert(0, str(fco_api_path))
+from app.services.price_data_service import PriceDataService
+
 # ロギング設定
 logging.basicConfig(
     level=logging.INFO,
@@ -35,7 +40,7 @@ class MarketDataDownloader:
     def __init__(self, base_dir: str = "data/market_data", for_fco: bool = True):
         """
         初期化
-        
+
         Args:
             base_dir: データ保存ベースディレクトリ
             for_fco: FCO用（全履歴）かLPPL用（2年）か
@@ -46,14 +51,15 @@ class MarketDataDownloader:
         self.cache_dir = self.base_dir / "cache" / "prepared"  # LPPL用2年キャッシュ
         self.full_cache_dir = self.base_dir / "cache" / "full"  # FCO用全履歴
         self.metadata_dir = self.base_dir / "metadata"
-        
+
         # ディレクトリ作成
         self.daily_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.full_cache_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.data_client = UnifiedDataClient()
+        self.price_data_service = PriceDataService()  # データベース保存用
         self._load_catalog()
     
     def _load_catalog(self):
@@ -140,7 +146,10 @@ class MarketDataDownloader:
             else:
                 self._update_cache(symbol, df)  # LPPL用は2年
             self._update_metadata(symbol, df.attrs)
-            
+
+            # データベースに保存（PriceDataServiceを使用）
+            self._save_to_database(symbol, df, source)
+
             logger.info(f"  ✅ {symbol}: {len(df)}日分保存完了 (source: {source})")
             return True
             
@@ -211,9 +220,40 @@ class MarketDataDownloader:
         df.attrs['total_days'] = len(df)
         
         df.to_parquet(cache_file)
-        
+
         logger.info(f"  📊 {symbol}: 全履歴キャッシュ更新 ({len(df)}日分, {df.index.min().strftime('%Y-%m-%d')} ~ {df.index.max().strftime('%Y-%m-%d')})")
-    
+
+    def _save_to_database(self, symbol: str, df: pd.DataFrame, source: str):
+        """データベースに保存（PriceDataServiceを使用）"""
+        try:
+            # データフレームからリストに変換
+            dates = [dt.date() if hasattr(dt, 'date') else dt for dt in df.index]
+
+            # FREDデータは'Close'列、他のソースは'close'列の可能性
+            if 'Close' in df.columns:
+                prices = df['Close'].tolist()
+            elif 'close' in df.columns:
+                prices = df['close'].tolist()
+            else:
+                logger.warning(f"  ⚠️  {symbol}: 価格列が見つかりません")
+                return
+
+            # データベースに保存
+            success = self.price_data_service.save_price_data(
+                symbol=symbol,
+                dates=dates,
+                prices=prices,
+                data_source=source
+            )
+
+            if success:
+                logger.info(f"  💾 {symbol}: データベース保存完了 ({len(dates)}件)")
+            else:
+                logger.warning(f"  ⚠️  {symbol}: データベース保存失敗")
+
+        except Exception as e:
+            logger.error(f"  ❌ {symbol}: データベース保存エラー - {e}")
+
     def _update_metadata(self, symbol: str, attrs: Dict):
         """メタデータを更新"""
         metadata_file = self.metadata_dir / "data_catalog.json"

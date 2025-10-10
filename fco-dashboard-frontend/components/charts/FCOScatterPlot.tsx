@@ -7,124 +7,166 @@ const Plot = dynamic(() => import('react-plotly.js'), { ssr: false })
 
 interface FCOScatterPlotProps {
   data: FCOAnalysis[]
-  showNegative?: boolean
+  onPointClick?: (analysisId: number) => void
 }
 
 export const FCOScatterPlot: React.FC<FCOScatterPlotProps> = ({
   data,
-  showNegative = false
+  onPointClick
 }) => {
-  const { plotData, validDataForLayout } = useMemo(() => {
-    if (!data || data.length === 0) return { plotData: [], validDataForLayout: [] }
+  const { plotData, validDataForLayout, analysisIds } = useMemo(() => {
+    if (!data || data.length === 0) return { plotData: [], validDataForLayout: [], analysisIds: [] }
 
-    // Filter and normalize bubble types
-    const filteredData = data.filter(d => {
+    // Show all data - no filtering by bubble type
+    // Filter out entries without predicted crash date
+    const validData = data.filter(d => d.predicted_crash_date && d.predicted_crash_date !== null)
+
+    // Store analysis IDs for click handling
+    const ids = validData.map(d => d.id)
+
+    // Separate positive and negative bubbles
+    const positiveData = validData.filter(d => {
       const bubbleType = d.bubble_type?.toLowerCase() || ''
-      if (showNegative) {
-        return bubbleType.includes('negative')
-      }
-      return bubbleType.includes('positive') || bubbleType === 'weak_positive'
+      return bubbleType.includes('positive') || !d.bubble_type
     })
 
-    // Prepare data for plotting - axis reversed as requested
-    // Filter out entries without predicted crash date
-    const validData = filteredData.filter(d => d.predicted_crash_date && d.predicted_crash_date !== null)
+    const negativeData = validData.filter(d => {
+      const bubbleType = d.bubble_type?.toLowerCase() || ''
+      return bubbleType.includes('negative')
+    })
 
-    const xDates = validData.map(d => d.predicted_crash_date)  // X axis: Predicted crash date
-    const yDates = validData.map(d => d.analysis_basis_date)   // Y axis: Fitting basis date (reversed)
+    // Create traces for each bubble type
+    const traces: any[] = []
 
-    // Use appropriate confidence values based on bubble type
-    const confidenceValues = validData.map(d =>
-      showNegative ?
-        (d.ds_lppls_confidence_neg || 0) * 100 :
-        (d.ds_lppls_confidence || 0) * 100
-    )
+    // Positive bubble trace (circles)
+    if (positiveData.length > 0) {
+      const xDatesPos = positiveData.map(d => d.predicted_crash_date)
+      const yDatesPos = positiveData.map(d => d.analysis_basis_date)
+      const confidencePos = positiveData.map(d => (d.ds_lppls_confidence || 0) * 100)
+      const symbolsPos = positiveData.map(d => d.symbol)
+      const trustPos = positiveData.map(d => (d.ds_lppls_trust || 0) * 100)
 
-    // Get symbols for hover text
-    const symbols = validData.map(d => d.symbol)
-    const trustValues = validData.map(d =>
-      (d.ds_lppls_trust || 0) * 100
-    )
-
-    const plot = [{
-      x: xDates,
-      y: yDates,
-      mode: 'markers',
-      type: 'scatter',
-      marker: {
-        size: 12,
-        color: confidenceValues,
-        // ⚠️ IMPORTANT: DO NOT CHANGE THIS COLOR GRADIENT
-        // This is the scientific Viridis colormap - a perceptually uniform,
-        // colorblind-friendly gradient that clearly shows low (dark) to high (bright) values.
-        // User specifically requested this gradient for clarity (2025-01-15).
-        // Dark purple = Low confidence, Bright yellow = High confidence
-        colorscale: showNegative ? [
-          // Viridis-like gradient for negative bubble (blue to yellow-green)
-          [0, '#440154'],    // Very dark purple-blue
-          [0.2, '#31688e'],  // Dark blue
-          [0.4, '#35b779'],  // Teal-green
-          [0.6, '#6ece58'],  // Light green
-          [0.8, '#b5de2b'],  // Yellow-green
-          [1, '#fde725']     // Bright yellow
-        ] : [
-          // Viridis gradient for positive bubble (standard scientific colormap)
-          [0, '#440154'],    // Very dark purple (low confidence)
-          [0.2, '#414487'],  // Dark blue-purple
-          [0.4, '#2a788e'],  // Blue
-          [0.6, '#22a884'],  // Teal
-          [0.8, '#7ad151'],  // Green-yellow
-          [1, '#fde725']     // Bright yellow (high confidence)
-        ],
-        showscale: true,
-        // IMPORTANT: Always display 0-100% scale regardless of actual data values
-        cmin: 0,  // Always start from 0%
-        cmax: 100,  // Always end at 100%
-        colorbar: {
-          title: showNegative ? 'DS-LPPLS<br>Confidence<br>Negative (%)' : 'DS-LPPLS<br>Confidence (%)',
-          titleside: 'right',
-          tickmode: 'linear',
-          tick0: 0,
-          dtick: 20,
-          tickvals: [0, 20, 40, 60, 80, 100],  // Explicit tick values
-          len: 0.75,
-          thickness: 20,
-          bgcolor: 'rgba(0, 0, 0, 0.3)',
-          bordercolor: '#444',
-          borderwidth: 1,
-          tickfont: {
-            color: '#fff'
+      traces.push({
+        x: xDatesPos,
+        y: yDatesPos,
+        mode: 'markers',
+        type: 'scatter',
+        marker: {
+          size: 12,
+          symbol: 'circle',  // Circle for positive bubbles
+          color: confidencePos,
+          colorscale: [
+            [0, '#440154'],    // Very dark purple (low confidence)
+            [0.2, '#414487'],  // Dark blue-purple
+            [0.4, '#2a788e'],  // Blue
+            [0.6, '#22a884'],  // Teal
+            [0.8, '#7ad151'],  // Green-yellow
+            [1, '#fde725']     // Bright yellow (high confidence)
+          ],
+          showscale: true,
+          cmin: 0,
+          cmax: 100,
+          colorbar: {
+            title: 'DS-LPPLS<br>Confidence (%)',
+            titleside: 'right',
+            tickmode: 'linear',
+            tick0: 0,
+            dtick: 20,
+            tickvals: [0, 20, 40, 60, 80, 100],
+            len: 0.75,
+            thickness: 20,
+            bgcolor: 'rgba(0, 0, 0, 0.3)',
+            bordercolor: '#444',
+            borderwidth: 1,
+            tickfont: { color: '#fff' },
+            titlefont: { color: '#fff' }
           },
-          titlefont: {
-            color: '#fff'
+          line: {
+            color: 'rgba(255, 255, 255, 0.2)',
+            width: 1
           }
         },
-        line: {
-          color: 'rgba(255, 255, 255, 0.2)',
-          width: 1
-        }
-      },
-      text: validData.map((d, i) =>
-        `Symbol: ${symbols[i]}<br>` +
-        `Fitting Date: ${d.analysis_basis_date}<br>` +
-        `Predicted Crash: ${d.predicted_crash_date}<br>` +
-        `Confidence: ${confidenceValues[i].toFixed(2)}%<br>` +
-        `Trust: ${trustValues[i].toFixed(2)}%`
-      ),
-      hovertemplate: '%{text}<extra></extra>',
-      hoverlabel: {
-        bgcolor: 'rgba(31, 41, 55, 0.95)',  // Dark gray background for readability
-        bordercolor: 'rgba(255, 255, 255, 0.2)',
-        font: {
-          color: '#fff',
-          size: 14
-        }
-      },
-      name: showNegative ? 'Negative Bubble' : 'Positive Bubble'
-    }]
+        text: positiveData.map((d, i) =>
+          `Symbol: ${symbolsPos[i]}<br>` +
+          `Type: Positive Bubble<br>` +
+          `Fitting Date: ${d.analysis_basis_date}<br>` +
+          `Predicted Crash: ${d.predicted_crash_date}<br>` +
+          `Confidence: ${confidencePos[i].toFixed(2)}%<br>` +
+          `Trust: ${trustPos[i].toFixed(2)}%`
+        ),
+        hovertemplate: '%{text}<extra></extra>',
+        hoverlabel: {
+          bgcolor: 'rgba(31, 41, 55, 0.95)',
+          bordercolor: 'rgba(255, 255, 255, 0.2)',
+          font: { color: '#fff', size: 14 }
+        },
+        name: 'Positive Bubble (○)'
+      })
+    }
 
-    return { plotData: plot, validDataForLayout: validData }
-  }, [data, showNegative])
+    // Negative bubble trace (squares)
+    if (negativeData.length > 0) {
+      const xDatesNeg = negativeData.map(d => d.predicted_crash_date)
+      const yDatesNeg = negativeData.map(d => d.analysis_basis_date)
+      const confidenceNeg = negativeData.map(d => (d.ds_lppls_confidence_neg || 0) * 100)
+      const symbolsNeg = negativeData.map(d => d.symbol)
+      const trustNeg = negativeData.map(d => (d.ds_lppls_trust || 0) * 100)
+
+      traces.push({
+        x: xDatesNeg,
+        y: yDatesNeg,
+        mode: 'markers',
+        type: 'scatter',
+        marker: {
+          size: 12,
+          symbol: 'square',  // Square for negative bubbles
+          color: confidenceNeg,
+          colorscale: [
+            [0, '#440154'],
+            [0.2, '#31688e'],
+            [0.4, '#35b779'],
+            [0.6, '#6ece58'],
+            [0.8, '#b5de2b'],
+            [1, '#fde725']
+          ],
+          showscale: false,  // Don't show second colorbar
+          cmin: 0,
+          cmax: 100,
+          line: {
+            color: 'rgba(255, 255, 255, 0.2)',
+            width: 1
+          }
+        },
+        text: negativeData.map((d, i) =>
+          `Symbol: ${symbolsNeg[i]}<br>` +
+          `Type: Negative Bubble<br>` +
+          `Fitting Date: ${d.analysis_basis_date}<br>` +
+          `Predicted Crash: ${d.predicted_crash_date}<br>` +
+          `Confidence (Neg): ${confidenceNeg[i].toFixed(2)}%<br>` +
+          `Trust: ${trustNeg[i].toFixed(2)}%`
+        ),
+        hovertemplate: '%{text}<extra></extra>',
+        hoverlabel: {
+          bgcolor: 'rgba(31, 41, 55, 0.95)',
+          bordercolor: 'rgba(255, 255, 255, 0.2)',
+          font: { color: '#fff', size: 14 }
+        },
+        name: 'Negative Bubble (□)'
+      })
+    }
+
+    return { plotData: traces, validDataForLayout: validData, analysisIds: ids }
+  }, [data])
+
+  // Handle point click
+  const handlePlotClick = (event: any) => {
+    if (!onPointClick || !event.points || event.points.length === 0) return
+
+    const pointIndex = event.points[0].pointIndex
+    if (pointIndex !== undefined && analysisIds && analysisIds[pointIndex] !== undefined) {
+      onPointClick(analysisIds[pointIndex])
+    }
+  }
 
   const layout = useMemo(() => {
     // Use the already filtered validData from plotData calculation
@@ -158,9 +200,7 @@ export const FCOScatterPlot: React.FC<FCOScatterPlotProps> = ({
 
     return {
       title: {
-        text: showNegative ?
-          'FCO Analysis - Negative Bubble Predictions' :
-          'FCO Analysis - Positive Bubble Predictions',
+        text: 'FCO Analysis - Bubble Predictions',
         font: {
           color: '#fff',
           size: 20
@@ -243,7 +283,7 @@ export const FCOScatterPlot: React.FC<FCOScatterPlotProps> = ({
         }
       ]
     }
-  }, [validDataForLayout, showNegative])
+  }, [validDataForLayout])
 
   const config = {
     responsive: true,
@@ -263,6 +303,7 @@ export const FCOScatterPlot: React.FC<FCOScatterPlotProps> = ({
             layout={layout}
             config={config}
             style={{ width: '100%', height: '100%' }}
+            onClick={handlePlotClick}
           />
         ) : (
           <div className="flex items-center justify-center h-full min-h-[600px]">

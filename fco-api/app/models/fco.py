@@ -3,7 +3,7 @@ FCO Analysis Pydantic Models
 """
 
 from datetime import date, datetime
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -19,27 +19,28 @@ class FCOAnalysisBase(BaseModel):
 
 class FCOIndicators(BaseModel):
     """DS-LPPLS Indicators"""
-    ds_lppls_confidence: float = Field(..., ge=0, le=1, description="DS-LPPLS Confidence (0-1)")
-    ds_lppls_confidence_neg: float = Field(..., ge=0, le=1, description="DS-LPPLS Confidence Negative")
-    ds_lppls_trust: float = Field(..., ge=0, le=1, description="DS-LPPLS Trust indicator")
-    bubble_type: Literal["positive", "negative", "none"] = Field(..., description="Detected bubble type")
+    ds_lppls_confidence: Optional[float] = Field(None, ge=0, le=1, description="DS-LPPLS Confidence (0-1)")
+    ds_lppls_confidence_neg: Optional[float] = Field(None, ge=0, le=1, description="DS-LPPLS Confidence Negative")
+    ds_lppls_trust: Optional[float] = Field(None, ge=0, le=1, description="DS-LPPLS Trust indicator")
+    ds_lppls_trust_negative: Optional[float] = Field(None, ge=0, le=1, description="DS-LPPLS Trust Negative")
+    bubble_type: Optional[str] = Field(None, description="Detected bubble type")
 
 
 class ClusteringResult(BaseModel):
     """Clustering analysis result"""
-    predicted_tc: float = Field(..., description="Predicted critical time (days)")
-    tc_std: float = Field(..., description="Standard deviation of tc")
-    scenario_probability: float = Field(..., ge=0, le=1, description="Scenario probability")
-    cluster_method: str = Field(default="dbscan", description="Clustering method used")
+    predicted_tc: Optional[float] = Field(None, description="Predicted critical time (days)")
+    tc_std: Optional[float] = Field(None, description="Standard deviation of tc")
+    scenario_probability: Optional[float] = Field(None, ge=0, le=1, description="Scenario probability")
+    cluster_method: Optional[str] = Field(default="dbscan", description="Clustering method used")
 
 
 class MultiWindowInfo(BaseModel):
     """Multi-window analysis information"""
-    num_windows: int = Field(..., description="Number of time windows analyzed")
-    num_qualified_fits: int = Field(..., description="Number of qualified fits")
-    window_min: int = Field(..., description="Minimum window size")
-    window_max: int = Field(..., description="Maximum window size")
-    window_step: int = Field(..., description="Window step size")
+    num_windows: Optional[int] = Field(None, description="Number of time windows analyzed")
+    num_qualified_fits: Optional[int] = Field(None, description="Number of qualified fits")
+    window_min: Optional[int] = Field(None, description="Minimum window size")
+    window_max: Optional[int] = Field(None, description="Maximum window size")
+    window_step: Optional[int] = Field(None, description="Window step size")
 
 
 class FCOAnalysisCreate(FCOAnalysisBase, FCOIndicators, ClusteringResult, MultiWindowInfo):
@@ -60,14 +61,17 @@ class FCOAnalysisCreate(FCOAnalysisBase, FCOIndicators, ClusteringResult, MultiW
 class FCOAnalysisResponse(FCOAnalysisBase, FCOIndicators, ClusteringResult, MultiWindowInfo):
     """FCO analysis response model"""
     model_config = ConfigDict(from_attributes=True)
-    
-    id: int = Field(..., description="Analysis ID")
-    analysis_date: datetime = Field(..., description="Analysis execution date")
+
+    id: Optional[int] = Field(None, description="Analysis ID")
+    analysis_date: Optional[datetime] = Field(None, description="Analysis execution date")
     predicted_crash_date: Optional[date] = Field(None, description="Predicted crash date")
+    predicted_critical_time: Optional[date] = Field(None, description="Predicted critical time")
     days_to_crash: Optional[int] = Field(None, description="Days to predicted crash")
     confidence_interval: Optional[str] = Field(None, description="Confidence interval")
-    
-    created_at: datetime = Field(..., description="Record creation time")
+    r_squared: Optional[float] = Field(None, description="R-squared value")
+
+    # Make these optional since they don't exist in the current DB
+    created_at: Optional[datetime] = Field(None, description="Record creation time")
     updated_at: Optional[datetime] = Field(None, description="Last update time")
 
 
@@ -93,10 +97,10 @@ class FCOSymbolSummary(BaseModel):
 class FCOTimeSeriesData(BaseModel):
     """Time series data for charts"""
     dates: List[date]
-    confidence_values: List[float]
-    confidence_neg_values: List[float]
-    trust_values: List[float]
-    predicted_tc_values: List[Optional[float]]
+    confidences: List[float]  # Changed to match actual usage
+    confidence_neg_values: Optional[List[float]] = None
+    trust_values: Optional[List[float]] = None  # Make optional
+    predicted_tc_values: Optional[List[Optional[float]]] = None
 
 
 class FCOHistoricalQuery(BaseModel):
@@ -108,3 +112,21 @@ class FCOHistoricalQuery(BaseModel):
     bubble_type: Optional[Literal["positive", "negative", "none", "all"]] = "all"
     limit: int = Field(default=1000, le=10000)
     order_by: Literal["date_asc", "date_desc", "confidence_desc"] = "date_desc"
+
+
+class FCOTimeSeriesWithPrice(BaseModel):
+    """Time series data with price and LPPL fit for visualization"""
+    dates: List[str]
+    prices: List[float]  # Original price data
+    log_prices: List[float]  # Log-transformed prices for LPPL fitting
+    lppl_fit: Optional[List[float]] = None  # LPPL fitted values (in log scale)
+    confidence: float  # DS-LPPLS Confidence for this analysis
+    trust: Optional[float] = None  # DS-LPPLS Trust (optional)
+    predicted_crash_date: str  # Predicted crash date
+    analysis_basis_date: str  # Analysis basis date
+    fitting_window_start_date: Optional[str] = None  # Start date of fitting window
+    fitting_window_days: Optional[int] = None  # Number of days in fitting window
+    symbol: str
+    bubble_type: str  # 'positive' or 'negative'
+    # LPPL parameters for reconstruction if needed
+    lppl_params: Optional[Dict[str, float]] = None

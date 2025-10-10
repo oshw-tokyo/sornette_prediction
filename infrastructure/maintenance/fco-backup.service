@@ -1,0 +1,14 @@
+[Unit]
+Description=FCO Database Backup on Shutdown
+DefaultDependencies=no
+Before=shutdown.target reboot.target halt.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/no-rules/projects/12_sornnet_prediction/sornette_prediction/infrastructure/maintenance/backup_to_gdrive.sh
+User=no-rules
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=halt.target reboot.target shutdown.target

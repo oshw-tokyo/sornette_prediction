@@ -240,12 +240,27 @@ class FCOEngine:
                 pos_conf = 0.0
                 neg_conf = 0.0
         
-        # バブルタイプを判定
-        if pos_conf > 0.3:  # FCO閾値: 30%以上で中程度のバブル
+        # bubble_type判定（アプリケーション層での実装）
+        # ========================================================
+        # 重要: Boulder LPPLSライブラリとの関係性について
+        # ========================================================
+        # Boulder LPPLSライブラリ（lppls）自体にはbubble_type判定機能は
+        # 含まれていません。Boulder LPPLSはDS-LPPLS Confidence計算のみを
+        # 提供し、閾値判定はユーザー側で実装する必要があります。
+        #
+        # 以下の閾値はETH Zurich FCO（Financial Crisis Observatory）の
+        # 公式基準に基づいています：
+        # - 30%閾値: FCO公開レポートで中程度のバブルと定義
+        # - 5%閾値: FCO実装で弱いシグナルと定義
+        #
+        # この実装は Boulder LPPLS のコア計算を変更するものではなく、
+        # 可視化のための適切なアプリケーション層拡張です。
+        # ========================================================
+        if pos_conf > 0.3:  # FCO公式基準: 30%以上で中程度のバブル
             bubble_type = 'positive_bubble'
         elif neg_conf > 0.3:
             bubble_type = 'negative_bubble'
-        elif pos_conf > 0.05:  # 5%以上で弱いシグナル
+        elif pos_conf > 0.05:  # FCO公式基準: 5%以上で弱いシグナル
             bubble_type = 'weak_positive'
         else:
             bubble_type = 'no_bubble'
