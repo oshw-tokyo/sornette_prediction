@@ -63,24 +63,75 @@ class BlackMonday1987FCOValidator:
     def load_historical_data(self) -> Optional[pd.DataFrame]:
         """
         1987年分析用の全履歴データを読み込み
-        
+
         Returns:
-            価格データフレーム
+            価格データフレーム（log_closeカラム含む）
+
+        【データソース戦略】
+        1. 優先: SQLiteデータベース（market_price_data）
+           - log_close事前計算済み（高速化のため）
+           - データが十分な場合（>= 750日）はこれを使用
+
+        2. フォールバック: Parquet キャッシュ
+           - 歴史的検証用に保存された完全データ
+           - データベースが不足している場合に使用
+           - FCO分析には最低750日必要（最大窓サイズ）
+
+        【重要】
+        本番運用では(1)を使用、歴史的検証では(2)を使用
         """
+        # SQLiteデータベースから読み込み（log_close含む）
+        import sqlite3
+        db_path = Path("results/fco_analysis_results.db")
+
+        if db_path.exists():
+            try:
+                conn = sqlite3.connect(db_path)
+
+                # log_closeを含めて読み込み
+                query = """
+                    SELECT date, close, log_close
+                    FROM market_price_data
+                    WHERE symbol = 'NASDAQCOM'
+                      AND date <= '1988-12-31'
+                    ORDER BY date
+                """
+
+                df = pd.read_sql(query, conn, parse_dates=['date'], index_col='date')
+                conn.close()
+
+                logger.info(f"Loaded from database: {db_path}")
+                logger.info(f"Data range: {df.index.min()} to {df.index.max()}")
+                logger.info(f"Columns: {df.columns.tolist()}")
+
+                # データが十分かチェック（FCO最大窓750日 + 余裕）
+                df_before_crash = df[df.index <= self.crash_date]
+                if len(df_before_crash) >= 750:
+                    logger.info(f"✅ Database has sufficient data ({len(df_before_crash)} days)")
+                    return df
+                else:
+                    logger.warning(f"❌ Database has insufficient data ({len(df_before_crash)} < 750 days)")
+                    logger.info("Falling back to parquet cache for full historical data")
+                    # フォールバック: キャッシュから読み込み
+
+            except Exception as e:
+                logger.error(f"Database load failed: {e}")
+                # フォールバック: キャッシュから読み込み
+
+        # フォールバック: parquetキャッシュから読み込み
         if self.use_cache:
-            # キャッシュから読み込み
             cache_paths = [
                 Path("data/market_data/cache/full/NASDAQCOM_1987_full.parquet"),
                 Path("data/market_data/cache/full/NASDAQCOM_full.parquet")
             ]
-            
+
             for cache_path in cache_paths:
                 if cache_path.exists():
                     df = pd.read_parquet(cache_path)
                     logger.info(f"Loaded from cache: {cache_path}")
                     logger.info(f"Data range: {df.index.min()} to {df.index.max()}")
                     return df
-            
+
             logger.error("No cache file found")
             return None
         else:
@@ -91,31 +142,51 @@ class BlackMonday1987FCOValidator:
     def prepare_analysis_data(self, df: pd.DataFrame) -> Tuple[np.ndarray, pd.DatetimeIndex]:
         """
         FCO分析用にデータを準備
-        
+
         Args:
             df: 全履歴データ
-            
+
         Returns:
             (価格配列, 日付インデックス)
+
+        【データ選択ロジック】
+        1. log_close（優先）: 事前計算済みlog価格
+           - データベースから読み込んだ場合に利用可能
+           - FCOエンジンでの重複log変換を回避
+           - 計算精度の一貫性を保証
+
+        2. Close / close（フォールバック）: 生の価格データ
+           - Parquetキャッシュから読み込んだ場合
+           - FCOエンジンで自動log変換される
+
+        【重要】
+        FCOエンジンのprepare_observations()は自動log変換判定機能を持つため、
+        どちらの形式でも正しく処理されます。
         """
         # クラッシュ日までのデータを抽出
         df_before_crash = df[df.index <= self.crash_date]
-        
+
         # FCOの最大窓（750日）+ 余裕を持たせる
         analysis_days = min(1000, len(df_before_crash))
         df_analysis = df_before_crash.iloc[-analysis_days:]
-        
+
         logger.info(f"Analysis period: {df_analysis.index.min()} to {df_analysis.index.max()}")
         logger.info(f"Total days for analysis: {len(df_analysis)}")
-        
-        # 価格データ抽出
-        if 'Close' in df_analysis.columns:
+
+        # 価格データ抽出（log_closeを優先）
+        if 'log_close' in df_analysis.columns:
+            prices = df_analysis['log_close'].values
+            logger.info("Using pre-computed log_close from database")
+        elif 'Close' in df_analysis.columns:
             prices = df_analysis['Close'].values
+            logger.info("Using Close (will be log-transformed by FCO engine)")
         elif 'close' in df_analysis.columns:
             prices = df_analysis['close'].values
+            logger.info("Using close (will be log-transformed by FCO engine)")
         else:
             prices = df_analysis.iloc[:, 0].values  # 最初のカラムを使用
-        
+            logger.info("Using first column (will be log-transformed by FCO engine)")
+
         return prices, df_analysis.index
     
     def run_fco_analysis(self, prices: np.ndarray) -> FCOAnalysisResult:

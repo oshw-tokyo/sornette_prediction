@@ -5,6 +5,71 @@
 
 ## 🟡 Active Issues (対応中)
 
+### I122: 🔴 FCO実装の根本的誤り - Nested構造による287倍の過剰計算
+**作成日**: 2025-01-15
+**優先度**: 🔴 Critical
+**担当**: FCOエンジン開発
+**状態**: 🚨 緊急対応中
+
+**内容**:
+FCO分析エンジン（`core/fitting/fco_engine.py`）が`compute_nested_fits()`を使用しており、FCO標準手法から大きく逸脱。
+
+**問題点**:
+1. **Nested構造**: 外側ループ(~287 endpoints)×内側ループ(126 windows) = 約36,162回のフィッティング
+2. **FCO標準**: 固定endpoint×126窓 = 126回のフィッティング
+3. **処理時間**: 287倍遅い（10日 vs 1時間）
+4. **科学的正確性**: FCO標準から完全逸脱
+5. **Damping計算式誤り**: `|m|*|ω|/(2π)` ← 正しくは `m*|B|/(ω*|C|)`
+6. **全データ無効**: 27期間の解析結果（49,020窓データ）がすべて無効
+
+**影響範囲**:
+- `core/fitting/fco_engine.py:136-156` - mp_compute_nested_fits() 呼び出し
+- `core/fitting/fco_engine.py:198-199` - Damping計算式誤り
+- データベース: SP500の27件の解析結果削除完了（バックアップ済み）
+
+**実施済み対応**:
+1. ✅ 実行中の解析プロセス停止（2025-01-15 01:48）
+2. ✅ データベースから無効な結果削除（27件＋49,020窓データ）
+3. ✅ バックアップ作成（`fco_analysis_results_backup_20251011_015003.db`）
+
+**調査結果** (2025-01-15 02:00):
+Boulder LPPLS公式実装との比較完了。主な発見:
+1. `compute_nested_fits()`: 時系列分析用（endpointを変化）
+2. FCO標準実装には `fit()` メソッドを単純ループで使用すべき
+3. 現在の実装はBoulder LPPLSの**誤用**である
+4. Damping計算式も独自実装で誤り（Boulder LPPLSに`get_damping()`メソッド存在）
+
+**実装修正完了** (2025-01-15 03:00):
+1. ✅ fco_engine.py修正完了: Nested構造→固定endpointループ
+2. ✅ Damping計算式修正: FCO標準式 `m*|B|/(ω*|C|)` 実装
+3. ✅ 126窓生成テスト成功: 正しく126窓生成確認
+
+**新たな問題発見** (2025-01-15 03:30):
+論文再現テスト（1987年ブラックマンデー）で重大な問題を発見:
+- **DS-LPPLS Confidence: 0.0%**（期待: >30%）
+- **原因**: Boulder LPPLSフィッティングのパラメータ収束問題
+- **詳細**:
+  - Damping >= 1.0を満たす窓: 2/110 (1.8%)
+  - 多くの窓でω < 2.0または tc <= t2（境界条件違反）
+  - フィッティング最適化設定の調整が必要
+
+**対応履歴**:
+1. ✅ Boulder LPPLS公式実装との詳細比較完了（2025-01-15 02:00）
+2. ✅ fco_engine.pyのFCO標準準拠実装への修正（2025-01-15 03:00）
+3. ✅ Damping計算式の修正（FCO標準式の実装）（2025-01-15 03:00）
+4. ✅ 単体テスト: 126窓が正しく生成されることを確認（2025-01-15 03:00）
+5. ✅ 論文再現テスト実行（1987年ブラックマンデー）（2025-01-15 03:30）
+6. 🔄 **新Issue I123作成**: Boulder LPPLSフィッティング最適化問題（優先対応）
+7. ⏳ 修正版での再解析実行（I123解決後）
+
+**参考資料**:
+- FCO標準仕様: `docs/fco_upgrade_v2/foundation/ds_lppls_indicators_detailed_specification.md`
+- 実装比較文書: `docs/fco_upgrade_v2/foundation/comparison_fco_vs_current_implementation.md`
+- 多重窓解説: `docs/fco_upgrade_v2/foundation/multi_window_fitting_explanation.md`
+- Boulder LPPLS: https://github.com/Boulder-Investment-Technologies/lppls
+
+---
+
 ### I116: FCO v2.1 Time Series表示問題
 **作成日**: 2025-01-15
 **優先度**: 高

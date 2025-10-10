@@ -1,6 +1,57 @@
 """
 FCO (Financial Crisis Observatory) スタイルの多重時間窓LPPLS分析エンジン
-Boulder Investment Technologies のlpplsライブラリを活用した実装
+
+═══════════════════════════════════════════════════════════════════════════════
+📐 アーキテクチャ概要
+═══════════════════════════════════════════════════════════════════════════════
+
+このエンジンはETH ZurichのFCO標準手法に準拠した多重時間窓LPPLS分析を実装します。
+
+【重要な依存関係】
+- コアフィッティングエンジン: Boulder Investment Technologies lppls (MIT License)
+  https://github.com/Boulder-Investment-Technologies/lppls
+  ※ 数学的フィッティングロジックは一切変更せず、そのまま使用
+
+【実装の責任分離】
+┌─────────────────────────────────────────────────────────────────┐
+│ Boulder lppls                 │ 本実装（FCOEngine）              │
+├─────────────────────────────────────────────────────────────────┤
+│ ✅ LPPLフィッティング         │ ✅ 多重時間窓の制御（126窓）     │
+│ ✅ 非線形最適化               │ ✅ FCO標準フィルタリング         │
+│ ✅ パラメータ推定             │ ✅ データ前処理（log変換）       │
+│                               │ ✅ DS-LPPLS指標計算              │
+│                               │ ✅ バブルタイプ判定              │
+└─────────────────────────────────────────────────────────────────┘
+
+【データフロー】
+1. 前処理（prepare_observations）
+   - 入力: 生の価格データまたはlog価格
+   - 自動log変換判定（prices.max() > 10 で生データと判定）
+   - 出力: 2xN形式（timestamps, log_prices）← Boulder lppls形式
+
+2. 多重時間窓フィッティング（compute_ds_lppls_confidence）
+   - FCO標準: 固定endpoint × 126窓（750→125日、5日刻み）
+   - 各窓でBoulder lppls.fit()を呼び出し
+   - ⚠️ compute_nested_fits()は使用しない（時系列分析用のため）
+
+3. 後処理（_analyze_results）
+   - FCO標準Damping計算: damping = m * |B| / (ω * |C|)
+     ここで C = sqrt(c1² + c2²)
+   - FCOフィルタリング条件適用:
+     * Damping >= 1.0
+     * 0.1 <= m <= 0.9
+     * 2.0 <= ω <= 25.0
+     * tc > t2（未来のtc）
+   - DS-LPPLS Confidence計算: qualified_fits / total_windows
+
+【重要な注意事項】
+⚠️ Boulder lpplsの関数を直接変更しないこと
+⚠️ フィルタリング条件はFCO標準に準拠（変更時は要検証）
+⚠️ log変換は一度だけ適用（重複log変換を回避）
+
+【参考文献】
+- FCO公式手法: docs/fco_upgrade_v2/foundation/ds_lppls_indicators_detailed_specification.md
+- Boulder lppls比較: docs/fco_upgrade_v2/foundation/comparison_fco_vs_current_implementation.md
 """
 
 import numpy as np
@@ -84,23 +135,36 @@ class FCOEngine:
     def prepare_observations(self, prices: np.ndarray, timestamps: Optional[np.ndarray] = None) -> np.ndarray:
         """
         価格データをLPPLS形式に変換
-        
+
         Args:
-            prices: 価格データ
+            prices: 価格データ（生の価格またはlog価格）
             timestamps: タイムスタンプ（オプション）
-        
+
         Returns:
-            2xN形式の観測データ（時間、価格）
+            2xN形式の観測データ（時間、log価格）
+
+        Note:
+            LPPLモデルは対数価格に対してフィッティングを行います。
+            このメソッドは自動的にlog変換を適用します。
         """
         n = len(prices)
-        
+
         if timestamps is None:
             # タイムスタンプがない場合は連番を使用
             timestamps = np.arange(n)
-        
+
+        # Log変換を適用
+        # 価格が既にlog変換されている場合（値が小さい場合）は、そのまま使用
+        if prices.max() > 10:  # 生の価格データと判定（例: 100.0）
+            log_prices = np.log(prices)
+            logger.debug(f"Applied log transformation: price range {prices.min():.2f}-{prices.max():.2f} -> log range {log_prices.min():.4f}-{log_prices.max():.4f}")
+        else:  # 既にlog変換済みと判定（例: 4.605）
+            log_prices = prices
+            logger.debug(f"Input appears to be already log-transformed: range {prices.min():.4f}-{prices.max():.4f}")
+
         # 2xN形式に変換（Boulder lppls形式）
-        observations = np.array([timestamps, prices])
-        
+        observations = np.array([timestamps, log_prices])
+
         return observations
     
     def compute_ds_lppls_confidence(self, prices: np.ndarray, 
@@ -133,32 +197,60 @@ class FCOEngine:
         # Boulder lpplsモデルを初期化
         lppls_model = LPPLS(observations)
         
-        # 多重時間窓分析を実行
-        if self.use_parallel:
-            # 並列処理版
-            results = lppls_model.mp_compute_nested_fits(
-                workers=self.max_workers,
-                window_size=self.WINDOW_MAX if len(prices) >= self.WINDOW_MAX else adjusted_max,
-                smallest_window_size=self.WINDOW_MIN,
-                outer_increment=self.WINDOW_STEP,
-                inner_increment=self.WINDOW_STEP,
-                max_searches=25
-            )
-        else:
-            # 逐次処理版
-            results = lppls_model.compute_nested_fits(
-                window_size=self.WINDOW_MAX if len(prices) >= self.WINDOW_MAX else adjusted_max,
-                smallest_window_size=self.WINDOW_MIN,
-                outer_increment=self.WINDOW_STEP,
-                inner_increment=self.WINDOW_STEP,
-                max_searches=25
-            )
-        
+        # 多重時間窓分析を実行（FCO標準: 固定endpointで126窓）
+        # ⚠️ compute_nested_fits()は時系列分析用（nested構造）であり、
+        # FCO標準の多重窓同時分析には適していない
+        results = []
+        max_window = self.WINDOW_MAX if len(prices) >= self.WINDOW_MAX else adjusted_max
+
+        # FCO標準: 固定endpointで窓サイズのみ変化（126窓）
+        # 750, 745, 740, ..., 130, 125 の126窓
+        for window_size in range(max_window, self.WINDOW_MIN - 1, -self.WINDOW_STEP):
+            if window_size > len(prices):
+                logger.warning(f"Skipping window {window_size}: insufficient data ({len(prices)} points)")
+                continue
+
+            # 固定endpoint（最新日）から遡って window_size 分のデータを切り出し
+            window_observations = observations[:, -window_size:]
+
+            try:
+                # 単一窓でフィッティング
+                lppls_model.fit(
+                    max_searches=25,
+                    minimizer='Nelder-Mead',
+                    obs=window_observations
+                )
+
+                # フィッティング結果を取得
+                fit_params = lppls_model.coef_.copy() if hasattr(lppls_model, 'coef_') else {}
+
+                # FCO形式に変換
+                t1 = len(prices) - window_size
+                t2 = len(prices) - 1
+
+                # window_size情報を追加
+                fit_params['window_size'] = window_size
+                fit_params['window_start_idx'] = t1
+                fit_params['window_end_idx'] = t2
+
+                result = {
+                    't1': t1,
+                    't2': t2,
+                    'res': [fit_params]  # Boulder形式に合わせてリスト化
+                }
+
+                results.append(result)
+
+            except Exception as e:
+                logger.warning(f"Window size {window_size} fitting failed: {e}")
+                continue
+
         # DS-LPPLS指標を計算
-        indicators = lppls_model.compute_indicators(results)
-        
-        # 結果を解析
-        return self._analyze_results(indicators, results)
+        # ⚠️ Boulder LPPLSの compute_indicators()は nested_fits() 形式を期待するため使用不可
+        # 独自実装の _analyze_results() を使用
+
+        # 結果を解析（Boulder indicators不使用）
+        return self._analyze_results(None, results)
     
     def _analyze_results(self, indicators: pd.DataFrame, raw_results: List) -> FCOAnalysisResult:
         """
@@ -192,11 +284,20 @@ class FCOEngine:
                     for fit in fits:
                         if isinstance(fit, dict):
                             m = fit.get('m', 0)
-                            w = fit.get('w', 0) 
+                            w = fit.get('w', 0)
                             tc = fit.get('tc', 0)
-                            
-                            # Damping計算
-                            damping = abs(m) * abs(w) / (2 * np.pi)
+                            B = fit.get('b', 0)
+                            c1 = fit.get('c1', 0)
+                            c2 = fit.get('c2', 0)
+
+                            # FCO標準のDamping計算式
+                            # damping = m * |B| / (ω * |C|)
+                            # ここで C = sqrt(c1^2 + c2^2)
+                            C = np.sqrt(c1**2 + c2**2)
+                            if C != 0 and w != 0:
+                                damping = m * abs(B) / (w * abs(C))
+                            else:
+                                damping = 0
                             
                             # FCOフィルタリング条件
                             is_qualified = (
