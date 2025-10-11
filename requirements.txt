@@ -7,3 +7,4 @@ scikit-learn>=1.6.1
 seaborn>=0.11.0  # グラフ表示の拡張
 requests>=2.32.3  # データ取得用
 lxml>=5.3.0      # HTML解析用
+lppls==0.6.20    # Boulder LPPLS - FCO準拠LPPLS実装（MIT License）

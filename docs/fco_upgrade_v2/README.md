@@ -4,14 +4,28 @@
 
 ---
 
-## 🎯 2つの並行稼働システム
+## 🎯 3つの並行存在システム
 
-**重要**: このプロジェクトには2つの異なるFCOシステムが存在し、**両者は並行稼働しています**。
+**重要**: このプロジェクトには3つの異なるFCO関連システムが存在します。
 
-| システム | レイヤー | 技術 | 実装状況 | 文書 |
-|---------|---------|------|----------|------|
-| **FCO v2.1** | Webアプリケーション層 | React + FastAPI | 🔄 Phase 2進行中 | `v2.1_webapp/` |
-| **Data Engine (v3)** | データ管理・分析エンジン層 | Python CLIツール | ✅ 実装完了・稼働中 | `data_engine/` |
+| システム | レイヤー | 技術 | 実装状況 | 文書 | アルゴリズム |
+|---------|---------|------|----------|------|-------------|
+| **カスタムFCO** | コア分析エンジン | 過去LPPL準拠 | 🚧 Phase 1開始準備 | `foundation/MIGRATION_PLAN_CUSTOM_FCO.md` | グリッドサーチ + 境界付き最適化 |
+| **FCO v2.1** | Webアプリケーション層 | React + FastAPI | 🔄 Phase 2進行中 | `v2.1_webapp/` | Boulder LPPLS（⚠️ 問題あり） |
+| **Data Engine (v3)** | データ管理・分析エンジン層 | Python CLIツール | ✅ 実装完了・稼働中 | `data_engine/` | Boulder LPPLS（⚠️ 問題あり） |
+
+### ⚠️ **重要な移行計画**
+
+**現状**:
+- FCO v2.1とData Engine (v3)は**Boulder LPPLS FCO**を使用中
+- Boulder LPPLS FCOは1987年ブラックマンデー検証で**0% Confidence（失敗）**
+- 原因: 無制約最適化 + ランダム初期値によるパラメータ発散
+
+**移行戦略**:
+- **カスタムFCO実装**（過去LPPL準拠）を`core/fitting/custom_fco_engine.py`で開発中
+- Phase 1-3完了後、`core/fitting/fco_engine.py`をファイルごと置き換え
+- **v2.1とData Engineは自動的にカスタムFCO実装を使用**（import文は変更なし）
+- インターフェース互換性維持: `FCOEngine.compute_ds_lppls_confidence()`シグネチャ不変
 
 ---
 
@@ -115,8 +129,11 @@ fco-daily CLIツールのアーキテクチャ文書
 
 ---
 
-### foundation/ - 共通基盤文書（全バージョン共通）
-v2.1とData Engineの両方に適用される技術仕様と戦略
+### foundation/ - 共通基盤文書（カスタムFCO + Boulder FCO共通）
+
+**📌 最優先参照（カスタムFCO移行計画）**:
+- **README.md** - foundation/ディレクトリ概要
+- **MIGRATION_PLAN_CUSTOM_FCO.md** - カスタムFCO移行計画（Phase 1-4詳細）
 
 **技術仕様**:
 - **ds_lppls_indicators_detailed_specification.md** (435行) - DS-LPPLS指標詳細仕様
@@ -124,9 +141,7 @@ v2.1とData Engineの両方に適用される技術仕様と戦略
 - **multi_window_fitting_explanation.md** (202行) - 複数窓分析説明
 
 **分析・戦略**:
-- **fco_implementation_gap_analysis.md** (230行) - FCO実装ギャップ分析
 - **boulder_integration_analysis.md** (138行) - Boulder LPPLS統合分析
-- **comparison_fco_vs_current_implementation.md** (265行) - FCO比較分析
 - **implementation_strategy_recommendation.md** (336行) - 実装戦略推奨
 - **repository_management_advice.md** (265行) - リポジトリ管理助言
 - **paper_reproduction_test_strategy.md** (154行) - 論文再現テスト戦略
@@ -134,6 +149,8 @@ v2.1とData Engineの両方に適用される技術仕様と戦略
 **最新戦略（全126窓データ保存）**:
 - **full_window_implementation_roadmap.md** (994行) - 全窓実装ロードマップ（6週間計画）
 - **full_window_storage_strategy.md** (606行) - 全窓保存戦略詳細
+
+→ 詳細は `foundation/README.md` を参照
 
 ---
 

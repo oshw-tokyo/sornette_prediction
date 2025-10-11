@@ -2,26 +2,100 @@
 
 金融市場における対数周期的な振る舞いを分析し、潜在的な市場の臨界点を予測するツール。Didier Sornette の研究に基づく実装。
 
+## 🚨 **重要: 論文再現の絶対保護**
+
+**⚠️ このシステムの科学的根幹は論文再現機能です**
+
+### 開発・変更時の必須ルール
+```bash
+# 変更前・後で必ず実行（統一エントリーポイント経由）
+python entry_points/main.py validate --crash 1987
+# 期待結果: 予測可能性スコア 100/100
+```
+
+**科学的検証が破損した場合は即座に変更を巻き戻してください。**
+
 ## 🚀 プロジェクト概要
 
 **目的**: Sornette対数周期パワー法則（LPPL）モデルを用いて金融市場のクラッシュを事前に予測し、実際の取引で収益を上げるシステムの構築
 
-**現在のステータス**: 実装改善フェーズ（論文再現性の確立）
+**現在のステータス**: FCO v2.0実装完了（2025-09-12）- DS-LPPLS指標・126窓分析・Boulder lppls統合
+
+### 🆕 FCO v2.0 アップグレード完了
+- **DS-LPPLS Confidence指標**: 多重時間窓での統計的信頼度評価
+- **126窓並列分析**: 125-750日の範囲で包括的分析
+- **Boulder lppls統合**: MITライセンスのオープンソース実装活用
+- **1987年検証**: FCO方式でも100/100スコア維持確認
+
+### 🎯 安定版v1.0 データソース戦略
+
+**基本原則**: FRED最優先 + Twelve Data補完による高品質データ取得
+
+#### データソース配分
+- **FRED**: 24銘柄（経済指標14 + 株式指数10）- 制限なし・最高品質
+- **Twelve Data**: 56銘柄（仮想通貨36 + 個別株式20）- 800req/日制限管理
+- **重複銘柄**: CBBTCUSD（FRED優先）vs BTC（Twelve Data）
+
+#### 優先順位設計
+1. **FRED継続**: SP500, NASDAQCOM, CBBTCUSD等は既存維持
+2. **Twelve Data拡張**: 新規仮想通貨・個別株式を追加
+3. **品質保証**: 論文再現（1987年）100/100スコア維持
 
 ## 📊 進捗管理とClaude Codeとの協働
 
 このプロジェクトは生成AI（Claude Code）との協働を前提として設計されています。
 
-### 進捗・Issue管理
-- **[現在の進捗状況](./docs/progress_management/CURRENT_PROGRESS.md)** - タスクの進行状況を確認
-- **[アクティブなIssue](./docs/progress_management/CURRENT_ISSUES.md)** - 現在の問題と対策状況
-- **[管理システムガイド](./docs/progress_management/README.md)** - 進捗管理の仕組み
+### 🎯 中核ドキュメント（必須参照）
+- **[Claude Code指示書](./CLAUDE.md)** - AIが最初に読むべきファイル
+- **[現在の進捗状況](./docs/progress_management/CURRENT_PROGRESS.md)** - タスクの進行状況
+- **[アクティブなIssue](./docs/progress_management/CURRENT_ISSUES.md)** - 現在の問題と対策（Issue I044: ドキュメント整合性）
+- **[数学的基礎](./docs/mathematical_foundation.md)** - LPPLモデルの理論と数式
+
+### 📁 プロジェクト構造（2025-08-02更新）
+```
+sornette_prediction/
+├── CLAUDE.md                     # AI用指示書（中核ファイル参照）
+├── README.md                     # このファイル
+├── USER_EXECUTION_GUIDE.md       # ユーザー実行ガイド
+│
+├── docs/                         # ドキュメント（統合済み）
+│   ├── progress_management/      # 🎯 中央管理システム
+│   ├── mathematical_foundation.md # 🎯 数学的基礎
+│   ├── implementation_strategy.md # 🎯 実装戦略
+│   ├── api_guides/               # API戦略（統合済み）
+│   ├── analysis/                 # 分析結果（統合済み）
+│   └── validation_results/       # 検証結果
+│
+├── core/                          # 科学的中核（保護対象）
+│   ├── fitting/                  # LPPLフィッティング（論文再現）
+│   │   ├── fitter.py             # 既存LPPL実装
+│   │   └── fco_engine.py         # 🆕 FCOエンジン（DS-LPPLS）
+│   ├── sornette_theory/          # 理論実装
+│   └── validation/               # 歴史的検証（100/100スコア保護）
+│
+├── applications/                 # アプリケーション層
+│   ├── analysis_tools/           # 分析ツール（crash_alert_system等）
+│   ├── dashboards/               # Webダッシュボード
+│   └── examples/                 # 実行例・デモ
+│
+├── infrastructure/               # インフラ層
+│   ├── data_sources/             # データ取得（80銘柄・FRED+Twelve Data）
+│   ├── database/                 # SQLite結果管理
+│   └── visualization/            # 可視化ツール
+│
+├── entry_points/                 # 統一エントリーポイント
+│   └── main.py                   # 中央コマンドインターフェース
+│
+├── tests/                        # テストコード
+├── results/                      # 実行結果
+└── papers/                       # 参照論文（テキスト版）
+```
 
 ### 技術ドキュメント
-- **[数学的基礎](./docs/mathematical_foundation.md)** - LPPLモデルの理論と数式（論文参照指示あり）
 - **[実装戦略](./docs/implementation_strategy.md)** - システム設計と開発方針
-- **[論文アーカイブ（テキスト版）](./papers/extracted_texts/)** - 実装の科学的根拠となる原論文（テキスト変換済み）
-- **⚠️ 重要**: PDFファイルは`Context low`エラーを避けるため、必ずテキスト版を参照してください
+- **[API統合ガイド](./docs/api_guides/)** - データソース戦略
+- **[論文アーカイブ（テキスト版）](./papers/extracted_texts/)** - 実装の科学的根拠
+- **⚠️ 重要**: PDFファイルは`Context low`エラーを避けるため、必ずテキスト版を参照
 
 ## 🎯 現在の最優先課題
 
@@ -45,44 +119,64 @@
 pip install -r requirements.txt
 ```
 
-### 2. 銘柄リストの準備
-```bash
-python src/get_market_symbols.py
-```
+### 2. 分析実行
 
-### 3. 分析実行
+**全ての実行は統一エントリーポイント（`entry_points/main.py`）から行います**：
+
 ```bash
-# 基本的な市場分析
-python src/analysis/market_analysis.py
+# カタログ全銘柄の包括解析（推奨）
+python entry_points/main.py analyze ALL
+
+# 個別銘柄の分析
+python entry_points/main.py analyze NASDAQCOM --period 2y
 
 # 過去のクラッシュ検証
-python -m src.reproducibility_validation.crash_1987_validator
+python entry_points/main.py validate --crash 1987
+
+# ダッシュボード起動
+python entry_points/main.py dashboard --type main
 ```
 
-## 📁 プロジェクト構造
+## 📁 プロジェクト構造（4層アーキテクチャ）
 
 ```
 sornette_prediction/
 ├── README.md                          # このファイル
+├── CLAUDE.md                          # AI開発者向け指示書（重要）
+├── USER_EXECUTION_GUIDE.md            # ユーザー実行ガイド
+│
+├── entry_points/                      # 統一エントリーポイント
+│   └── main.py                        # 全機能への中央インターフェース
+│
+├── core/                              # 科学的中核（保護対象）
+│   ├── fitting/                       # LPPLフィッティングアルゴリズム
+│   ├── sornette_theory/               # 理論実装
+│   └── validation/                    # 歴史的検証（100/100スコア保護）
+│
+├── applications/                      # アプリケーション層
+│   ├── analysis_tools/                # 分析ツール（crash_alert_system等）
+│   ├── dashboards/                    # Webダッシュボード
+│   └── examples/                      # 実行例・デモ
+│
+├── infrastructure/                    # インフラ層
+│   ├── data_sources/                  # データ取得（80銘柄・FRED優先+Twelve Data補完）
+│   ├── database/                      # SQLite結果管理
+│   └── visualization/                 # 可視化ツール
+│
+├── tests/                             # テストコード
+│   └── historical_crashes/            # 歴史的クラッシュ検証
+│
 ├── docs/                              # ドキュメント
 │   ├── progress_management/           # 進捗・Issue管理システム
 │   ├── mathematical_foundation.md     # 数学的基礎（論文再現結果含む）
 │   └── implementation_strategy.md     # 実装戦略
-├── src/                               # ソースコード
-│   ├── fitting/                       # LPPLフィッティング
-│   ├── analysis/                      # 市場分析
-│   ├── reproducibility_validation/    # 論文再現性検証
-│   └── visualization/                 # 可視化
-├── tests/                             # テストコード
-│   └── reproducibility/               # 再現性テスト
-├── tools/                             # プロジェクトツール
-│   ├── pdf_converter.py               # PDF変換ツール
-│   └── validation/                    # 検証・デバッグツール
-├── plots/                             # 生成された図表
-│   └── validation/                    # 検証結果の図表
+│
+├── results/                           # 分析結果
+│   └── analysis_results.db            # SQLiteデータベース
+│
 └── papers/                            # 論文アーカイブ
-    ├── extracted_texts/               # テキスト変換済み論文（作業用）
-    └── pdf_archive/                   # 元PDFファイル（直接読み込み禁止）
+    ├── extracted_texts/               # テキスト変換済み論文
+    └── pdf_archive/                   # 元PDFファイル
 ```
 
 ## 🗂️ ファイル整理方針
