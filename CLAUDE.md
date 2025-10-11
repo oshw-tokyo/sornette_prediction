@@ -157,27 +157,86 @@ Claude Codeは実装の各段階で、要件が不明瞭な場合は
 
 ### 🔄 **カスタムFCO移行状況**
 
+**⭐⭐⭐ Phase 1完了 (2025-10-11) ⭐⭐⭐**
+
 **現在の実装ステータス**:
 - ✅ Boulder LPPLS多重試行+tc未来制約実装（0% Confidence、問題あり）
 - ✅ 時間単位影響調査完了（時間単位の問題ではない）
 - ✅ 科学的手法差分抽出完了（FCO vs 過去LPPL）
 - ✅ カスタムFCO移行計画策定完了
-- ⏭️ **ユーザー承認待ち** → Phase 1実装開始予定
+- ✅ **Phase 1完全成功** (R²=0.9664, 予測誤差5日, omega境界張り付き解消)
+- 🔄 **Phase 2実装予定** → 126窓多重時間窓統合
+
+**Phase 1成功結果 (2025-10-11)**:
+- ✅ R² = 0.9664 (目標 > 0.9)
+- ✅ tc = 1.2128 (未来予測、境界張り付きなし)
+- ✅ omega = 8.5234 (境界張り付き解消、範囲拡大により達成)
+- ✅ 予測誤差 = 5日 (目標 ≤ 35日、大幅達成)
+- 🎯 1987年ブラックマンデー予測: 実際10/19 vs 予測10/24
+
+**重要な改善 (2025-10-11)**:
+- ⚠️ **omega範囲拡大**: [5.0, 8.0] → [5.0, 10.0]
+  - 根拠: Sornette論文で最大 ω = 8.93 の実例を確認
+  - 詳細: papers/extracted_texts/sornette_2004_0301543v1_*.txt
+  - 結果: omega境界張り付き問題を解消、予測精度向上（11日→5日）
 
 **実装ファイル**:
-- `core/fitting/fco_engine.py` - 現在の実装（Boulder LPPLS準拠、**0% Confidence問題あり**）
-- `core/fitting/custom_fco_engine.py` - 新規実装予定（過去LPPL準拠、Phase 1で作成）
+- `core/fitting/lppl_optimizer.py` - ⚠️ **CRITICAL** グリッドサーチ + 境界付き最適化（詳細コメント済み）
+- `core/fitting/custom_fco_engine.py` - ⚠️ **CRITICAL** 多重窓FCOエンジン（Phase 2実装予定、詳細コメント済み）
+- `core/fitting/lppl_utils.py` - 時間正規化・LPPL関数定義
+- `workspace_for_claude/test_custom_fco_phase1_with_plot.py` - Phase 1検証スクリプト（色盲対応プロット）
 - `infrastructure/database/fco_results_database.py` - FCO専用DB設計済み
 - **データベース方針**: 全126窓のデータを保存（変更なし）
 
+**⚠️⚠⚠️ 変更前の必須確認 ⚠️⚠️⚠️**:
+```bash
+# Phase 1検証テスト（必須）
+python workspace_for_claude/test_custom_fco_phase1_with_plot.py
+# 期待結果: R² > 0.9, tc > 1.0, 予測誤差 ≤ 35日, 境界張り付きなし
+```
+
 ### 📚 **カスタムFCO移行計画・調査結果**
 
-**中心文書**:
-- **`docs/progress_management/MIGRATION_PLAN_PAST_LPPL_TO_CUSTOM_FCO.md`** - 📌 **最優先参照**
+#### 🎯 **文書体系の全体像**
+
+```
+docs/fco_upgrade_v2/              ← FCO関連文書の統合ディレクトリ
+│
+├── foundation/                   ← 共通基盤（カスタムFCO + Boulder FCO共通）
+│   └── MIGRATION_PLAN_CUSTOM_FCO.md  ← 📌 カスタムFCO移行計画（最優先参照）
+│
+├── v2.1_webapp/                  ← Boulder LPPLS FCO（Webアプリケーション層）
+│   ├── fco_v2.1_architecture.md       # React + FastAPI アーキテクチャ
+│   └── [その他フロントエンド文書]
+│
+├── data_engine/                  ← Boulder LPPLS FCO（CLIツール層）
+│   ├── README.md                      # fco-daily コマンド仕様
+│   └── [その他データエンジン文書]
+│
+└── archives/deprecated_boulder_plans/ ← 非推奨のBoulder FCO計画（参照禁止）
+
+workspace_for_claude/
+└── CUSTOM_FCO_REPRODUCIBILITY_TEST_PLAN.md  ← 📌 テスト実装仕様
+```
+
+#### 📌 **カスタムFCO移行計画**（最優先参照）
+
+- **`docs/fco_upgrade_v2/foundation/MIGRATION_PLAN_CUSTOM_FCO.md`** - 📌 **移行計画の完全仕様**
   - Phase 1: 過去実装復元・単一窓検証（2-3日）
-  - Phase 2: 多重窓解析統合（1週間）
+    - 成功基準: R² > 0.9, tc > 1.0, 予測誤差 ≤ 35日, 境界張り付きなし
+  - Phase 2: 多重窓解析統合（1週間、最初から126窓）
+    - 成功基準: Confidence > 30%, positive_bubble, 精度達成率測定
   - Phase 3: DB/フロントエンド統合（2-3日）
-  - Phase 4: 最終検証・最適化（3-5日）
+  - Phase 4: 最終検証・最適化（3-5日、2000年・2008年段階的実装）
+
+#### 📋 **再現性テスト計画**（2025-10-11更新）
+
+- **`workspace_for_claude/CUSTOM_FCO_REPRODUCIBILITY_TEST_PLAN.md`** - 📌 **テスト実装の完全仕様**
+  - A0: 境界張り付きを失敗として扱う（警告ではなく）
+  - A1: 予測誤差≤35日、各窓の精度達成率測定
+  - A2: DS-LPPLS Confidence > 30%（FCO標準閾値、選定理由明記）
+  - A3: 最初から126窓でテスト（段階的検証不要）
+  - A4: 他の歴史的クラッシュは段階的実装（1987年→2000年→2008年）
 
 **科学的根拠**:
 - `docs/progress_management/FCO_VS_PAST_LPPL_SCIENTIFIC_DIFFERENCES.md` - 科学的手法差分
@@ -187,6 +246,9 @@ Claude Codeは実装の各段階で、要件が不明瞭な場合は
 - `archive/src_pre_migration_backup/fitting/fitter.py` - 過去の成功実装（100/100スコア）
 
 **調査結果**:
+- `workspace_for_claude/CORRECTED_FINDING_actual_results.md` - データ期間影響の実測値
+  - commit a9c7f55: 706日データ、17日誤差（クラッシュ3日前基準）
+  - グリッドサーチ: 1000日データ、35日誤差（60日前基準、科学的に正しい）
 - `docs/progress_management/TIME_UNIT_INVESTIGATION_RESULT.md` - 時間単位調査
   - 結論: 時間単位の問題ではない（Boulder LPPLSアルゴリズム自体の問題）
 - `docs/progress_management/FCO_IMPROVEMENT_IMPLEMENTATION_SUMMARY.md` - 実装サマリー
@@ -199,22 +261,47 @@ Claude Codeは実装の各段階で、要件が不明瞭な場合は
   - `fco_implementation_gap_analysis.md` - 旧ギャップ分析（非推奨）
 - ⚠️ **これらの文書は参照しないこと**（カスタムFCO移行のため）
 
-### 🎯 **フロントエンド実装計画（継続）**
+### 🎯 **並行するFCOシステム: カスタムFCO vs Boulder LPPLS FCO**
 
-**FCO v2.0 (Streamlit)** → **FCO v2.1 (React+FastAPI)**への移行作業中
+#### ⚠️ **重要: 2つのFCO実装の共存**
 
-**v2.1 移行計画**:
-- Week 1: FastAPI バックエンド実装
-- Week 2: React フロントエンド構築
-- Week 3: データ可視化コンポーネント
-- Week 4: 認証・デプロイメント
+現在、以下の2つのFCO実装が並行して存在します：
 
-**フロントエンド文書（有効）**:
+| 実装 | 状態 | アルゴリズム | 文書 | 用途 |
+|------|------|-------------|------|------|
+| **カスタムFCO** | 🚧 開発中 | 過去LPPL準拠（グリッドサーチ + 境界付き最適化） | `foundation/MIGRATION_PLAN_CUSTOM_FCO.md` | **科学的再現性の保証** |
+| **Boulder LPPLS FCO** | ⚠️ 問題あり | Boulder LPPLSライブラリ（無制約最適化） | `v2.1_webapp/`, `data_engine/` | Webアプリ・CLIツール |
+
+#### 🎯 **統合戦略**
+
+**Phase 3完了後の統合**:
+```python
+# カスタムFCOエンジンが完成後:
+core/fitting/fco_engine.py ← custom_fco_engine.py で置き換え
+    ↓
+v2.1 Webアプリ・Data Engineが自動的にカスタムFCO実装を使用
+    ↓
+インターフェース互換性維持（APIエンドポイント・CLI変更なし）
+```
+
+#### 📁 **Boulder LPPLS FCO文書（参照のみ）**
+
+**FCO v2.1 (Webアプリケーション層)**:
 - `docs/fco_upgrade_v2/v2.1_webapp/fco_v2.1_architecture.md` - React+FastAPI アーキテクチャ
 - `docs/fco_upgrade_v2/v2.1_webapp/fco_dashboard_integration_guide.md` - フロントエンド統合ガイド
-- `docs/fco_upgrade_v2/data_engine/` - データエンジン設計（汎用）
+- **注意**: これらはBoulder LPPLS FCO用の文書（カスタムFCO完成後は実装部分を差し替え）
 
-**注意**: バックエンドAPI変更なし（インターフェース互換性維持）
+**Data Engine (CLIツール層)**:
+- `docs/fco_upgrade_v2/data_engine/README.md` - fco-daily コマンド仕様
+- `docs/fco_upgrade_v2/data_engine/fco_v3_complete_architecture.md` - v3システム完全仕様
+- **注意**: これらもBoulder LPPLS FCO用（カスタムFCO完成後は自動的に切り替わる）
+
+#### ⚠️ **実装時の注意**
+
+1. **カスタムFCO Phase 1-3**: `core/fitting/custom_fco_engine.py` で開発
+2. **Phase 3完了後**: `custom_fco_engine.py` → `fco_engine.py` へ置き換え
+3. **v2.1 Webアプリ・Data Engine**: 自動的にカスタムFCO実装を使用（import文は変更なし）
+4. **インターフェース互換性**: `FCOEngine.compute_ds_lppls_confidence()` シグネチャを維持
 
 **商用サービス化文書（継続）**:
 - `docs/service_commercialization/` - 商用サービス化文書
@@ -222,8 +309,30 @@ Claude Codeは実装の各段階で、要件が不明瞭な場合は
   - **`legally_compliant_service_specification.md`** - 法的準拠版仕様書（実装はこれに従う）✅
 
 ### 🔒 保護対象
+
+**⚠️⚠️⚠️ CRITICAL: 以下のファイル・機能は絶対に破壊しないこと ⚠️⚠️⚠️**
+
+- **`core/fitting/lppl_optimizer.py`** ⚠️ **Phase 1完了 (2025-10-11)**
+  - グリッドサーチ + 境界付き最適化（科学的再現性の根幹）
+  - R²=0.9664, 予測誤差5日達成
+  - omega範囲 [5.0, 10.0] (Sornette論文準拠、最大8.93確認済み)
+  - **変更前必須テスト**: `python workspace_for_claude/test_custom_fco_phase1_with_plot.py`
+
+- **`core/fitting/custom_fco_engine.py`** ⚠️ **Phase 2実装予定**
+  - 多重時間窓FCOエンジン（126窓統合）
+  - lppl_optimizer.py との境界条件完全一致必須
+  - **依存関係**: lppl_utils.py, lppl_optimizer.py
+
+- **`core/fitting/lppl_utils.py`**
+  - 時間正規化 [0, 1]
+  - logarithm_periodic_func（LPPL数式実装）
+  - **変更禁止**: 数式の数学的定義
+
+- **`workspace_for_claude/test_custom_fco_phase1_with_plot.py`**
+  - Phase 1検証スクリプト（色盲対応プロット）
+  - 成功基準: R² > 0.9, tc > 1.0, 予測誤差 ≤ 35日, 境界張り付きなし
+
 - `core/validation/crash_validators/black_monday_1987_validator.py` （100/100スコア維持必須）
-- `core/fitting/` 以下のフィッティングアルゴリズム
 - 論文数式の実装（logarithm_periodic_func等）
 - 歴史的クラッシュ検証機能
 - **Boulder LPPLSライブラリのコア計算**（`lppls`パッケージの数学的処理は一切変更禁止）

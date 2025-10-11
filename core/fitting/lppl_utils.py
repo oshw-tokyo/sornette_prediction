@@ -20,12 +20,12 @@ def logarithm_periodic_func(
     beta: float,
     omega: float,
     phi: float,
-    log_A: float,
+    A: float,
     B: float,
     C: float
 ) -> np.ndarray:
     """
-    Sornette論文式(54): LPPL数式
+    Sornette論文式(54): LPPL数式 (過去実装完全準拠)
 
     log(p(t)) = A + B*(tc-t)^β + C*(tc-t)^β*cos(ω*log(tc-t) + φ)
 
@@ -33,13 +33,18 @@ def logarithm_periodic_func(
     - t: 正規化時間 [0, 1]
     - tc: 臨界時刻（tc > 1.0で未来予測）
 
+    【重要】パラメータAについて
+    対数価格データ（log-transformed price）に対してフィッティングする場合、
+    Aは対数空間のオフセットとして直接使用されます。
+    これは過去実装（archive/src_pre_migration_backup/fitting/utils.py）と完全に一致します。
+
     Args:
         t: 正規化時間 [0, 1]
         tc: 臨界時刻（tc > 1.0で未来予測）
         beta (β): べき乗指数 (典型値: 0.3-0.7)
         omega (ω): 角周波数 (典型値: 5.0-8.0)
         phi (φ): 位相 (-8π ~ 8π)
-        log_A: オフセット（対数）
+        A: オフセット（対数価格空間）
         B: 振幅パラメータ
         C: 振幅パラメータ
 
@@ -48,30 +53,31 @@ def logarithm_periodic_func(
 
     【科学的根拠】
     - 出典: "Why Stock Markets Crash" (Sornette, 2003), 式(54)
-    - 実装元: archive/src_pre_migration_backup/fitting/utils.py
+    - 実装元: archive/src_pre_migration_backup/fitting/utils.py Line 22-69
     - 実績: 1987年ブラックマンデー 100/100スコア達成
 
     ⚠️ この数式は科学的再現性の根幹です。むやみに変更しないこと。
     """
-    dt = tc - t
+    t = np.asarray(t).ravel()
+    dt = (tc - t).ravel()
+    mask = dt > 0
+    result = np.zeros_like(t, dtype=float)
 
-    # tc <= t の場合は無限大を返す（フィッティング失敗として扱う）
-    if np.any(dt <= 0):
-        return np.full_like(t, np.inf, dtype=float)
+    valid_dt = dt[mask]
+    if len(valid_dt) > 0:
+        # べき乗項
+        power_term = np.power(valid_dt, beta).ravel()
 
-    # べき乗項
-    power_law_term = np.power(dt, beta)
+        # 対数周期振動項
+        log_term = np.log(valid_dt).ravel()
+        cos_term = np.cos(omega * log_term + phi).ravel()
+        oscillation = (C * power_term * cos_term).ravel()
 
-    # 対数周期振動項
-    log_dt = np.log(dt)
-    oscillation_term = np.cos(omega * log_dt + phi)
+        # LPPL式（過去実装と完全一致）
+        base = (A + B * power_term).ravel()
+        result[mask] = (base + oscillation).ravel()
 
-    # LPPL式
-    # log(price_normalized) = log(A) + B*(tc-t)^β + C*(tc-t)^β*cos(ω*log(tc-t) + φ)
-    # 注意: log_A = log(A) として渡されている
-    result = log_A + B * power_law_term + C * power_law_term * oscillation_term
-
-    return result
+    return result.ravel()
 
 
 def calculate_fit_metrics(
