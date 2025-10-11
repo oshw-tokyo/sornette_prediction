@@ -52,6 +52,8 @@ import pandas as pd
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import logging
+from multiprocessing import Pool, cpu_count
+import time
 
 from .lppl_optimizer import fit_lppl_grid_search, validate_lppl_parameters, check_boundary_adhesion
 from .lppl_utils import prepare_normalized_data
@@ -354,3 +356,295 @@ class CustomFCOEngine:
             return False
 
         return True
+
+    # ========================================================================
+    # 🚀 マルチプロセッシング並列化実装 (Issue I127)
+    # ========================================================================
+    #
+    # 【実装方針】
+    # - 既存メソッド (compute_ds_lppls_confidence) は一切変更しない
+    # - 新しい並列版メソッドを追加する形で実装
+    # - 科学的精度100%保持（同一データで同一結果を保証）
+    # - シンプルで管理しやすい実装（Python標準ライブラリのみ使用）
+    #
+    # 【アルゴリズム】
+    # - 各窓の解析は完全に独立している
+    # - multiprocessing.Pool で並列実行
+    # - 結果集約は既存ロジックを再利用
+    #
+    # 【科学的根拠保証】
+    # - フィッティングアルゴリズムは一切変更なし
+    # - フィルタリング条件は完全一致
+    # - 結果の順序のみ変わる可能性あり（ソート済みなので実質同一）
+    #
+    # 【期待効果】
+    # - 8コアで約8倍高速化（51窓: 5-7分 → 約1分）
+    #
+    # 【実装日】2025-10-12
+    # 【参照】workspace_for_claude/performance_optimization_investigation.md
+
+    def compute_ds_lppls_confidence_parallel(
+        self,
+        prices: np.ndarray,
+        timestamps: Optional[np.ndarray] = None,
+        n_workers: Optional[int] = None
+    ) -> CustomFCOResult:
+        """
+        DS-LPPLS Confidence指標を計算（多重時間窓分析、並列版）
+
+        【並列化方針】
+        - 各窓の解析は完全に独立 → multiprocessing.Pool で並列実行
+        - 科学的精度100%保持（同一データで同一結果）
+        - シンプルな実装（Python標準ライブラリのみ）
+
+        【アルゴリズム】
+        1. 126窓（750→125日、5日刻み）を生成
+        2. 各窓を並列でフィッティング（multiprocessing.Pool）
+        3. 結果集約（既存ロジック使用）
+        4. DS-LPPLS Confidence = 適格フィット数 / 総窓数
+
+        Args:
+            prices: 価格データ（生の価格）
+            timestamps: タイムスタンプ（オプション、インデックスに使用）
+            n_workers: ワーカープロセス数（Noneの場合はCPU数-1を使用）
+
+        Returns:
+            CustomFCOResult: FCO分析結果（逐次版と科学的に同一）
+        """
+        # 計測開始
+        start_time = time.perf_counter()
+
+        n_total = len(prices)
+
+        # ワーカー数の決定（1コアはOSに残す）
+        if n_workers is None:
+            n_workers = max(1, cpu_count() - 1)
+
+        logger.info(f"Parallel analysis with {n_workers} workers (CPU count: {cpu_count()})")
+
+        # 十分なデータがあるか確認
+        if n_total < self.WINDOW_MAX:
+            logger.warning(f"Insufficient data: {n_total} < {self.WINDOW_MAX}")
+            adjusted_max = n_total - 20
+            window_sizes = list(range(self.WINDOW_MIN, adjusted_max, self.WINDOW_STEP))
+        else:
+            window_sizes = list(range(self.WINDOW_MIN, self.WINDOW_MAX + 1, self.WINDOW_STEP))
+
+        logger.info(f"Analyzing {len(window_sizes)} windows (sizes: {window_sizes[0]}-{window_sizes[-1]})")
+
+        # 各窓のパラメータを準備
+        # ⚠️ CRITICAL: multiprocessing.Pool では pickle 可能な引数のみ渡せる
+        # → prices全体を渡し、各ワーカーが必要部分を切り出す
+        window_params = [
+            (prices, window_size, n_total, self.n_tries, idx, len(window_sizes))
+            for idx, window_size in enumerate(window_sizes, 1)
+        ]
+
+        # 並列実行
+        # ⚠️ CRITICAL: Pool.starmap は引数をタプルで渡す
+        # → 静的ワーカー関数 (_fit_single_window_worker) を使用
+        with Pool(n_workers) as pool:
+            window_results = pool.starmap(_fit_single_window_worker_static, window_params)
+
+        # 結果集約（既存ロジックと同一）
+        qualified_fits = []
+        tc_values = []
+
+        for window_result in window_results:
+            if window_result.get('is_qualified', False):
+                qualified_fits.append(window_result)
+                tc_values.append(window_result['tc'])
+
+        # DS-LPPLS Confidence計算
+        total_windows = len(window_results)
+        num_qualified = len(qualified_fits)
+        ds_lppls_confidence = num_qualified / total_windows if total_windows > 0 else 0.0
+
+        # 予測tc統計
+        if tc_values:
+            predicted_tc = float(np.median(tc_values))
+            tc_std = float(np.std(tc_values))
+        else:
+            predicted_tc = None
+            tc_std = None
+
+        # 計測終了
+        elapsed_time = time.perf_counter() - start_time
+
+        result = CustomFCOResult(
+            ds_lppls_confidence=ds_lppls_confidence,
+            qualified_fits=num_qualified,
+            total_windows=total_windows,
+            window_results=window_results,
+            predicted_tc=predicted_tc,
+            tc_std=tc_std,
+            metadata={
+                'n_tries': self.n_tries,
+                'combinations': self.n_tries ** 3,
+                'data_points': n_total,
+                'analysis_date': pd.Timestamp.now().isoformat(),
+                'parallel': True,
+                'n_workers': n_workers,
+                'elapsed_time_sec': elapsed_time
+            }
+        )
+
+        logger.info(
+            f"DS-LPPLS Confidence: {ds_lppls_confidence:.2%} "
+            f"({num_qualified}/{total_windows} qualified) "
+            f"- Elapsed time: {elapsed_time:.2f}s"
+        )
+
+        return result
+
+
+# ============================================================================
+# 静的ワーカー関数（multiprocessing.Pool用）
+# ============================================================================
+#
+# ⚠️⚠️⚠️ CRITICAL: pickle可能な関数である必要がある ⚠️⚠️⚠️
+#
+# multiprocessing.Pool は引数をプロセス間でpickleして渡すため、
+# 以下の条件を満たす必要がある:
+# - モジュールレベル関数（グローバル関数）
+# - クラスメソッドではない（staticmethodでも不可）
+# - すべての引数がpickle可能
+#
+# そのため、CustomFCOEngineのメソッドではなく、
+# モジュールレベルの静的関数として実装する。
+#
+# 【科学的精度保証】
+# - フィッティングアルゴリズム: fit_lppl_grid_search() を直接呼び出し
+# - フィルタリング条件: _apply_filtering_static() で完全一致を保証
+# - 既存実装と完全に同一のロジック
+#
+# 【実装日】2025-10-12
+
+def _fit_single_window_worker_static(
+    prices_full: np.ndarray,
+    window_size: int,
+    n_total: int,
+    n_tries: int,
+    idx: int,
+    total_windows: int
+) -> Dict[str, Any]:
+    """
+    静的ワーカー関数: 単一窓のフィッティング（multiprocessing.Pool用）
+
+    ⚠️ CRITICAL: この関数は科学的精度を100%保持する必要がある
+
+    Args:
+        prices_full: 価格データ全体（ワーカーが必要部分を切り出し）
+        window_size: 窓サイズ
+        n_total: データ総数
+        n_tries: グリッドサーチ刻み数
+        idx: 窓インデックス（プログレス表示用）
+        total_windows: 総窓数（プログレス表示用）
+
+    Returns:
+        窓解析結果（dict）
+    """
+    # プログレス表示（10窓ごと）
+    if idx % 10 == 0 or idx == 1 or idx == total_windows:
+        print(f"  Progress: {idx}/{total_windows} windows ({idx/total_windows*100:.1f}%) - window_size={window_size}")
+
+    if window_size > n_total:
+        return {
+            'window_size': window_size,
+            'window_start_idx': n_total - window_size,
+            'window_end_idx': n_total - 1,
+            'fit_success': False,
+            'is_qualified': False
+        }
+
+    # 固定endpoint（最新日）から遡って window_size 分のデータを切り出し
+    window_prices = prices_full[-window_size:]
+
+    # 時間正規化 [0, 1] + フィッティング
+    t, log_prices_normalized = prepare_normalized_data(window_prices)
+
+    try:
+        result = fit_lppl_grid_search(t, log_prices_normalized, n_tries=n_tries)
+
+        if result is None:
+            return {
+                'window_size': window_size,
+                'window_start_idx': n_total - window_size,
+                'window_end_idx': n_total - 1,
+                'fit_success': False,
+                'is_qualified': False
+            }
+
+        # フィルタリング条件適用（静的関数版）
+        is_qualified = _apply_filtering_static(result)
+
+        # 窓結果を返却
+        return {
+            'window_size': window_size,
+            'window_start_idx': n_total - window_size,
+            'window_end_idx': n_total - 1,
+            'fit_success': True,
+            'is_qualified': is_qualified,
+            **result  # tc, beta, omega, phi, A, B, C, r2, residuals
+        }
+
+    except Exception as e:
+        return {
+            'window_size': window_size,
+            'window_start_idx': n_total - window_size,
+            'window_end_idx': n_total - 1,
+            'fit_success': False,
+            'is_qualified': False,
+            'error': str(e)
+        }
+
+
+def _apply_filtering_static(result: Dict[str, float]) -> bool:
+    """
+    静的フィルタリング関数（multiprocessing.Pool用）
+
+    ⚠️⚠️⚠️ CRITICAL: CustomFCOEngine._apply_filtering_conditions() と完全一致必須 ⚠️⚠️⚠️
+
+    【科学的精度保証】
+    - 条件は CustomFCOEngine のクラス定数と完全一致
+    - LPPL_BOUNDS も同一のグローバル定数を使用
+    - 既存実装と同一のロジック
+
+    【条件】
+    1. beta ∈ [0.3, 0.7]
+    2. omega ∈ [5.0, 10.0]
+    3. R² > 0.5
+    4. tc > 1.0
+    5. 境界値張り付きなし
+
+    Args:
+        result: フィッティング結果
+
+    Returns:
+        適格判定（True/False）
+    """
+    # CustomFCOEngine のクラス定数と完全一致
+    FILTER_BETA_MIN = 0.3
+    FILTER_BETA_MAX = 0.7
+    FILTER_OMEGA_MIN = 5.0
+    FILTER_OMEGA_MAX = 10.0
+    FILTER_R2_MIN = 0.5
+    FILTER_TC_MIN = 1.0
+
+    # 基本的な範囲チェック
+    is_qualified = (
+        FILTER_BETA_MIN <= result['beta'] <= FILTER_BETA_MAX and
+        FILTER_OMEGA_MIN <= result['omega'] <= FILTER_OMEGA_MAX and
+        result['r2'] > FILTER_R2_MIN and
+        result['tc'] > FILTER_TC_MIN
+    )
+
+    if not is_qualified:
+        return False
+
+    # 境界値張り付きチェック
+    has_adhesion = check_boundary_adhesion(result, LPPL_BOUNDS)
+    if has_adhesion:
+        return False
+
+    return True

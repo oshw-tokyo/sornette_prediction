@@ -177,6 +177,140 @@ print("【可視化】")
 print("-" * 80)
 print("プロット生成中...")
 
+# ============================================================================
+# プロット1: 最良R²フィッティングの時系列プロット（Phase 1スタイル）
+# ============================================================================
+if result.qualified_fits > 0:
+    print("【プロット1: 最良R²フィッティング時系列】")
+
+    # 最良R²フィッティングを抽出
+    qualified_results = [w for w in result.window_results if w.get('is_qualified', False)]
+    best_fit = max(qualified_results, key=lambda x: x['r2'])
+
+    print(f"  最良R²: {best_fit['r2']:.4f}")
+    print(f"  窓サイズ: {best_fit['window_size']}日")
+    print(f"  tc: {best_fit['tc']:.4f}")
+    print(f"  beta: {best_fit['beta']:.4f}, omega: {best_fit['omega']:.4f}")
+    print()
+
+    # 最良フィッティングの窓データを準備
+    best_window_size = best_fit['window_size']
+    best_window_prices = prices[-best_window_size:]
+
+    from core.fitting.lppl_utils import prepare_normalized_data
+    t_best, log_prices_norm_best = prepare_normalized_data(best_window_prices)
+
+    # 最良フィッティング曲線を生成（正規化対数価格空間）
+    y_pred_best = logarithm_periodic_func(
+        t_best,
+        best_fit['tc'],
+        best_fit['beta'],
+        best_fit['omega'],
+        best_fit['phi'],
+        best_fit['A'],
+        best_fit['B'],
+        best_fit['C']
+    )
+
+    # 実価格に変換（正規化を元に戻す）
+    log_prices_original_best = np.log(best_window_prices)
+    log_prices_fitted_best = y_pred_best + log_prices_original_best[0]
+    fitted_prices_best = np.exp(log_prices_fitted_best)
+
+    # 最良窓の日付範囲を取得
+    best_window_start_idx = len(df_analysis) - best_window_size
+    fitting_dates_best = df_analysis.index[best_window_start_idx:]
+
+    # 未来予測部分を計算（基準日からtcまで）
+    tc_normalized_best = best_fit['tc']
+    future_t_best = np.linspace(1.0, tc_normalized_best, 100)
+
+    future_log_pred_best = logarithm_periodic_func(
+        future_t_best,
+        best_fit['tc'], best_fit['beta'], best_fit['omega'], best_fit['phi'],
+        best_fit['A'], best_fit['B'], best_fit['C']
+    )
+    future_log_prices_best = future_log_pred_best + log_prices_original_best[0]
+    future_prices_best = np.exp(future_log_prices_best)
+
+    # 未来時刻を実日付に変換
+    future_days_best = (future_t_best - 1.0) * best_window_size
+    future_dates_best = [analysis_basis_date + timedelta(days=d) for d in future_days_best]
+
+    # 予測クラッシュ日（最良フィッティング基準）
+    tc_days_beyond_best = (tc_normalized_best - 1.0) * best_window_size
+    predicted_crash_date_best = analysis_basis_date + timedelta(days=tc_days_beyond_best)
+    prediction_error_days_best = abs((predicted_crash_date_best - crash_date).days)
+
+    # 色盲対応カラーパレット (Okabe-Ito color universal design)
+    COLOR_ACTUAL = '#0173B2'      # 青: 実データ
+    COLOR_FIT = '#DE8F05'         # オレンジ: フィッティング
+    COLOR_PREDICTION = '#CC78BC'  # ピンク: 予測（Future）
+    COLOR_CRASH = '#029E73'       # 緑: Black Monday
+    COLOR_TC = '#D55E00'          # 朱色: tc（Critical Time）
+    COLOR_BASIS = '#808080'       # 灰色: Analysis Basis Date
+
+    # 2段プロット: 上段=時系列、下段=残差
+    fig1, (ax1_ts, ax2_ts) = plt.subplots(2, 1, figsize=(14, 10))
+
+    # 上段: 価格フィッティング（クラッシュ後データも表示）
+    all_dates = df_all.index
+    all_prices = df_all['Close'].values
+
+    # プロット: 実データ（全期間）
+    ax1_ts.plot(all_dates, all_prices, color=COLOR_ACTUAL, linewidth=1.5, alpha=0.7, label='Actual NASDAQ (Full Period)')
+
+    # プロット: フィッティング（過去データ）
+    ax1_ts.plot(fitting_dates_best, fitted_prices_best, color=COLOR_FIT, linewidth=2.5, label='LPPL Fit (Historical)')
+
+    # プロット: 予測（未来データ）
+    ax1_ts.plot(future_dates_best, future_prices_best, color=COLOR_PREDICTION, linestyle='-', linewidth=2.5, label='LPPL Prediction (Future)')
+
+    # ブラックマンデーをマーク
+    ax1_ts.axvline(crash_date, color=COLOR_CRASH, linestyle='--', linewidth=2, alpha=0.8, label='Black Monday (Actual)')
+
+    # 予測クラッシュ日（tc）をマーク
+    ax1_ts.axvline(predicted_crash_date_best, color=COLOR_TC, linestyle=':', linewidth=2, alpha=0.8, label=f'tc (Critical Time) = {tc_normalized_best:.3f}')
+
+    # 解析基準日をマーク
+    ax1_ts.axvline(analysis_basis_date, color=COLOR_BASIS, linestyle='-.', linewidth=2, alpha=0.6, label='Analysis Basis Date')
+
+    ax1_ts.set_ylabel('NASDAQ Composite Index', fontsize=12)
+    ax1_ts.set_title(f'Phase 2 Best Fit: 1987 Black Monday LPPL Prediction (R²={best_fit["r2"]:.4f}, Window={best_window_size}d, Error={prediction_error_days_best}d)',
+                     fontsize=14, fontweight='bold')
+    ax1_ts.legend(loc='upper left', fontsize=9, framealpha=0.9)
+    ax1_ts.grid(True, alpha=0.3)
+
+    # 統計情報表示
+    info_text_best = f'R² = {best_fit["r2"]:.4f}\nbeta = {best_fit["beta"]:.3f}\nomega = {best_fit["omega"]:.2f}\nWindow Size = {best_window_size} days\nPrediction Error = {prediction_error_days_best} days'
+    ax1_ts.text(0.02, 0.28, info_text_best, transform=ax1_ts.transAxes,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.85),
+                fontsize=10)
+
+    # 下段: 残差分析（対数価格空間）
+    residuals_best = log_prices_norm_best - y_pred_best
+    ax2_ts.plot(fitting_dates_best, residuals_best, 'green', linewidth=1, alpha=0.7, label='Residuals')
+    ax2_ts.axhline(0, color='black', linestyle='-', alpha=0.5)
+    ax2_ts.set_ylabel('Residuals (Log Price Space)', fontsize=12)
+    ax2_ts.set_title('Residual Analysis', fontsize=12)
+    ax2_ts.legend()
+    ax2_ts.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    # 保存
+    plot_dir = Path('plots/crash_prediction/')
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    filename_best = plot_dir / '1987_custom_fco_phase2_best_fit_timeseries.png'
+    plt.savefig(filename_best, dpi=300, bbox_inches='tight')
+    print(f"✅ 最良フィッティングプロット保存: {filename_best}")
+    print()
+
+# ============================================================================
+# プロット2: DS-LPPLS Confidence推移 + tc分布（既存プロット）
+# ============================================================================
+print("【プロット2: DS-LPPLS Confidence推移 + tc分布】")
+
 # 2段プロット: 上段=DS-LPPLS Confidence推移、下段=tc分布
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
 
@@ -242,14 +376,11 @@ else:
 plt.tight_layout()
 
 # 保存
-plot_dir = Path('plots/crash_prediction/')
-plot_dir.mkdir(parents=True, exist_ok=True)
 filename = plot_dir / '1987_custom_fco_phase2_validation.png'
 plt.savefig(filename, dpi=300, bbox_inches='tight')
-print(f"✅ プロット保存: {filename}")
+print(f"✅ DS-LPPLS Confidenceプロット保存: {filename}")
+print()
 
-# GUIに表示（ターミナル実行時はコメントアウト）
-# plt.show()
 print("✅ プロット生成完了（GUIスキップ、ファイルに保存済み）")
 print()
 
