@@ -7,9 +7,10 @@
 
 ### I122: 🔴 FCO実装の根本的誤り - Nested構造による287倍の過剰計算
 **作成日**: 2025-01-15
+**解決日**: 2025-10-11
 **優先度**: 🔴 Critical
 **担当**: FCOエンジン開発
-**状態**: 🚨 緊急対応中
+**状態**: ✅ 解決済み（Issue I123へ移行）
 
 **内容**:
 FCO分析エンジン（`core/fitting/fco_engine.py`）が`compute_nested_fits()`を使用しており、FCO標準手法から大きく逸脱。
@@ -59,14 +60,104 @@ Boulder LPPLS公式実装との比較完了。主な発見:
 3. ✅ Damping計算式の修正（FCO標準式の実装）（2025-01-15 03:00）
 4. ✅ 単体テスト: 126窓が正しく生成されることを確認（2025-01-15 03:00）
 5. ✅ 論文再現テスト実行（1987年ブラックマンデー）（2025-01-15 03:30）
-6. 🔄 **新Issue I123作成**: Boulder LPPLSフィッティング最適化問題（優先対応）
-7. ⏳ 修正版での再解析実行（I123解決後）
+6. ✅ Log変換バグ修正 + データベースフォールバック実装（2025-10-11 02:00）
+7. ✅ 保護的コメント追加（Boulder LPPLS依存関係明示）（2025-10-11 02:30）
+8. ✅ Git commit & GitHub push完了（2025-10-11 03:00）
+9. 🔄 **Issue I123作成**: Boulder LPPLSフィッティング最適化問題（次の優先対応）
+
+**解決サマリー（2025-10-11）**:
+- ✅ Nested構造を廃止し、FCO標準の固定endpointループに修正
+- ✅ Damping計算式をFCO標準式に修正
+- ✅ Log変換の自動判定機能を実装
+- ✅ データベースフォールバック機能を実装
+- ✅ 126窓が正しく生成されることを確認
+- ✅ 実装構造がFCO標準に準拠することを確認
+- ⏳ 1987年検証: Confidence=0%（Issue I123で対応）
+
+**Git Commit**: `02a129e` - "🔧 Fix critical FCO implementation errors (Issue I122)"
 
 **参考資料**:
 - FCO標準仕様: `docs/fco_upgrade_v2/foundation/ds_lppls_indicators_detailed_specification.md`
 - 実装比較文書: `docs/fco_upgrade_v2/foundation/comparison_fco_vs_current_implementation.md`
 - 多重窓解説: `docs/fco_upgrade_v2/foundation/multi_window_fitting_explanation.md`
 - Boulder LPPLS: https://github.com/Boulder-Investment-Technologies/lppls
+
+---
+
+### I123: 🔴 Boulder LPPLSフィッティング最適化パラメータ調整
+**作成日**: 2025-10-11
+**優先度**: 🔴 Critical
+**担当**: FCOエンジン開発
+**状態**: 🔍 調査中
+**前提**: Issue I122解決済み（実装構造はFCO標準準拠）
+
+**内容**:
+FCO実装構造の修正後も、1987年ブラックマンデー検証でDS-LPPLS Confidence=0%となる。
+実装構造は正しいが、Boulder LPPLSのフィッティング最適化パラメータが適切に収束していない。
+
+**問題の詳細**:
+- **DS-LPPLS Confidence**: 0.0%（期待: >30%）
+- **実装構造**: ✅ 正常（126窓、固定endpoint、FCO標準Damping式）
+- **データ**: ✅ 正常（1971-1988年、1000日分）
+- **根本原因**: Boulder LPPLS `fit()`の最適化パラメータが不適切
+
+**統計データ（1987年データでの分析）**:
+```
+総窓数: 110窓（データ不足により一部窓がスキップ）
+適格フィット: 0窓
+
+FCOフィルタリング条件達成率:
+- Damping >= 1.0:        2/110 (1.8%)  ← **最大のボトルネック**
+- 0.1 <= m <= 0.9:       53/110 (48%)
+- 2.0 <= ω <= 25.0:      101/110 (92%)
+- tc > t2（未来のtc）:   68/110 (62%)
+```
+
+**原因分析**:
+1. **Dampingが極端に小さい**: 大多数の窓でdamping < 0.5
+   - FCO基準（>= 1.0）を満たすのは1.8%のみ
+2. **ωが小さすぎる**: 一部の窓でω < 2.0（境界条件違反）
+3. **tcが過去**: 約38%の窓でtc <= t2（過去のtc）
+
+これらはBoulder LPPLS `fit()`の最適化が局所解に陥っていることを示唆。
+
+**Boulder LPPLS `fit()`パラメータ（現在の設定）**:
+```python
+lppls_model.fit(
+    max_searches=25,
+    minimizer='Nelder-Mead',
+    obs=window_observations
+)
+```
+
+**調整候補**:
+1. **max_searches**: 25 → 50-100（探索回数を増やす）
+2. **minimizer**: 'Nelder-Mead' → 他のアルゴリズム検討
+   - 'L-BFGS-B'（勾配ベース）
+   - 'Powell'
+   - 'SLSQP'（制約付き最適化）
+3. **初期値・境界条件**: Boulder LPPLSのデフォルト値を調査・調整
+4. **フィッティング前処理**: データ正規化・スケーリング
+
+**次のアクション**:
+1. Boulder LPPLSのドキュメント・コードを精査し、最適化パラメータの推奨設定を確認
+2. 異なるminimizerアルゴリズムでのテスト実行
+3. max_searchesを段階的に増やしてテスト
+4. 初期値・境界条件の調整を検討
+5. 1987年データで再検証
+
+**重要な注意事項**:
+⚠️ Boulder LPPLSのコアロジックは変更しない（MIT License準拠）
+⚠️ パラメータ調整のみで対応
+⚠️ 調整後は必ず論文再現テストで検証
+
+**調査ファイル**:
+- `workspace_for_claude/debug_fco_1987_fits_output.txt` - 詳細な窓別分析結果
+- `workspace_for_claude/debug_fco_1987_fits.py` - デバッグスクリプト
+
+**参考資料**:
+- Boulder LPPLS: https://github.com/Boulder-Investment-Technologies/lppls
+- Boulder LPPLS Examples: https://github.com/Boulder-Investment-Technologies/lppls/tree/master/examples
 
 ---
 
