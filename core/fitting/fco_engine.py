@@ -99,12 +99,79 @@ class FCOEngine:
     WINDOW_MAX = 750  # 最大窓サイズ（営業日）
     WINDOW_STEP = 5   # 窓の刻み幅
     
-    # フィルタリング条件（FCO Filtering Condition 1）
-    FILTER_DAMPING_MIN = 1.0
-    FILTER_M_MIN = 0.1
-    FILTER_M_MAX = 0.9
-    FILTER_OMEGA_MIN = 2.0
-    FILTER_OMEGA_MAX = 25.0
+    # ========================================================================
+    # FCO Filtering Condition 1 - フィルタリング条件（Boulder LPPLS完全準拠）
+    # ========================================================================
+    # 【重要】科学的信頼性に関わる設定 - むやみに変更しないこと
+    #
+    # 以下の閾値はBoulder LPPLS（FCO準拠実装）の標準値に**完全準拠**します。
+    # 出典: /home/no-rules/.local/lib/python3.10/site-packages/lppls/lppls.py
+    #        - Line 250-254: デフォルトフィルタリング条件
+    #        - Line 293-318: フィルタリングロジック実装
+    #        - Line 619-623: Oscillation & Damping計算式
+    #
+    # 【設定根拠】(Issue I124調査結果 2025-10-11)
+    # 1. Damping (D) 閾値: 0.5 (Boulder標準)
+    #    - 計算式: D = m * |B| / (ω * |C|), C = sqrt(c1² + c2²)
+    #    - 科学的意味: クラッシュハザード率h(t)が非負であること
+    #    - Boulder LPPLS: Line 254 "D_min = 0.5", Line 307 "D > D_min"
+    #
+    # 2. m範囲: 0.0 - 1.0 (Boulder標準)
+    #    - べき乗指数の理論的範囲
+    #    - Boulder LPPLS: Line 251 "m_min, m_max = (0.0, 1.0)"
+    #    - 本実装: 0.0 < m < 1.0（境界値を除外、Line 298参照）
+    #
+    # 3. ω範囲: 2.0 - 15.0 (Boulder標準) ⚠️ 25.0から修正
+    #    - 対数周期振動の角周波数範囲
+    #    - Boulder LPPLS: Line 252 "w_min, w_max = (2.0, 15.0)"
+    #    - 科学的意味: 観測可能な対数周期振動の範囲
+    #
+    # 4. Oscillation (O) 閾値: 2.5 (Boulder標準) 🆕 追加
+    #    - 計算式: O = (ω / 2π) * log((tc - t1) / (tc - t2))
+    #    - 科学的意味: 窓内の対数周期振動の回数
+    #    - Boulder LPPLS: Line 253 "O_min = 2.5", Line 306 "O > O_min"
+    #
+    # 5. tc範囲条件 (Boulder標準) 🆕 根本的変更
+    #    - Boulder LPPLS: Line 293-297
+    #    - 条件: max(t2-60, t2-0.5*(t2-t1)) < tc < min(t2+252, t2+0.5*(t2-t1))
+    #    - 科学的意味:
+    #      a) 過去60日までのtcを許容（フィッティングの不確実性考慮）
+    #      b) 未来252日（約1年）までの予測を許容
+    #      c) 窓サイズの50%を前後の許容範囲とする
+    #
+    # 【Sornette論文の30日事前予測要件との関係】（重要な設計決定）
+    # - 論文要件: tcと解析日が近すぎると精度低下（フィッティング関数の発散）
+    # - 実装方針:
+    #   a) Boulder条件: 統計的に安定したフィット（過去60日〜未来252日許容）
+    #   b) Sornette要件: 予測精度保証のため tc >= t2 + 30日 を追加制約
+    #   c) 最終判定: Boulder条件 AND Sornette要件 の両方を満たす必要あり
+    # - 根拠: Boulderは事後分析も含むが、FCOは予測を目的とするため
+    #
+    # 【変更履歴】
+    # - 2025-10-11 (1): Damping閾値を1.0→0.5に変更（Boulder標準準拠）
+    # - 2025-10-11 (2): m上限を0.9→1.0に変更（Boulder標準準拠）
+    # - 2025-10-11 (3): ω上限を25.0→15.0に変更（Boulder標準完全準拠）
+    # - 2025-10-11 (4): Oscillation (O) 条件を追加（Boulder標準準拠）
+    # - 2025-10-11 (5): tc条件をBoulder範囲条件に変更（重要な修正）
+    # - 2025-10-11 (6): Sornette 30日事前予測要件を追加制約として実装（予測精度保証）
+    # ========================================================================
+    FILTER_DAMPING_MIN = 0.5    # Boulder LPPLS標準値
+    FILTER_M_MIN = 0.0          # Boulder LPPLS標準値
+    FILTER_M_MAX = 1.0          # Boulder LPPLS標準値
+    FILTER_OMEGA_MIN = 2.0      # Boulder LPPLS標準値
+    FILTER_OMEGA_MAX = 15.0     # Boulder LPPLS標準値（旧: 25.0）
+    FILTER_OSCILLATION_MIN = 2.5  # Boulder LPPLS標準値（新規追加）
+
+    # tc範囲パラメータ（Boulder LPPLS標準値）
+    TC_RANGE_PAST_DAYS = 60     # tcの過去方向許容範囲（日数）
+    TC_RANGE_FUTURE_DAYS = 252  # tcの未来方向許容範囲（日数、約1年）
+    TC_RANGE_WINDOW_RATIO = 0.5 # 窓サイズに対する許容範囲比率
+
+    # 🆕 Sornette論文の30日事前予測要件（Boulder条件への追加制約）
+    # 出典: Sornette論文 - tcと解析日が近すぎると精度低下
+    # 理由: クリティカルポイント付近でLPPLSフィッティング関数が発散するため
+    # Boulder条件（過去60日許容）とは**別に**、予測目的では未来30日以上が必要
+    MIN_TC_ADVANCE_DAYS = 30    # tc >= t2 + 30日（Sornette要件）
     
     def __init__(self, use_parallel: bool = True, max_workers: int = 8, use_enhanced_confidence: bool = True):
         """
@@ -214,15 +281,18 @@ class FCOEngine:
             window_observations = observations[:, -window_size:]
 
             try:
-                # 単一窓でフィッティング
-                lppls_model.fit(
-                    max_searches=25,
-                    minimizer='Nelder-Mead',
-                    obs=window_observations
+                # 🆕 多重試行 + tc未来制約フィルタリング
+                # Boulder LPPLSのtc初期化範囲が過去も許容するため（t2 ± 0.2Δt）、
+                # 複数回試行してtc >= t2 + MIN_TC_ADVANCE_DAYSを満たす最良フィットを選択
+                fit_params = self._fit_lppls_with_future_constraint(
+                    window_observations,
+                    max_searches=25
                 )
 
-                # フィッティング結果を取得
-                fit_params = lppls_model.coef_.copy() if hasattr(lppls_model, 'coef_') else {}
+                if fit_params is None:
+                    # tc未来制約を満たすフィットなし
+                    logger.debug(f"Window {window_size}: No future-constrained fit found")
+                    continue
 
                 # FCO形式に変換
                 t1 = len(prices) - window_size
@@ -251,7 +321,82 @@ class FCOEngine:
 
         # 結果を解析（Boulder indicators不使用）
         return self._analyze_results(None, results)
-    
+
+    def _fit_lppls_with_future_constraint(
+        self,
+        observations: np.ndarray,
+        max_searches: int = 25
+    ) -> Optional[Dict[str, float]]:
+        """
+        未来予測を保証するLPPLSフィッティング
+
+        Boulder LPPLSのtc初期化範囲が過去も許容するため（lppls.py:136で tc ∈ [t2-0.2Δt, t2+0.2Δt]）、
+        複数回試行してtc >= t2 + MIN_TC_ADVANCE_DAYSを満たす最良フィットを選択する。
+
+        根拠:
+        - Boulder LPPLS実験結果: 1000日窓でtc=955（過去44日）が頻出
+        - Sornette論文要件: tc >= t2 + 30日（フィッティング関数の発散防止）
+        - 過去の成功実装: 明示的境界条件でtc未来保証
+
+        実装戦略:
+        1. max_searches回試行（各試行でランダム初期化）
+        2. 各試行でtc >= t2 + MIN_TC_ADVANCE_DAYSをチェック
+        3. 条件を満たす中でR²最大のフィットを選択
+
+        Args:
+            observations: 2xN numpy array [timestamps, log_prices]
+            max_searches: 試行回数（デフォルト25）
+
+        Returns:
+            最良フィットパラメータ辞書、または None（適格フィットなし）
+        """
+        t2 = observations[0, -1]
+        best_fit = None
+        best_r2 = -np.inf
+
+        for attempt in range(max_searches):
+            try:
+                # 個別LPPLS instance（試行ごとに初期化→ランダム初期値）
+                lppls_model = LPPLS(observations)
+                lppls_model.fit(max_searches=1, minimizer='Nelder-Mead')
+
+                fit_params = lppls_model.coef_.copy() if hasattr(lppls_model, 'coef_') else {}
+                tc = fit_params.get('tc', 0)
+
+                # Sornette 30日要件チェック
+                if tc < t2 + self.MIN_TC_ADVANCE_DAYS:
+                    continue  # 棄却
+
+                # R²計算（フィット品質評価）
+                try:
+                    fitted_values = np.array([
+                        lppls_model.lppls(
+                            t, tc,
+                            fit_params.get('m', 0), fit_params.get('w', 0),
+                            fit_params.get('a', 0), fit_params.get('b', 0),
+                            fit_params.get('c1', 0), fit_params.get('c2', 0)
+                        )
+                        for t in observations[0, :]
+                    ])
+
+                    ss_res = np.sum((observations[1, :] - fitted_values) ** 2)
+                    ss_tot = np.sum((observations[1, :] - np.mean(observations[1, :])) ** 2)
+                    r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else -np.inf
+                except:
+                    r2 = -np.inf
+
+                # 最良フィット更新
+                if r2 > best_r2:
+                    best_r2 = r2
+                    fit_params['r2'] = r2
+                    best_fit = fit_params
+
+            except Exception as e:
+                # フィッティング失敗時はスキップ
+                continue
+
+        return best_fit
+
     def _analyze_results(self, indicators: pd.DataFrame, raw_results: List) -> FCOAnalysisResult:
         """
         分析結果を解析してFCO形式に整形
@@ -290,21 +435,48 @@ class FCOEngine:
                             c1 = fit.get('c1', 0)
                             c2 = fit.get('c2', 0)
 
-                            # FCO標準のDamping計算式
-                            # damping = m * |B| / (ω * |C|)
+                            # Boulder LPPLS標準のOscillation (O) 計算
+                            # O = (ω / 2π) * log((tc - t1) / (tc - t2))
+                            # 出典: lppls.py Line 619-620
+                            if (tc - t2) != 0 and (tc - t1) / (tc - t2) > 0:
+                                O = (w / (2.0 * np.pi)) * np.log((tc - t1) / (tc - t2))
+                            else:
+                                O = np.inf  # Boulder標準: 計算不可の場合は無限大
+
+                            # Boulder LPPLS標準のDamping (D) 計算
+                            # D = m * |B| / (ω * |C|)
                             # ここで C = sqrt(c1^2 + c2^2)
+                            # 出典: lppls.py Line 622-623
                             C = np.sqrt(c1**2 + c2**2)
                             if C != 0 and w != 0:
                                 damping = m * abs(B) / (w * abs(C))
                             else:
                                 damping = 0
-                            
-                            # FCOフィルタリング条件
+
+                            # Boulder LPPLS標準のtc範囲条件
+                            # max(t2 - 60, t2 - 0.5*(t2 - t1)) < tc < min(t2 + 252, t2 + 0.5*(t2 - t1))
+                            # 出典: lppls.py Line 293-297
+                            tc_lower = max(t2 - self.TC_RANGE_PAST_DAYS,
+                                         t2 - self.TC_RANGE_WINDOW_RATIO * (t2 - t1))
+                            tc_upper = min(t2 + self.TC_RANGE_FUTURE_DAYS,
+                                         t2 + self.TC_RANGE_WINDOW_RATIO * (t2 - t1))
+                            tc_in_range = tc_lower < tc < tc_upper
+
+                            # Sornette論文の30日事前予測要件
+                            # tcと解析日が近すぎると精度低下（フィッティング関数の発散）
+                            # Boulder条件に加えて、予測目的では tc >= t2 + 30日が必要
+                            tc_advance_sufficient = (tc - t2) >= self.MIN_TC_ADVANCE_DAYS
+
+                            # 統合フィルタリング条件（Boulder LPPLS標準 + Sornette要件）
+                            # Boulder条件: 統計的に安定したフィット
+                            # Sornette要件: 予測精度を保証する事前予測期間
                             is_qualified = (
-                                damping >= self.FILTER_DAMPING_MIN and
-                                self.FILTER_M_MIN <= m <= self.FILTER_M_MAX and
-                                self.FILTER_OMEGA_MIN <= w <= self.FILTER_OMEGA_MAX and
-                                tc > t2  # 未来のtc
+                                tc_in_range and                              # Boulder: tc範囲条件
+                                self.FILTER_M_MIN < m < self.FILTER_M_MAX and  # Boulder: m範囲
+                                self.FILTER_OMEGA_MIN < w < self.FILTER_OMEGA_MAX and  # Boulder: ω範囲
+                                O > self.FILTER_OSCILLATION_MIN and          # Boulder: Oscillation
+                                damping > self.FILTER_DAMPING_MIN and        # Boulder: Damping
+                                tc_advance_sufficient                         # Sornette: 30日事前予測要件
                             )
                             
                             # 全窓結果を保存（データベース移行戦略に従う）
@@ -313,6 +485,7 @@ class FCOEngine:
                                 'window_size': window_size,
                                 'window_start_idx': t1,
                                 'window_end_idx': t2,
+                                'oscillation': O,  # Boulder LPPLS標準指標
                                 'damping': damping,
                                 'is_qualified': is_qualified
                             }
