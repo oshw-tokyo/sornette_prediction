@@ -125,6 +125,21 @@ python workspace_for_claude/check_api_response.py     # API確認（ローカル
 
 ## 🚀 **FCO v2.1 技術スタック移行中（2025年9月14日開始）**
 
+### ⚠️ **重要な方針転換（2025-10-11）**
+
+**Boulder LPPLS準拠FCO → カスタムFCO（過去LPPL準拠）への移行決定**
+
+**経緯**:
+1. ✅ Boulder LPPLS統合実装（多重試行+tc未来制約）
+2. ✅ 1987年ブラックマンデー検証 → **0% Confidence（失敗）**
+3. ✅ 時間単位影響調査 → 時間単位の問題ではない（Boulder LPPLSアルゴリズム自体の問題）
+4. 🎯 **カスタムFCO実装**（過去LPPL準拠）へ移行決定
+
+**問題の詳細**:
+- Boulder LPPLSフィッティング: 無制約最適化 + ランダム初期値 → パラメータ発散
+- 結果: m=2.2 (範囲外: 0.0-1.0), ω=188.7 (範囲外: 2.0-15.0), R²=-1006.52
+- 過去LPPL実装: 境界付き最適化 + グリッドサーチ → 同じデータで100/100スコア達成
+
 ### 📋 **要件確認ルール（重要）**
 
 **⚠️ 実装前の必須確認事項**：
@@ -140,47 +155,71 @@ Claude Codeは実装の各段階で、要件が不明瞭な場合は
 - セキュリティ要件
 ```
 
-### 🔄 **移行状況**
+### 🔄 **カスタムFCO移行状況**
+
+**現在の実装ステータス**:
+- ✅ Boulder LPPLS多重試行+tc未来制約実装（0% Confidence、問題あり）
+- ✅ 時間単位影響調査完了（時間単位の問題ではない）
+- ✅ 科学的手法差分抽出完了（FCO vs 過去LPPL）
+- ✅ カスタムFCO移行計画策定完了
+- ⏭️ **ユーザー承認待ち** → Phase 1実装開始予定
+
+**実装ファイル**:
+- `core/fitting/fco_engine.py` - 現在の実装（Boulder LPPLS準拠、**0% Confidence問題あり**）
+- `core/fitting/custom_fco_engine.py` - 新規実装予定（過去LPPL準拠、Phase 1で作成）
+- `infrastructure/database/fco_results_database.py` - FCO専用DB設計済み
+- **データベース方針**: 全126窓のデータを保存（変更なし）
+
+### 📚 **カスタムFCO移行計画・調査結果**
+
+**中心文書**:
+- **`docs/progress_management/MIGRATION_PLAN_PAST_LPPL_TO_CUSTOM_FCO.md`** - 📌 **最優先参照**
+  - Phase 1: 過去実装復元・単一窓検証（2-3日）
+  - Phase 2: 多重窓解析統合（1週間）
+  - Phase 3: DB/フロントエンド統合（2-3日）
+  - Phase 4: 最終検証・最適化（3-5日）
+
+**科学的根拠**:
+- `docs/progress_management/FCO_VS_PAST_LPPL_SCIENTIFIC_DIFFERENCES.md` - 科学的手法差分
+  - 時間正規化: [0, 1] vs インデックス
+  - 最適化: curve_fit (境界付き) vs minimize (無制約)
+  - 初期値: グリッドサーチ (1000回) vs ランダム (25回)
+- `archive/src_pre_migration_backup/fitting/fitter.py` - 過去の成功実装（100/100スコア）
+
+**調査結果**:
+- `docs/progress_management/TIME_UNIT_INVESTIGATION_RESULT.md` - 時間単位調査
+  - 結論: 時間単位の問題ではない（Boulder LPPLSアルゴリズム自体の問題）
+- `docs/progress_management/FCO_IMPROVEMENT_IMPLEMENTATION_SUMMARY.md` - 実装サマリー
+- `docs/progress_management/ALTERNATIVE_SOLUTION_PAST_LPPL_TO_FCO.md` - 代替策提案
+- `docs/progress_management/ISSUE_I124_FCO_IMPLEMENTATION_VERIFICATION.md` - Issue管理
+
+**旧FCO計画（Boulder LPPLS準拠、⚠️ 非推奨）**:
+- `docs/fco_upgrade_v2/archives/deprecated_boulder_plans/` - アーカイブ済み
+  - `comparison_fco_vs_current_implementation.md` - 旧比較文書（非推奨）
+  - `fco_implementation_gap_analysis.md` - 旧ギャップ分析（非推奨）
+- ⚠️ **これらの文書は参照しないこと**（カスタムFCO移行のため）
+
+### 🎯 **フロントエンド実装計画（継続）**
 
 **FCO v2.0 (Streamlit)** → **FCO v2.1 (React+FastAPI)**への移行作業中
 
-**v2.0 実装済み機能**：
-1. **DS-LPPLS Confidence/Trust指標の実装** ✅ 完了
-2. **多重時間窓分析（126窓）** ✅ 実装済み
-3. **Boulder lppls統合** ✅ MITライセンス確認済み
-4. **1987年ブラックマンデー検証** ✅ 100/100スコア達成
-
-**v2.1 移行計画**：
+**v2.1 移行計画**:
 - Week 1: FastAPI バックエンド実装
 - Week 2: React フロントエンド構築
 - Week 3: データ可視化コンポーネント
 - Week 4: 認証・デプロイメント
 
-**実装ステータス**：
-- `core/fitting/fco_engine.py` - FCOエンジン実装済み
-- `infrastructure/database/fco_results_database.py` - FCO専用DB設計済み
-- `core/validation/crash_validators/fco_black_monday_1987_validator.py` - 検証済み
-- **データベース方針**: 全126窓のデータを保存、後から最適化
+**フロントエンド文書（有効）**:
+- `docs/fco_upgrade_v2/v2.1_webapp/fco_v2.1_architecture.md` - React+FastAPI アーキテクチャ
+- `docs/fco_upgrade_v2/v2.1_webapp/fco_dashboard_integration_guide.md` - フロントエンド統合ガイド
+- `docs/fco_upgrade_v2/data_engine/` - データエンジン設計（汎用）
 
-**詳細仕様書**：
-- `docs/fco_upgrade_v2/` - FCOレベルアップグレード文書群
-  - `ds_lppls_indicators_detailed_specification.md` - DS-LPPLS指標詳細
-  - `technical_implementation_plan.md` - 技術実装計画
-  - `implementation_strategy_recommendation.md` - Boulder lppls活用戦略
-  - `repository_management_advice.md` - リポジトリ管理戦略
-  - `multi_window_fitting_explanation.md` - 複数ウィンドウ分析説明
-  - **`comparison_fco_vs_current_implementation.md`** - FCO方式と現在の実装の詳細比較 🆕
-  - **`fco_database_migration_strategy.md`** - FCOデータベース移行戦略（全窓保存方式）🆕
-  - **`daily_analysis_implementation_plan.md`** - 日次分析システム実装計画 🆕
+**注意**: バックエンドAPI変更なし（インターフェース互換性維持）
+
+**商用サービス化文書（継続）**:
 - `docs/service_commercialization/` - 商用サービス化文書
   - **`sornette-legal-compliance-guide.md`** - 法的コンプライアンスガイド 🔒
   - **`legally_compliant_service_specification.md`** - 法的準拠版仕様書（実装はこれに従う）✅
-  - `implementation_gap_analysis.md` - 現在実装と法的要件のギャップ分析 📊
-  - `lppl_service_specification_v2.md` - 初期構想版（参考のみ）
-  - `lppl_service_specification_simplified.md` - 簡略版（要修正）
-
-**参考実装**：
-- Boulder Investment Technologies: https://github.com/Boulder-Investment-Technologies/lppls (MIT License, 417+ stars)
 
 ### 🔒 保護対象
 - `core/validation/crash_validators/black_monday_1987_validator.py` （100/100スコア維持必須）
