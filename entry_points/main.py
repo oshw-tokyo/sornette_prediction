@@ -105,18 +105,18 @@ def run_analysis(symbol, period='1y', use_fco=False):
     else:
         # 個別銘柄解析
         if use_fco:
-            # FCOエンジンを使用した解析
+            # FCOエンジンを使用した解析（カスタムFCO版）
             try:
-                from core.fitting.fco_engine import FCOEngine
+                from core.fitting.custom_fco_engine import CustomFCOEngine
                 from infrastructure.database.fco_results_database import FCOResultsDatabase
                 from infrastructure.data_sources.unified_data_client import UnifiedDataClient
-                
-                print(f"🎯 FCO個別銘柄解析: {symbol}")
-                
+
+                print(f"🎯 FCO個別銘柄解析: {symbol} (カスタムFCOエンジン)")
+
                 # データ取得
                 from datetime import datetime, timedelta
                 data_client = UnifiedDataClient()
-                
+
                 # 期間をパース
                 end_date = datetime.now()
                 if period == '1y':
@@ -129,18 +129,18 @@ def run_analysis(symbol, period='1y', use_fco=False):
                     start_date = end_date - timedelta(days=1825)
                 else:
                     start_date = end_date - timedelta(days=365)
-                
+
                 # データ取得（タプル形式: (DataFrame, source_name)）
                 data, source = data_client.get_data_with_fallback(
-                    symbol, 
+                    symbol,
                     start_date.strftime('%Y-%m-%d'),
                     end_date.strftime('%Y-%m-%d')
                 )
-                
+
                 if data is None:
                     print(f"❌ データ取得失敗: {symbol}")
                     return False
-                    
+
                 # DataFrameから価格データを抽出
                 if 'close' in data.columns:
                     prices = data['close'].values
@@ -151,32 +151,38 @@ def run_analysis(symbol, period='1y', use_fco=False):
                 else:
                     # 最初の数値列を使用
                     prices = data.iloc[:, 0].values
-                    
+
                 metadata = {
                     'source': source,
                     'start_date': start_date.strftime('%Y-%m-%d'),
                     'end_date': end_date.strftime('%Y-%m-%d')
                 }
-                
+
                 if prices is None or len(prices) < 200:
                     print(f"❌ データ不足: {symbol} ({len(prices) if prices is not None else 0}点)")
                     return False
-                
-                # FCO分析実行
-                engine = FCOEngine(use_parallel=True, max_workers=4)
-                result = engine.compute_ds_lppls_confidence(prices)
-                
+
+                # カスタムFCO分析実行（窓並列化: 2.86倍高速化）
+                engine = CustomFCOEngine(n_tries=10)
+                result = engine.compute_ds_lppls_confidence_parallel(prices, n_workers=8)
+
+                # バブルタイプ計算（カスタムFCO: confidence > 0.3 で positive）
+                bubble_type = 'positive' if result.ds_lppls_confidence > 0.3 else 'negative'
+
+                # ds_lppls_confidence_neg取得（metadataから）
+                ds_lppls_confidence_neg = result.metadata.get('ds_lppls_confidence_neg', 0.0)
+
                 # 結果表示
                 print(f"\n--- FCO分析結果 ---")
                 print(f"DS-LPPLS Confidence (正): {result.ds_lppls_confidence:.2%}")
-                print(f"DS-LPPLS Confidence (負): {result.ds_lppls_confidence_neg:.2%}")
-                print(f"バブルタイプ: {result.bubble_type}")
+                print(f"DS-LPPLS Confidence (負): {ds_lppls_confidence_neg:.2%}")
+                print(f"バブルタイプ: {bubble_type}")
                 
                 if result.predicted_tc:
                     print(f"予測臨界時間: {result.predicted_tc:.3f}")
                     print(f"標準偏差: {result.tc_std:.3f}")
                 
-                # データベース保存
+                # データベース保存（カスタムFCO対応）
                 db = FCOResultsDatabase()
                 db_result = {
                     'symbol': symbol,
@@ -186,15 +192,15 @@ def run_analysis(symbol, period='1y', use_fco=False):
                     'data_period_end': metadata.get('end_date'),
                     'data_points': len(prices),
                     'ds_lppls_confidence': result.ds_lppls_confidence,
-                    'ds_lppls_confidence_neg': result.ds_lppls_confidence_neg,
-                    'bubble_type': result.bubble_type,
+                    'ds_lppls_confidence_neg': ds_lppls_confidence_neg,
+                    'bubble_type': bubble_type,
                     'predicted_tc': result.predicted_tc,
                     'tc_std': result.tc_std,
-                    'scenario_probability': result.scenario_probability,
-                    'num_windows': result.metadata.get('num_windows', 0),
-                    'num_qualified_fits': result.metadata.get('qualified_fits', 0),
-                    'filter_m_range': [0.1, 0.9],
-                    'filter_omega_range': [2.0, 25.0],
+                    'scenario_probability': None,  # カスタムFCOでは未実装
+                    'num_windows': result.total_windows,
+                    'num_qualified_fits': result.qualified_fits,
+                    'filter_m_range': [0.3, 0.7],  # カスタムFCOのbeta範囲
+                    'filter_omega_range': [5.0, 10.0],  # カスタムFCOのomega範囲
                     'window_results': result.window_results,  # 全窓結果を渡す
                     'metadata': result.metadata
                 }
