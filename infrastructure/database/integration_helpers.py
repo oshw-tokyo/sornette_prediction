@@ -41,9 +41,9 @@ class AnalysisResultSaver:
         best = result.get_selected_result()
         if not best:
             raise ValueError("保存可能な分析結果がありません")
-        
-        # tc値から予測日を計算
-        predicted_date = self._calculate_predicted_date(best.tc, data.index[-1])
+
+        # tc値から予測日を計算（Issue I128修正: first_date追加）
+        predicted_date = self._calculate_predicted_date(best.tc, data.index[0], data.index[-1])
         days_to_crash = (predicted_date - datetime.now()).days if predicted_date else None
         
         # データベース保存用のディクショナリ作成
@@ -107,43 +107,36 @@ class AnalysisResultSaver:
         print(f"📊 可視化データ保存: ID={viz_id}, Type={chart_type}")
         return viz_id
     
-    def _calculate_predicted_date(self, tc: float, last_date: pd.Timestamp) -> Optional[datetime]:
+    def _calculate_predicted_date(
+        self,
+        tc: float,
+        first_date: pd.Timestamp,
+        last_date: pd.Timestamp
+    ) -> Optional[datetime]:
         """
-        tc値から予測日時を計算（時間精度対応）
-        
+        tc値から予測日時を計算（フィッティング期間考慮版）
+
+        【修正内容 (Issue I128)】
+        - first_date（フィッティング開始日）を追加
+        - core.fitting.lppl_utils.convert_tc_to_date() を使用
+        - フィッティング期間の実際の暦日数を反映
+        - 窓ごとに異なる変換比率を適用
+
         Args:
             tc: tc値（正規化時間）
-            last_date: データの最終日
-            
+            first_date: フィッティング期間の開始日
+            last_date: フィッティング期間の終了日
+
         Returns:
             datetime: 予測日時（時間精度まで含む）
+
+        Scientific Basis:
+            LPPL時間正規化に基づく変換
+            Issue: I128
+            実装日: 2025-10-12
         """
-        try:
-            if tc > 1.0:
-                # データ期間を超えた予測（将来）
-                days_beyond = (tc - 1.0) * 365  # 1年を基準とした近似
-                
-                # 日数と時間に分離（時間精度対応）
-                full_days = int(days_beyond)
-                fractional_day = days_beyond - full_days
-                hours = fractional_day * 24
-                
-                # pandas.Timestampをdatetimeに変換
-                if hasattr(last_date, 'to_pydatetime'):
-                    base_datetime = last_date.to_pydatetime()
-                else:
-                    base_datetime = last_date
-                
-                # 時間精度まで含めた予測日時を計算
-                predicted_datetime = base_datetime + timedelta(days=full_days, hours=hours)
-                
-                return predicted_datetime
-            else:
-                # データ期間内の予測（過去）- 通常はクラッシュ予測では使用されない
-                return None
-        except Exception as e:
-            print(f"⚠️ tc値から日時計算エラー: tc={tc}, error={str(e)}")
-            return None
+        from core.fitting.lppl_utils import convert_tc_to_date
+        return convert_tc_to_date(tc, first_date, last_date, include_time=True)
     
     def _extract_quality_metadata(self, candidate: FittingCandidate) -> Dict[str, Any]:
         """品質評価メタデータの抽出"""
@@ -203,8 +196,8 @@ class AnalysisResultSaver:
         if not best:
             raise ValueError("No valid analysis result to save")
         
-        # Calculate predicted date from tc
-        predicted_date = self._calculate_predicted_date(best.tc, pd.to_datetime(basis_date))
+        # Calculate predicted date from tc (Issue I128修正: first_date追加)
+        predicted_date = self._calculate_predicted_date(best.tc, data.index[0], pd.to_datetime(basis_date))
         days_to_crash = (predicted_date - datetime.now()).days if predicted_date else None
         
         # Create database record with schedule metadata

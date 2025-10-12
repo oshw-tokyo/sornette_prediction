@@ -11,7 +11,12 @@ LPPL (Log-Periodic Power Law) 数式・ユーティリティ関数
 """
 
 import numpy as np
-from typing import Tuple
+import pandas as pd
+from typing import Tuple, Union, Optional
+from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def logarithm_periodic_func(
@@ -146,3 +151,100 @@ def prepare_normalized_data(
     log_prices_normalized = log_prices - log_prices[0]
 
     return t, log_prices_normalized
+
+
+def convert_tc_to_date(
+    tc: float,
+    first_date: Union[datetime, pd.Timestamp, str],
+    last_date: Union[datetime, pd.Timestamp, str],
+    include_time: bool = True
+) -> Optional[datetime]:
+    """
+    tc値から予測日時を計算（フィッティング期間考慮版）
+
+    【アルゴリズム】
+    - 時間正規化: t ∈ [0, 1]
+      - t=0: first_date (フィッティング開始日)
+      - t=1: last_date (フィッティング終了日)
+    - tc > 1.0: 未来予測
+    - tcの暦日換算: (tc - 1.0) × フィッティング期間の暦日数
+
+    【修正内容 (Issue I128)】
+    ❌ 修正前: days_beyond = (tc - 1.0) * 365  # 固定値
+    ✅ 修正後: days_beyond = (tc - 1.0) * fitting_period_calendar_days
+
+    【科学的根拠】
+    - LPPL時間正規化に基づく変換
+    - tcは正規化時間 [0, 1] を基準とする
+    - フィッティング期間を正しく反映する必要がある
+    - 窓サイズが異なる場合、同じtc値でも異なる予測日になる
+
+    【検証結果（2025-10-12）】
+    | 窓サイズ | フィッティング期間 | 実際の暦日数 | tc値 | 修正前（365日固定） | 修正後（期間考慮） | 誤差改善 |
+    |---------|-----------------|------------|------|------------------|----------------|----------|
+    | 750営業日 | 2021-10-19 ~ 2024-10-19 | 1096日 | 1.2 | 2024-12-31 | 2025-05-26 | 147日 |
+    | 125営業日 | 2024-04-19 ~ 2024-10-19 | 183日 | 1.2 | 2024-12-31 | 2024-11-24 | 36日 |
+    | 1987年 | 1983-11-03 ~ 1987-10-19 | 1446日 | 1.2128 | 1988-01-04 | 1988-08-21 | 231日 |
+
+    Args:
+        tc: 正規化tc値（tc > 1.0で未来予測）
+        first_date: フィッティング期間の開始日
+        last_date: フィッティング期間の終了日
+        include_time: 時間精度まで含めるか（デフォルト: True）
+
+    Returns:
+        予測日時（tc <= 1.0の場合はNone）
+
+    Examples:
+        >>> # 750営業日窓（2021-10-19 ~ 2024-10-19, 1096暦日）
+        >>> convert_tc_to_date(1.2, '2021-10-19', '2024-10-19')
+        datetime.datetime(2025, 5, 26, ...)
+
+        >>> # 125営業日窓（2024-04-19 ~ 2024-10-19, 183暦日）
+        >>> convert_tc_to_date(1.2, '2024-04-19', '2024-10-19')
+        datetime.datetime(2024, 11, 24, ...)
+
+    Scientific Basis:
+        LPPL時間正規化に基づく変換
+        実装元: workspace_for_claude/verify_tc_conversion_problem.py:correct_tc_conversion()
+        Issue: I128
+        実装日: 2025-10-12
+    """
+    # 日付型への変換
+    if isinstance(first_date, str):
+        first_date = pd.to_datetime(first_date)
+    if isinstance(last_date, str):
+        last_date = pd.to_datetime(last_date)
+
+    # pandas.Timestamp → datetime 変換
+    if hasattr(first_date, 'to_pydatetime'):
+        first_date = first_date.to_pydatetime()
+    if hasattr(last_date, 'to_pydatetime'):
+        last_date = last_date.to_pydatetime()
+
+    # tc <= 1.0 は過去（通常は使用されない）
+    if tc <= 1.0:
+        logger.warning(f"tc={tc:.4f} <= 1.0 (not a future prediction)")
+        return None
+
+    # フィッティング期間の実際の暦日数
+    fitting_period_calendar_days = (last_date - first_date).days
+
+    # tcが正規化時間を超えた分を暦日に変換
+    # tc=1.0 が last_date に対応
+    # tc=2.0 が last_date + fitting_period_calendar_days に対応
+    days_beyond = (tc - 1.0) * fitting_period_calendar_days
+
+    if include_time:
+        # 日数と時間に分離（時間精度対応）
+        full_days = int(days_beyond)
+        fractional_day = days_beyond - full_days
+        hours = fractional_day * 24
+
+        # 時間精度まで含めた予測日時を計算
+        predicted_datetime = last_date + timedelta(days=full_days, hours=hours)
+    else:
+        # 日付のみ
+        predicted_datetime = last_date + timedelta(days=days_beyond)
+
+    return predicted_datetime
