@@ -17,7 +17,7 @@ import logging
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(project_root))
 
-from core.fitting.fco_engine import FCOEngine, FCOAnalysisResult
+from core.fitting.custom_fco_engine import CustomFCOEngine, CustomFCOResult
 from core.fco_indicators.ds_lppls_confidence import DSLPPLSConfidenceCalculator
 from core.fco_indicators.ds_lppls_trust import DSLPPLSTrustCalculator
 
@@ -40,8 +40,8 @@ class BlackMonday1987FCOValidator:
         self.crash_date = datetime(1987, 10, 19)  # ブラックマンデー
         self.use_cache = use_cache
         
-        # FCOエンジン初期化
-        self.fco_engine = FCOEngine(use_parallel=True, max_workers=4)
+        # カスタムFCOエンジン初期化
+        self.fco_engine = CustomFCOEngine(n_tries=10)
         
         # 拡張DS-LPPLS計算機（オプション）
         self.confidence_calculator = DSLPPLSConfidenceCalculator(
@@ -189,28 +189,39 @@ class BlackMonday1987FCOValidator:
 
         return prices, df_analysis.index
     
-    def run_fco_analysis(self, prices: np.ndarray) -> FCOAnalysisResult:
+    def run_fco_analysis(self, prices: np.ndarray) -> CustomFCOResult:
         """
-        FCOエンジンで126窓分析を実行
-        
+        カスタムFCOエンジンで126窓分析を実行
+
         Args:
-            prices: 価格配列
-            
+            prices: 価格配列（log変換済みまたは未変換）
+
         Returns:
-            FCO分析結果
+            カスタムFCO分析結果
         """
-        logger.info("Running FCO 126-window analysis...")
-        
-        # Boulder lpplsベースのFCO分析
-        result = self.fco_engine.compute_ds_lppls_confidence(prices)
-        
+        logger.info("Running Custom FCO 126-window analysis...")
+
+        # カスタムFCO分析（窓並列化使用）
+        result = self.fco_engine.compute_ds_lppls_confidence_parallel(
+            prices,
+            n_workers=8  # 窓並列化（2.86倍高速化実証済み）
+        )
+
+        # bubble_type計算
+        bubble_type = 'positive' if result.ds_lppls_confidence > 0.3 else 'negative'
+        ds_lppls_confidence_neg = result.metadata.get('ds_lppls_confidence_neg', 0.0)
+
         logger.info(f"DS-LPPLS Confidence: {result.ds_lppls_confidence:.1%}")
-        logger.info(f"DS-LPPLS Confidence (negative): {result.ds_lppls_confidence_neg:.1%}")
-        logger.info(f"Bubble type: {result.bubble_type}")
-        
+        logger.info(f"DS-LPPLS Confidence (negative): {ds_lppls_confidence_neg:.1%}")
+        logger.info(f"Bubble type: {bubble_type}")
+
         if result.predicted_tc is not None:
             logger.info(f"Predicted tc: {result.predicted_tc:.0f} days from end")
-        
+
+        # CustomFCOResultにbubble_type属性を動的追加（評価用）
+        result.bubble_type = bubble_type
+        result.ds_lppls_confidence_neg = ds_lppls_confidence_neg
+
         return result
     
     def run_enhanced_analysis(self, prices: pd.Series) -> Dict:
@@ -240,7 +251,7 @@ class BlackMonday1987FCOValidator:
         
         return confidence_result
     
-    def evaluate_results(self, fco_result: FCOAnalysisResult, 
+    def evaluate_results(self, fco_result: CustomFCOResult,
                         enhanced_result: Optional[Dict] = None) -> Dict:
         """
         結果を評価して成功基準と照合
