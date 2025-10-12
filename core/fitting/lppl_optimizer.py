@@ -37,12 +37,42 @@ def fit_lppl_grid_search(
     3. ロバスト損失関数: loss='soft_l1'（外れ値耐性）
 
     【パラメータ境界条件】
-    以下の境界は archive/src_pre_migration_backup/fitting/fitter.py:64-67 に基づく:
-    - tc: 1.01-1.5 (未来予測、正規化時間)
-    - beta: 0.3-0.7 (べき乗指数、典型値)
-    - omega: 5.0-8.0 (角周波数、観測可能範囲)
-    - phi: -8π ~ 8π (位相)
-    - A, B, C: 広範囲（-10 ~ 10）
+    ⚠️ FCO本家（Boulder LPPLS）との違いを明記（Issue I129対応）:
+
+    1. **beta (べき乗指数)**:
+       - FCO本家（Boulder LPPLS）: 0.0-1.0（デフォルト範囲）
+       - 本実装: 0.1-0.9（Sornette論文典型値範囲）
+       - 理由: Sornette論文での物理的意味を持つ範囲に限定
+       - 変更履歴:
+         * 過去実装: 0.3-0.7（1987年単一窓で100/100スコア達成）
+         * 2025-10-12: 0.1-0.9に拡大（多重窓FCO対応、Issue I129）
+
+    2. **omega (角周波数)**:
+       - FCO本家（Boulder LPPLS）: 2.0-15.0（デフォルト範囲）
+       - 本実装: 5.0-15.0（観測可能範囲の制限）
+       - 理由: omega < 5.0 は周期が長すぎてデータ期間内で観測困難
+       - 変更履歴:
+         * 過去実装: 5.0-8.0（1987年単一窓で100/100スコア達成）
+         * 2025-10-12: 5.0-15.0に拡大（多重窓FCO対応、Issue I129）
+
+    3. **tc, phi, A, B, C**:
+       - 過去実装と同一（変更なし）
+       - tc: 1.01-1.5 (未来予測、正規化時間)
+       - phi: -8π ~ 8π (位相)
+       - A, B, C: 広範囲（-10 ~ 10）
+
+    【重要】窓範囲パラメータ（CustomFCOEngine）:
+    - FCO標準: 最小窓125日、最大窓750日、刻み5日 → 126窓
+    - 本実装: 同上（FCO標準準拠、変更なし）
+    - 注意: 直接スクリプト（test_phase2）では実用的最小窓250日を採用
+      （理由: 125-250日窓での収束失敗多発のため）
+    - 変更時は Issue I129 を参照し、FCO標準からの逸脱を明記すること
+
+    【科学的根拠】:
+    - 過去実装（単一窓LPPL）: beta=0.3-0.7, omega=5.0-8.0で成功
+    - 多重窓FCO（126窓）: 窓ごとに異なる最適パラメータが必要
+    - 緩和版（2025-10-12）: beta=0.1-0.9, omega=5.0-15.0
+    - 目的: 境界張り付き問題の軽減（Issue I129）
 
     【tc > 1.0 条件の科学的根拠】（重要）
     ⚠️ 本プロジェクトではtc > 1.0（未来予測）を必須条件とする
@@ -103,23 +133,25 @@ def fit_lppl_grid_search(
     logger.info(f"Starting LPPL grid search fitting with {n_tries}³ = {n_tries**3} combinations")
 
     # グリッドサーチによる初期値生成
-    # archive/src_pre_migration_backup/fitting/fitter.py:64-67 をベースに
-    # omega範囲を拡大（Sornette論文で8.93の実例確認済み）
+    # 2025-10-12: 多重窓FCO対応のため境界を拡大（Issue I129）
+    # 過去実装（単一窓LPPL）: beta=0.3-0.7, omega=5.0-8.0で成功
+    # 現在（多重窓FCO）: beta=0.1-0.9, omega=5.0-15.0に拡大
     tc_values = np.linspace(1.01, 1.5, n_tries)
-    beta_values = np.linspace(0.3, 0.7, n_tries)
-    omega_values = np.linspace(5.0, 10.0, n_tries)  # 拡大: 8.0 → 10.0
+    beta_values = np.linspace(0.1, 0.9, n_tries)  # 拡大版（Issue I129、多重窓FCO対応）
+    omega_values = np.linspace(5.0, 15.0, n_tries)  # 拡大版（Issue I129、多重窓FCO対応）
 
     logger.info(f"Parameter ranges:")
     logger.info(f"  tc: [{tc_values[0]:.3f}, {tc_values[-1]:.3f}]")
     logger.info(f"  beta: [{beta_values[0]:.3f}, {beta_values[-1]:.3f}]")
     logger.info(f"  omega: [{omega_values[0]:.3f}, {omega_values[-1]:.3f}]")
 
-    # 境界条件（過去実装ベース + omega拡大）
-    # archive/src_pre_migration_backup/fitting/fitter.py:64-67
-    # omega上限を10.0に拡大（Sornette論文で8.93の実例確認済み）
+    # 境界条件（2025-10-12: Issue I129対応で拡大）
+    # 過去実装: beta=0.3-0.7, omega=5.0-8.0（単一窓LPPL、1987年100/100スコア達成）
+    # 現在: beta=0.1-0.9, omega=5.0-15.0（多重窓FCO対応、境界張り付き問題軽減）
+    # 根拠: 多重窓解析では各窓で異なる最適パラメータが必要（Issue I129調査結果）
     bounds = (
-        [1.01, 0.3, 5.0, -8*np.pi, -10, -10, -2.0],  # lower
-        [1.5,  0.7, 10.0,  8*np.pi,  10,  10,  2.0]  # upper (omega: 8.0→10.0)
+        [1.01, 0.1, 5.0, -8*np.pi, -10, -10, -2.0],  # lower
+        [1.5,  0.9, 15.0,  8*np.pi,  10,  10,  2.0]  # upper（Issue I129拡大版）
     )
 
     best_result = None
