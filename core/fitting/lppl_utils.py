@@ -119,7 +119,9 @@ def prepare_normalized_data(
     prices: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    価格データを正規化時間 [0, 1] で準備
+    **生の価格データ**を正規化時間 [0, 1] で準備
+
+    ⚠️ IMPORTANT: この関数は**生の価格データ（対数変換前）**を想定しています
 
     【時間正規化の科学的根拠】
     - 実装元: archive/src_pre_migration_backup/fitting/fitter.py:28
@@ -128,19 +130,106 @@ def prepare_normalized_data(
     - 実績: 1987年ブラックマンデー 100/100スコア達成
 
     Args:
-        prices: 生の価格データ（任意長）
+        prices: **生の価格データ**（対数変換前、任意長）
 
     Returns:
         t: 正規化時間 [0, 1]
         log_prices_normalized: 正規化対数価格（初期値を0に調整）
+
+    【使用例】
+    ```python
+    # APIから取得した生データを解析
+    raw_prices = get_prices_from_api()
+    t, log_prices_norm = prepare_normalized_data(raw_prices)
+    ```
 
     ⚠️ 時間正規化 [0, 1] は過去実装の成功の鍵。むやみに変更しないこと。
     """
     # 時間正規化 [0, 1]
     t = np.linspace(0, 1, len(prices))
 
-    # 対数変換
+    # 対数変換（生データ → ログスケール）
     log_prices = np.log(prices)
+
+    # 初期値を0に正規化（フィッティング安定性向上）
+    log_prices_normalized = log_prices - log_prices[0]
+
+    return t, log_prices_normalized
+
+
+def prepare_normalized_data_from_log_prices(
+    log_prices: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    **ログスケール済み価格データ**を正規化時間 [0, 1] で準備
+
+    ✅ IMPORTANT: この関数は**対数変換済みデータ**を想定しています
+    データベースの`log_close`カラムから読み込んだデータを直接使用します。
+
+    【使用シーン】
+    - データベースから`log_close`を読み込んだ場合
+    - 事前にnp.log()変換済みのデータを使用する場合
+    - 重複する対数変換を回避する最適化（高速化）
+
+    【注意】
+    生の価格データには使用しないでください。
+    生データの場合は `prepare_normalized_data()` を使用してください。
+
+    Args:
+        log_prices: **対数変換済み**の価格データ（np.log(prices)済み、任意長）
+
+    Returns:
+        t: 正規化時間 [0, 1]
+        log_prices_normalized: 正規化対数価格（初期値を0に調整）
+
+    【データフロー例】
+    ```python
+    # データベースからログスケールデータを読み込み
+    df = pd.read_sql("SELECT log_close FROM market_price_data WHERE ...", conn)
+    log_prices = df['log_close'].values  # ← 既に np.log() 済み
+
+    # ログデータ専用関数で準備（np.log()スキップ、高速化）
+    t, log_prices_norm = prepare_normalized_data_from_log_prices(log_prices)
+    ```
+
+    【科学的精度保証】
+    以下の2つは**完全に等価**です（数値的に1bit単位で一致）:
+    ```python
+    # 方法1: 生データから変換（既存実装）
+    t, log_norm1 = prepare_normalized_data(raw_prices)
+
+    # 方法2: ログデータ直接利用（新実装、最適化版）
+    log_prices = np.log(raw_prices)
+    t, log_norm2 = prepare_normalized_data_from_log_prices(log_prices)
+
+    # 結果: log_norm1 == log_norm2 (完全一致)
+    ```
+
+    【時間正規化の科学的根拠】
+    - 実装元: archive/src_pre_migration_backup/fitting/fitter.py:28
+    - 時間範囲: t ∈ [0, 1]（データ長に依存しない統一スケール）
+    - tc未来保証: tc > 1.0 で未来予測
+    - 実績: 1987年ブラックマンデー 100/100スコア達成
+
+    ⚠️ 時間正規化 [0, 1] は過去実装の成功の鍵。むやみに変更しないこと。
+    """
+    # ⚠️ ASSERTION: ログスケールデータであることを実行時確認
+    # 生データを誤って渡した場合のデバッグ用
+    # （生データは通常 > 1.0、ログスケールは負の値も含む）
+    if len(log_prices) > 0 and np.all(log_prices > 10.0):
+        import warnings
+        warnings.warn(
+            "警告: 渡されたデータが生の価格データの可能性があります。\n"
+            "ログスケールデータには prepare_normalized_data_from_log_prices() を、\n"
+            "生データには prepare_normalized_data() を使用してください。",
+            UserWarning
+        )
+
+    # 時間正規化 [0, 1]
+    t = np.linspace(0, 1, len(log_prices))
+
+    # ⚠️⚠️⚠️ CRITICAL: 対数変換はスキップ（既にlog変換済み） ⚠️⚠️⚠️
+    # log_prices = np.log(prices)  ← これを実行しない（高速化のポイント）
 
     # 初期値を0に正規化（フィッティング安定性向上）
     log_prices_normalized = log_prices - log_prices[0]
