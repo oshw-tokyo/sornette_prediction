@@ -17,7 +17,7 @@ import matplotlib.dates as mdates
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
-from core.fitting.lppl_utils import prepare_normalized_data, logarithm_periodic_func
+from core.fitting.lppl_utils import prepare_normalized_data, logarithm_periodic_func, convert_tc_to_date
 from core.fitting.lppl_optimizer import fit_lppl_grid_search, validate_lppl_parameters, check_boundary_adhesion
 
 # 境界条件（過去実装ベース + omega拡大、lppl_optimizer.py と一致）
@@ -116,9 +116,14 @@ print()
 print(f"  総合判定: {'✅ VALID' if is_valid else '❌ INVALID'}")
 print()
 
-# tc → 実日付変換（予測誤差計算のため先に実行）
-tc_days_beyond = (result['tc'] - 1.0) * len(prices)
-predicted_crash_date = df_analysis.index[-1] + timedelta(days=tc_days_beyond)
+# tc → 実日付変換（Issue I128修正版を使用）
+predicted_crash_date = convert_tc_to_date(
+    result['tc'],
+    df_analysis.index[0],   # first_date: フィッティング開始日
+    df_analysis.index[-1],  # last_date: フィッティング終了日（解析基準日）
+    include_time=False
+)
+tc_days_beyond = (predicted_crash_date - df_analysis.index[-1].to_pydatetime()).days
 prediction_error_days = abs((predicted_crash_date - crash_date).days)
 
 # Phase 1成功基準判定（A0-A1反映）
@@ -189,9 +194,11 @@ future_log_pred = logarithm_periodic_func(
 future_log_prices = future_log_pred + log_prices_original[0]
 future_prices = np.exp(future_log_prices)
 
-# 未来時刻を実日付に変換
-future_days = (future_t - 1.0) * len(prices)
-future_dates = [analysis_basis_date + timedelta(days=d) for d in future_days]
+# 未来時刻を実日付に変換（Issue I128修正版）
+future_dates = [
+    convert_tc_to_date(t, df_analysis.index[0], df_analysis.index[-1], include_time=False)
+    for t in future_t
+]
 
 # 色盲対応カラーパレット (Okabe-Ito color universal design)
 # https://jfly.uni-koeln.de/color/

@@ -18,7 +18,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 from core.fitting.custom_fco_engine import CustomFCOEngine, LPPL_BOUNDS
-from core.fitting.lppl_utils import logarithm_periodic_func
+from core.fitting.lppl_utils import logarithm_periodic_func, convert_tc_to_date
 
 # データ読み込み
 cache_path = Path("data/market_data/cache/full/NASDAQCOM_1987_full.parquet")
@@ -94,11 +94,24 @@ if result.predicted_tc is not None:
     print(f"  予測tc (中央値): {result.predicted_tc:.4f}")
     print(f"  tc標準偏差: {result.tc_std:.4f}")
 
-    # tc → 実日付変換
+    # tc → 実日付変換（Issue I128修正版）
     # 注: 各窓のサイズが異なるため、正確な日時変換は窓ごとに実施必要
     # ここでは最大窓（750日）を基準に概算を表示
-    tc_days_beyond = (result.predicted_tc - 1.0) * engine.WINDOW_MAX
-    predicted_crash_date = analysis_basis_date + timedelta(days=tc_days_beyond)
+    # ❌ 修正前: tc_days_beyond = (result.predicted_tc - 1.0) * engine.WINDOW_MAX （営業日数ベース）
+    # ✅ 修正後: convert_tc_to_date()を使用（暦日ベース）
+
+    # 最大窓の日付範囲を取得
+    max_window_start_idx = len(df_analysis) - engine.WINDOW_MAX
+    first_date_max_window = df_analysis.index[max_window_start_idx]
+    last_date_max_window = df_analysis.index[-1]
+
+    predicted_crash_date = convert_tc_to_date(
+        result.predicted_tc,
+        first_date_max_window,
+        last_date_max_window,
+        include_time=False
+    )
+    tc_days_beyond = (predicted_crash_date - last_date_max_window.to_pydatetime()).days
     prediction_error_days = abs((predicted_crash_date - crash_date).days)
 
     print()
@@ -233,13 +246,26 @@ if result.qualified_fits > 0:
     future_log_prices_best = future_log_pred_best + log_prices_original_best[0]
     future_prices_best = np.exp(future_log_prices_best)
 
-    # 未来時刻を実日付に変換
-    future_days_best = (future_t_best - 1.0) * best_window_size
-    future_dates_best = [analysis_basis_date + timedelta(days=d) for d in future_days_best]
+    # 未来時刻を実日付に変換（Issue I128修正版）
+    # ❌ 修正前: future_days_best = (future_t_best - 1.0) * best_window_size （営業日数ベース）
+    # ✅ 修正後: convert_tc_to_date()を使用（暦日ベース）
 
-    # 予測クラッシュ日（最良フィッティング基準）
-    tc_days_beyond_best = (tc_normalized_best - 1.0) * best_window_size
-    predicted_crash_date_best = analysis_basis_date + timedelta(days=tc_days_beyond_best)
+    # 最良窓の日付範囲を取得
+    best_window_first_date = fitting_dates_best[0]
+    best_window_last_date = fitting_dates_best[-1]
+
+    future_dates_best = [
+        convert_tc_to_date(t, best_window_first_date, best_window_last_date, include_time=False)
+        for t in future_t_best
+    ]
+
+    # 予測クラッシュ日（最良フィッティング基準、Issue I128修正版）
+    predicted_crash_date_best = convert_tc_to_date(
+        tc_normalized_best,
+        best_window_first_date,
+        best_window_last_date,
+        include_time=False
+    )
     prediction_error_days_best = abs((predicted_crash_date_best - crash_date).days)
 
     # 色盲対応カラーパレット (Okabe-Ito color universal design)
