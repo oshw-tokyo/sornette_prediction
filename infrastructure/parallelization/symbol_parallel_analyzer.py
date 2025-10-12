@@ -114,8 +114,14 @@ def analyze_symbols_parallel(
         logger.warning("解析対象の銘柄が見つかりませんでした")
         return {}
 
-    with Pool(n_symbol_workers) as pool:
-        results = pool.starmap(_analyze_symbol_worker_static, worker_params)
+    # 銘柄並列化実行（n_symbol_workers=1の場合は直接実行でNested multiprocessing回避）
+    if n_symbol_workers == 1:
+        # 逐次実行（Poolを使わない）
+        results = [_analyze_symbol_worker_static(*params) for params in worker_params]
+    else:
+        # 並列実行
+        with Pool(n_symbol_workers) as pool:
+            results = pool.starmap(_analyze_symbol_worker_static, worker_params)
 
     # 結果を辞書にマッピング
     results_dict = {symbol: result for symbol, result in results}
@@ -167,7 +173,7 @@ def _analyze_symbol_worker_static(
             logger.info(
                 f"[{symbol}] 解析成功 - "
                 f"DS-LPPLS: {result.ds_lppls_confidence:.1f}%, "
-                f"適格: {result.qualified_fits}/{result.total_fits}"
+                f"適格: {result.qualified_fits}/{result.total_windows}"
             )
         else:
             logger.warning(f"[{symbol}] 解析失敗（結果がNone）")
