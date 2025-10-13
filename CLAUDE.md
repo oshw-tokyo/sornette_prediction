@@ -414,6 +414,17 @@ python tests/custom_fco/test_phase1_single_window.py
 - **Phase 1**: `tests/custom_fco/test_phase1_single_window.py` - 単一窓検証（✅ 完了、R²=0.9664、誤差5日）
 - **Phase 2**: `tests/custom_fco/test_phase2_multi_window.py` - 多重窓検証（✅ 完了、Confidence=41.18%、誤差20日）
 
+**📊 再現性テストプロット出力必須化（Issue I134、2025-10-13）**:
+- **出力先**: `plots/reproducibility_tests/` に統一（必須）
+- **命名規則**: `YYYY_crash_name_test_type.png`（英語統一）
+  - 例: `1987_black_monday_custom_fco_phase2.png`
+  - 例: `2000_dotcom_bubble_custom_fco.png`
+  - 例: `2008_lehman_crisis_custom_fco.png`
+- **必須プロット**:
+  - Confidence推移・tc分布（多重窓解析）
+  - 最良フィット時系列・残差解析
+- **関連Issue**: Issue I133（歴史的クラッシュ拡張）、Issue I134（プロット整理）
+
 **科学的検証が破損した場合は即座にgit revertで変更を巻き戻してください。**
 
 ---

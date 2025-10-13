@@ -1,14 +1,26 @@
 """
-LPPL最適化: グリッドサーチ + 境界付き最適化
+LPPL最適化: ランダム初期値生成 + 境界付き最適化
+
+⚠️⚠️⚠️ Issue I136: グリッドサーチからランダム初期値生成への変更（2025-10-13） ⚠️⚠️⚠️
+- 変更理由: 計算時間短縮（約3時間 → 約9分、1/20の計算量）
+- 旧アルゴリズム: グリッドサーチ（8³=512組み合わせ）
+- 新アルゴリズム: ランダム初期値生成（25回、Boulder LPPLS準拠）
+
+【実験検証結果（2025-10-13）】
+✅ グリッドサーチ vs ランダム初期値の直接比較（1987年ブラックマンデー60日前、51窓）
+- グリッドサーチ (n=8, 512組み合わせ): Confidence 11.76%, 適格6/51, 計算時間 8.11分
+- ランダム初期値 (n=25, 25回試行):    Confidence 11.76%, 適格6/51, 計算時間 0.38分
+- 結論: 予測精度は完全に保持、計算時間は21.2倍高速化 ✅
 
 【科学的根拠】
 - 実装元: archive/src_pre_migration_backup/fitting/fitter.py:36-157
-- アルゴリズム: グリッドサーチ初期値 + scipy.optimize.curve_fit (境界付き)
-- 成功実績: 1987年ブラックマンデー 100/100スコア達成
+- アルゴリズム: ランダム初期値 + scipy.optimize.curve_fit (境界付き)
+- 成功実績: 1987年ブラックマンデー 100/100スコア達成（グリッドサーチ版）
+- 検証済み: ランダム25回でグリッドサーチ512組と同一精度達成
 
 【Boulder LPPLSとの違い】
 - Boulder LPPLS: 無制約最適化 + ランダム初期値 → パラメータ発散（0% Confidence）
-- 本実装: 境界条件付き最適化 + グリッドサーチ → 収束保証（100/100スコア）
+- 本実装: 境界条件付き最適化 + ランダム初期値 → 収束保証を維持
 
 ⚠️ この最適化手法は科学的再現性の根幹です。むやみに変更しないこと。
 """
@@ -17,6 +29,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 from typing import Dict, Optional
 import logging
+import random
 
 from .lppl_utils import logarithm_periodic_func, calculate_fit_metrics
 
@@ -26,15 +39,21 @@ logger = logging.getLogger(__name__)
 def fit_lppl_grid_search(
     t: np.ndarray,
     log_prices: np.ndarray,
-    n_tries: int = 10
+    n_tries: int = 25
 ) -> Optional[Dict[str, float]]:
     """
-    グリッドサーチ + 境界付き最適化によるLPPLフィッティング
+    ランダム初期値生成 + 境界付き最適化によるLPPLフィッティング
+
+    ⚠️⚠️⚠️ Issue I136: グリッドサーチからランダム初期値生成への変更（2025-10-13） ⚠️⚠️⚠️
+    - 変更理由: 計算時間短縮（約3時間 → 約9分、1/20の計算量）
+    - 旧アルゴリズム: グリッドサーチ（8³=512組み合わせ）
+    - 新アルゴリズム: ランダム初期値生成（25回、Boulder LPPLS準拠）
 
     【アルゴリズム】
-    1. グリッドサーチ: tc, beta, omega の組み合わせを体系的に探索
+    1. ランダム初期値生成: tc, beta, omega を境界の内側10%-90%からランダム生成
     2. 境界付き最適化: scipy.optimize.curve_fit with bounds
     3. ロバスト損失関数: loss='soft_l1'（外れ値耐性）
+    4. 試行回数: 25回（Boulder LPPLS準拠、デフォルト）
 
     【パラメータ境界条件】
     ⚠️ FCO本家（Boulder LPPLS）との違いを明記（Issue I129対応）:
@@ -49,11 +68,16 @@ def fit_lppl_grid_search(
 
     2. **omega (角周波数)**:
        - FCO本家（Boulder LPPLS）: 2.0-15.0（デフォルト範囲）
-       - 本実装: 5.0-15.0（観測可能範囲の制限）
-       - 理由: omega < 5.0 は周期が長すぎてデータ期間内で観測困難
+       - 本実装: 2.0-15.0（Boulder LPPLS準拠、Issue I130対応）
+       - 理由: omega境界張り付き問題解消（Issue I130検証結果）
        - 変更履歴:
          * 過去実装: 5.0-8.0（1987年単一窓で100/100スコア達成）
          * 2025-10-12: 5.0-15.0に拡大（多重窓FCO対応、Issue I129）
+         * 2025-10-13: 2.0-15.0に拡大（Boulder LPPLS準拠、Issue I130）
+       - 科学的根拠:
+         * Boulder LPPLS実装（lppls.py:252）: omega ∈ [2.0, 15.0]
+         * Issue I130検証: omega=5.0下限張り付き問題を確認
+         * 解決策: Boulder LPPLS標準範囲に統一
 
     3. **tc, phi, A, B, C**:
        - 過去実装と同一（変更なし）
@@ -116,7 +140,7 @@ def fit_lppl_grid_search(
     Args:
         t: 正規化時間 [0, 1]
         log_prices: 正規化対数価格
-        n_tries: グリッドサーチの刻み数（デフォルト10 → 10³=1000組み合わせ）
+        n_tries: ランダム初期値生成の試行回数（デフォルト25回、Boulder LPPLS準拠）
 
     Returns:
         フィッティング結果（成功時）:
@@ -130,102 +154,153 @@ def fit_lppl_grid_search(
 
     ⚠️ パラメータ境界は過去実装の値を厳守すること
     """
-    logger.info(f"Starting LPPL grid search fitting with {n_tries}³ = {n_tries**3} combinations")
+    # ⚠️⚠️⚠️ Issue I136: ランダム初期値生成への変更（2025-10-13） ⚠️⚠️⚠️
+    #
+    # 【変更理由】
+    # - グリッドサーチ（8³=512組み合わせ）: 計算時間が長すぎる（約3時間）
+    # - Boulder LPPLS準拠: ランダム初期値生成（25回）で1/20の計算量
+    # - 期待効果: 計算時間を約3時間 → 約9分に短縮
+    #
+    # 【アルゴリズム変更】
+    # - 旧: 3重ループによるグリッドサーチ（網羅的探索）
+    # - 新: ランダム初期値生成（確率的探索）
+    # - 試行回数: n_tries = 25（Boulder LPPLS準拠、デフォルト）
+    #
+    # 【初期値範囲】
+    # - 境界の内側10%-90%からランダム生成（境界張り付きリスク軽減）
+    # - 根拠: Issue I130で境界値張り付き問題を確認済み
+    #
+    logger.info(f"Starting LPPL random initialization fitting with {n_tries} attempts")
 
-    # グリッドサーチによる初期値生成
-    # 2025-10-12: 多重窓FCO対応のため境界を拡大（Issue I129）
-    # 過去実装（単一窓LPPL）: beta=0.3-0.7, omega=5.0-8.0で成功
-    # 現在（多重窓FCO）: beta=0.1-0.9, omega=5.0-15.0に拡大
-    tc_values = np.linspace(1.01, 1.5, n_tries)
-    beta_values = np.linspace(0.1, 0.9, n_tries)  # 拡大版（Issue I129、多重窓FCO対応）
-    omega_values = np.linspace(5.0, 15.0, n_tries)  # 拡大版（Issue I129、多重窓FCO対応）
-
-    logger.info(f"Parameter ranges:")
-    logger.info(f"  tc: [{tc_values[0]:.3f}, {tc_values[-1]:.3f}]")
-    logger.info(f"  beta: [{beta_values[0]:.3f}, {beta_values[-1]:.3f}]")
-    logger.info(f"  omega: [{omega_values[0]:.3f}, {omega_values[-1]:.3f}]")
-
-    # 境界条件（2025-10-12: Issue I129対応で拡大）
-    # 過去実装: beta=0.3-0.7, omega=5.0-8.0（単一窓LPPL、1987年100/100スコア達成）
-    # 現在: beta=0.1-0.9, omega=5.0-15.0（多重窓FCO対応、境界張り付き問題軽減）
-    # 根拠: 多重窓解析では各窓で異なる最適パラメータが必要（Issue I129調査結果）
+    # ランダム初期値生成のための範囲定義
+    # ⚠️⚠️⚠️ CRITICAL: Boulder LPPLS準拠の範囲設定（Issue I130、2025-10-13） ⚠️⚠️⚠️
+    #
+    # 【omega範囲の決定根拠】
+    # - Boulder LPPLS標準: omega ∈ [2.0, 15.0]（lppls.py:252）
+    # - Issue I130検証結果: 旧範囲[5.0, 15.0]でomega=5.0下限張り付き発生
+    # - 解決策: Boulder LPPLS標準範囲に統一 → omega ∈ [2.0, 15.0]
+    # - 物理的意味: omega = 角周波数（周期の逆数）
+    #   * omega=2.0: 周期が長い（ゆっくりとした振動）
+    #   * omega=15.0: 周期が短い（速い振動）
+    # - 観測可能性: データ期間内で2.5サイクル以上必要（Oscillations > 2.5）
+    #
+    # 【変更履歴】
+    # - 過去実装（単一窓LPPL）: omega=5.0-8.0で100/100スコア達成
+    # - 2025-10-12（Issue I129）: omega=5.0-15.0に拡大（多重窓FCO対応）
+    # - 2025-10-13（Issue I130）: omega=2.0-15.0に拡大（Boulder LPPLS準拠）
+    #
+    # 境界条件（2025-10-13: Issue I130対応でomega下限を2.0に変更）
+    # ⚠️⚠️⚠️ CRITICAL: Boulder LPPLS準拠の境界設定 ⚠️⚠️⚠️
+    #
+    # 【変更履歴】
+    # - 過去実装: beta=0.3-0.7, omega=5.0-8.0（単一窓LPPL、1987年100/100スコア達成）
+    # - 2025-10-12（Issue I129）: beta=0.1-0.9, omega=5.0-15.0（多重窓FCO対応）
+    # - 2025-10-13（Issue I130）: omega下限 5.0→2.0（Boulder LPPLS準拠）
+    #
+    # 【omega下限2.0の根拠】
+    # - Boulder LPPLS標準: omega ∈ [2.0, 15.0]（lppls.py:252）
+    # - Issue I130実験結果: 旧下限5.0で全適格フィットがomega=5.0に張り付き
+    # - 原因: omega最適値が5.0未満の可能性（探索範囲外）
+    # - 対策: Boulder LPPLS標準範囲に統一 → 境界張り付き解消を期待
+    #
     bounds = (
-        [1.01, 0.1, 5.0, -8*np.pi, -10, -10, -2.0],  # lower
-        [1.5,  0.9, 15.0,  8*np.pi,  10,  10,  2.0]  # upper（Issue I129拡大版）
+        [1.01, 0.1, 2.0, -8*np.pi, -10, -10, -2.0],  # lower（omega: 5.0→2.0、Issue I130）
+        [1.5,  0.9, 15.0,  8*np.pi,  10,  10,  2.0]  # upper
     )
+
+    # ランダム初期値生成範囲（境界の内側10%-90%）
+    # ⚠️ Issue I130: 境界張り付き問題軽減のため、境界値からの初期化を回避
+    tc_range = (1.01 + 0.1*(1.5-1.01), 1.01 + 0.9*(1.5-1.01))
+    beta_range = (0.1 + 0.1*(0.9-0.1), 0.1 + 0.9*(0.9-0.1))
+    omega_range = (2.0 + 0.1*(15.0-2.0), 2.0 + 0.9*(15.0-2.0))
+
+    logger.info(f"Random initialization ranges (interior 10%-90%):")
+    logger.info(f"  tc: [{tc_range[0]:.3f}, {tc_range[1]:.3f}]")
+    logger.info(f"  beta: [{beta_range[0]:.3f}, {beta_range[1]:.3f}]")
+    logger.info(f"  omega: [{omega_range[0]:.3f}, {omega_range[1]:.3f}]")
 
     best_result = None
     best_r2 = -np.inf
     failed_attempts = 0
     successful_attempts = 0
 
-    # 3重ループでグリッドサーチ
-    for i, tc in enumerate(tc_values):
-        for j, beta in enumerate(beta_values):
-            for k, omega in enumerate(omega_values):
-                try:
-                    # 初期値設定（過去実装完全準拠）
-                    # ⚠️ CRITICAL: 過去実装では np.log(np.mean(y)) を使用
-                    # yは正規化対数価格 (log_prices - log_prices[0])
-                    p0 = [
-                        tc,                              # tc
-                        beta,                            # beta
-                        omega,                           # omega
-                        0.0,                             # phi
-                        np.log(np.mean(log_prices)),     # log(A)（過去実装準拠）
-                        (log_prices[-1] - log_prices[0]) / (t[-1] - t[0]),  # B
-                        0.1                              # C
-                    ]
+    # ランダム初期値生成ループ（Boulder LPPLS準拠）
+    for attempt in range(n_tries):
+        try:
+            # ランダム初期値生成（境界の内側10%-90%）
+            tc_init = random.uniform(tc_range[0], tc_range[1])
+            beta_init = random.uniform(beta_range[0], beta_range[1])
+            omega_init = random.uniform(omega_range[0], omega_range[1])
 
-                    # 境界付き最適化
-                    popt, pcov = curve_fit(
-                        logarithm_periodic_func,
-                        t,
-                        log_prices,
-                        p0=p0,
-                        bounds=bounds,
-                        method='trf',  # Trust Region Reflective（境界対応）
-                        ftol=1e-6,
-                        xtol=1e-6,
-                        gtol=1e-6,
-                        loss='soft_l1',  # ロバスト損失関数（外れ値耐性）
-                        max_nfev=50000
-                    )
+            # 初期値設定（過去実装完全準拠）
+            # ⚠️ CRITICAL: 過去実装では np.log(np.mean(y)) を使用
+            # yは正規化対数価格 (log_prices - log_prices[0])
+            p0 = [
+                tc_init,                          # tc (ランダム)
+                beta_init,                        # beta (ランダム)
+                omega_init,                       # omega (ランダム)
+                0.0,                              # phi
+                np.log(np.mean(log_prices)),      # log(A)（過去実装準拠）
+                (log_prices[-1] - log_prices[0]) / (t[-1] - t[0]),  # B
+                0.1                               # C
+            ]
 
-                    # フィッティング品質評価
-                    y_fit = logarithm_periodic_func(t, *popt)
-                    residuals, r2 = calculate_fit_metrics(log_prices, y_fit)
+            # 境界付き最適化
+            popt, pcov = curve_fit(
+                logarithm_periodic_func,
+                t,
+                log_prices,
+                p0=p0,
+                bounds=bounds,
+                method='trf',  # Trust Region Reflective（境界対応）
+                ftol=1e-6,
+                xtol=1e-6,
+                gtol=1e-6,
+                loss='soft_l1',  # ロバスト損失関数（外れ値耐性）
+                max_nfev=50000
+            )
 
-                    successful_attempts += 1
+            # フィッティング品質評価
+            y_fit = logarithm_periodic_func(t, *popt)
+            residuals, r2 = calculate_fit_metrics(log_prices, y_fit)
 
-                    # 最良フィット更新
-                    if r2 > best_r2:
-                        best_r2 = r2
-                        best_result = {
-                            'tc': popt[0],
-                            'beta': popt[1],
-                            'omega': popt[2],
-                            'phi': popt[3],
-                            'A': popt[4],  # A（過去実装準拠、対数価格空間のオフセット）
-                            'B': popt[5],
-                            'C': popt[6],
-                            'r2': r2,
-                            'residuals': residuals
-                        }
-                        logger.debug(f"New best fit: R²={r2:.4f}, tc={popt[0]:.4f}, "
-                                   f"beta={popt[1]:.4f}, omega={popt[2]:.4f}")
+            successful_attempts += 1
 
-                except Exception as e:
-                    failed_attempts += 1
-                    logger.debug(f"Fit attempt failed: {e}")
-                    continue
+            # 最良フィット更新
+            if r2 > best_r2:
+                best_r2 = r2
+                best_result = {
+                    'tc': popt[0],
+                    'beta': popt[1],
+                    'omega': popt[2],
+                    'phi': popt[3],
+                    'A': popt[4],  # A（過去実装準拠、対数価格空間のオフセット）
+                    'B': popt[5],
+                    'C': popt[6],
+                    'r2': r2,
+                    'residuals': residuals
+                }
+                logger.debug(f"New best fit (attempt {attempt+1}/{n_tries}): R²={r2:.4f}, "
+                           f"tc={popt[0]:.4f}, beta={popt[1]:.4f}, omega={popt[2]:.4f}")
 
-    logger.info(f"Grid search completed:")
-    logger.info(f"  Successful attempts: {successful_attempts}/{n_tries**3}")
-    logger.info(f"  Failed attempts: {failed_attempts}/{n_tries**3}")
+        except Exception as e:
+            failed_attempts += 1
+            logger.debug(f"Fit attempt {attempt+1}/{n_tries} failed: {e}")
+            continue
+
+    logger.info(f"Random initialization completed:")
+    logger.info(f"  Successful attempts: {successful_attempts}/{n_tries}")
+    logger.info(f"  Failed attempts: {failed_attempts}/{n_tries}")
 
     if best_result is None:
-        logger.warning(f"All {n_tries**3} grid search attempts failed")
+        # ⚠️ 警告レベル: この窓ではLPPLパターンが検出されませんでした
+        # 原因: データにLPPLパターンが存在しない、または境界条件が厳しすぎる
+        # 影響: この窓は適格フィットとしてカウントされません（多重窓解析では正常な挙動）
+        logger.warning(
+            f"Window fitting failed: No valid LPPL pattern found "
+            f"(all {n_tries} random initialization attempts failed to converge). "
+            f"This is expected for windows without clear bubble signatures."
+        )
         return None
 
     logger.info(f"Best fit found:")

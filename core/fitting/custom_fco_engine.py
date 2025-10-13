@@ -65,30 +65,37 @@ from .lppl_utils import (
 
 logger = logging.getLogger(__name__)
 
-# ⚠️⚠️⚠️ CRITICAL: 境界条件（Issue I129多重窓FCO対応版） ⚠️⚠️⚠️
+# ⚠️⚠️⚠️ CRITICAL: 境界条件（Issue I130: Boulder LPPLS準拠版） ⚠️⚠️⚠️
 #
-# 【重要更新 (2025-10-12)】多重窓FCO対応のため範囲拡大
+# 【重要更新 (2025-10-13)】omega下限をBoulder LPPLS準拠に変更
 # - beta: [0.3, 0.7] → [0.1, 0.9]（多重窓対応、Issue I129）
 # - omega: [5.0, 8.0] → [5.0, 15.0]（多重窓対応、Issue I129）
+#         → [2.0, 15.0]（Boulder LPPLS準拠、Issue I130）
 #
-# 【パラメータミスマッチ修正】
+# 【omega下限変更の根拠（Issue I130、2025-10-13）】
+# - Boulder LPPLS標準: omega ∈ [2.0, 15.0]（lppls.py:252）
+# - Issue I130実験結果: 旧下限5.0で全6適格フィットがomega=5.0に張り付き
+# - 原因: omega最適値が5.0未満の可能性（探索範囲が狭すぎた）
+# - 対策: Boulder LPPLS標準範囲に統一 → 境界張り付き解消を期待
+# - 物理的意味: omega=2.0でも観測可能（Oscillations > 2.5が判定基準）
+#
+# 【パラメータミスマッチ修正（Issue I129）】
 # - 問題: lppl_optimizer.pyとcustom_fco_engine.pyで範囲が不一致
-#   * optimizer: beta=0.1-0.9, omega=5.0-15.0
+#   * optimizer: beta=0.1-0.9, omega=5.0-15.0（修正前）
 #   * filter: beta=0.3-0.7, omega=5.0-10.0（修正前）
 #   → 結果: 全フィット棄却、0.0% Confidence
-# - 修正: filter範囲をoptimizer範囲に一致させる
-# - 日付: 2025-10-12
-# - 文書: workspace_for_claude/issue_i129_option2_parameter_mismatch.md
+# - 修正: filter範囲をoptimizer範囲に一致させる（Issue I129）
+#         さらにomega下限を2.0に拡大（Issue I130）
 #
 # 【依存関係】⚠️ CRITICAL ⚠️
-# この境界条件は lppl_optimizer.py:43-46 の bounds と**完全一致必須**
+# この境界条件は lppl_optimizer.py の bounds と**完全一致必須**
 # 不一致の場合、フィルタリング条件と最適化条件の矛盾が発生し、
 # 適格フィット数が0になる可能性がある（Issue I129で実証済み）
 #
 # 【パラメータ説明】
 # - tc: 1.01-1.5 (臨界時刻、正規化時間、tc > 1.0で未来予測)
 # - beta: 0.1-0.9 (べき乗指数、多重窓FCO対応版)
-# - omega: 5.0-15.0 (角周波数、多重窓FCO対応版)
+# - omega: 2.0-15.0 (角周波数、Boulder LPPLS準拠版、Issue I130)
 # - phi: -8π ~ 8π (位相)
 # - A, B, C: -10 ~ 10, -10 ~ 10, -2.0 ~ 2.0 (線形パラメータ)
 #
@@ -96,11 +103,11 @@ logger = logging.getLogger(__name__)
 # - 実装元: archive/src_pre_migration_backup/fitting/fitter.py:64-67
 # - 過去実装（単一窓LPPL）: beta=0.3-0.7, omega=5.0-8.0で100/100スコア達成
 # - 多重窓FCO: 各窓（250-750日）で異なる最適パラメータが必要
-# - Issue I129調査結果: 窓サイズに応じて beta > 0.7, omega > 10.0 が最適になる
+# - Boulder LPPLS標準: omega=2.0-15.0（lppls.py:252）
 #
 LPPL_BOUNDS = (
-    [1.01, 0.1, 5.0, -8*np.pi, -10, -10, -2.0],  # lower
-    [1.5,  0.9, 15.0,  8*np.pi,  10,  10,  2.0]  # upper (Issue I129多重窓FCO対応版)
+    [1.01, 0.1, 2.0, -8*np.pi, -10, -10, -2.0],  # lower（omega: 5.0→2.0、Issue I130）
+    [1.5,  0.9, 15.0,  8*np.pi,  10,  10,  2.0]  # upper
 )
 
 
@@ -303,33 +310,39 @@ class CustomFCOEngine:
     # - workspace_for_claude/issue_i129_investigation_summary.md
     # - workspace_for_claude/beta_window_dependency_analysis.md
 
-    # ⚠️⚠️⚠️ CRITICAL: フィルタリング条件（Issue I129多重窓FCO対応版） ⚠️⚠️⚠️
-    # 【重要更新 (2025-10-12)】多重窓FCO対応のため範囲拡大
+    # ⚠️⚠️⚠️ CRITICAL: フィルタリング条件（Issue I130: Boulder LPPLS準拠版） ⚠️⚠️⚠️
+    # 【重要更新 (2025-10-13)】omega下限をBoulder LPPLS準拠に変更
     # - beta: [0.3, 0.7] → [0.1, 0.9]（多重窓対応、Issue I129）
     # - omega: [5.0, 10.0] → [5.0, 15.0]（多重窓対応、Issue I129）
+    #         → [2.0, 15.0]（Boulder LPPLS準拠、Issue I130）
     #
-    # 【パラメータミスマッチ修正】
+    # 【omega下限変更の根拠（Issue I130、2025-10-13）】
+    # - Boulder LPPLS標準: omega ∈ [2.0, 15.0]（lppls.py:252）
+    # - Issue I130実験結果: 旧下限5.0で全6適格フィットがomega=5.0に張り付き
+    # - 原因: omega最適値が5.0未満の可能性（探索範囲が狭すぎた）
+    # - 対策: Boulder LPPLS標準範囲に統一 → 境界張り付き解消を期待
+    #
+    # 【パラメータミスマッチ修正（Issue I129）】
     # - 問題: lppl_optimizer.pyの生成範囲とfilter範囲が不一致
-    #   * optimizer: beta=0.1-0.9, omega=5.0-15.0
+    #   * optimizer: beta=0.1-0.9, omega=5.0-15.0（修正前）
     #   * filter: beta=0.3-0.7, omega=5.0-10.0（修正前）
     #   → 結果: 全フィット棄却、0.0% Confidence
-    # - 修正: filter範囲をoptimizer範囲に一致させる
-    # - 日付: 2025-10-12
-    # - 文書: workspace_for_claude/issue_i129_option2_parameter_mismatch.md
+    # - 修正: filter範囲をoptimizer範囲に一致させる（Issue I129）
+    #         さらにomega下限を2.0に拡大（Issue I130）
     #
     # 【依存関係】⚠️ CRITICAL ⚠️
-    # これらの値は LPPL_BOUNDS (上記) および lppl_optimizer.py:43-46 と**完全一致必須**
+    # これらの値は LPPL_BOUNDS (上記) および lppl_optimizer.py と**完全一致必須**
     # 不一致の場合、適格フィット数が0になる可能性がある（Issue I129で実証済み）
     #
     # 【科学的根拠】
     # - 実装元: archive/src_pre_migration_backup/fitting/fitter.py:64-67
     # - 過去実装（単一窓LPPL）: beta=0.3-0.7, omega=5.0-8.0で100/100スコア達成
     # - 多重窓FCO: 各窓（250-750日）で異なる最適パラメータが必要
-    # - Issue I129調査結果: 窓サイズに応じて beta > 0.7, omega > 10.0 が最適になる
+    # - Boulder LPPLS標準: omega=2.0-15.0（lppls.py:252）
     #
     FILTER_BETA_MIN = 0.1  # 拡大: 0.3 → 0.1（Issue I129多重窓FCO対応）
     FILTER_BETA_MAX = 0.9  # 拡大: 0.7 → 0.9（Issue I129多重窓FCO対応）
-    FILTER_OMEGA_MIN = 5.0  # 変更なし
+    FILTER_OMEGA_MIN = 2.0  # 拡大: 5.0 → 2.0（Issue I130、Boulder LPPLS準拠）
     FILTER_OMEGA_MAX = 15.0  # 拡大: 10.0 → 15.0（Issue I129多重窓FCO対応）
     FILTER_R2_MIN = 0.5  # 変更なし
     FILTER_TC_MIN = 1.0  # 正規化時間で未来予測、変更なし
@@ -347,13 +360,17 @@ class CustomFCOEngine:
     ENABLE_TC_RANGE_CHECK = False  # 一時的に無効化（tc > 1.0チェック）
     ENABLE_BOUNDARY_ADHESION_CHECK = False  # 一時的に無効化（境界張り付きチェック）
 
-    def __init__(self, n_tries: int = 10):
+    def __init__(self, n_tries: int = 25):
         """
+        ⚠️⚠️⚠️ Issue I136: ランダム初期値生成への変更（2025-10-13） ⚠️⚠️⚠️
+
         Args:
-            n_tries: グリッドサーチの刻み数（デフォルト10 → 1000組み合わせ）
+            n_tries: ランダム初期値生成の試行回数（デフォルト25回、Boulder LPPLS準拠）
+                    旧: グリッドサーチの刻み数（10 → 1000組み合わせ）
+                    新: ランダム試行回数（25回、1/20の計算量）
         """
         self.n_tries = n_tries
-        logger.info(f"CustomFCOEngine initialized (n_tries={n_tries}, combinations={n_tries**3})")
+        logger.info(f"CustomFCOEngine initialized (n_tries={n_tries}, random initialization)")
 
     def compute_ds_lppls_confidence(
         self,
@@ -482,7 +499,7 @@ class CustomFCOEngine:
             tc_std=tc_std,
             metadata={
                 'n_tries': self.n_tries,
-                'combinations': self.n_tries ** 3,
+                'method': 'random_initialization',  # Issue I136: グリッドサーチから変更
                 'data_points': n_total,
                 'analysis_date': pd.Timestamp.now().isoformat()
             }
@@ -734,7 +751,7 @@ class CustomFCOEngine:
             tc_std=tc_std,
             metadata={
                 'n_tries': self.n_tries,
-                'combinations': self.n_tries ** 3,
+                'method': 'random_initialization',  # Issue I136: グリッドサーチから変更
                 'data_points': n_total,
                 'analysis_date': pd.Timestamp.now().isoformat(),
                 'parallel': True,
@@ -791,7 +808,7 @@ def _fit_single_window_worker_static(
         prices_full: 価格データ全体（ワーカーが必要部分を切り出し）
         window_size: 窓サイズ
         n_total: データ総数
-        n_tries: グリッドサーチ刻み数
+        n_tries: ランダム初期値生成の試行回数（Issue I136: グリッドサーチから変更）
         idx: 窓インデックス（プログレス表示用）
         total_windows: 総窓数（プログレス表示用）
 
@@ -879,10 +896,10 @@ def _apply_filtering_static(result: Dict[str, float]) -> bool:
     Returns:
         適格判定（True/False）
     """
-    # CustomFCOEngine のクラス定数と完全一致（Issue I130更新版）
+    # CustomFCOEngine のクラス定数と完全一致（Issue I130更新版: Boulder LPPLS準拠）
     FILTER_BETA_MIN = 0.1
     FILTER_BETA_MAX = 0.9
-    FILTER_OMEGA_MIN = 5.0
+    FILTER_OMEGA_MIN = 2.0  # 5.0 → 2.0（Issue I130、Boulder LPPLS準拠）
     FILTER_OMEGA_MAX = 15.0
     FILTER_R2_MIN = 0.5
     FILTER_TC_MIN = 1.0
