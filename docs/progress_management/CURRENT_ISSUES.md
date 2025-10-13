@@ -1,9 +1,422 @@
 # 📋 CURRENT ISSUES - アクティブな課題管理
 
-最終更新: 2025-10-08
+最終更新: 2025-10-13
 
 
 ## 🟡 Active Issues (対応中)
+
+### I130: 🔵 Boulder LPPLS FCOフィルタリング実装の調査
+**作成日**: 2025-10-13
+**優先度**: 🔵 Medium
+**担当**: カスタムFCO開発
+**状態**: 🔍 調査完了（実装への適用検討中）
+
+**内容**:
+カスタムFCO実装においてパラメータ境界張り付き問題が発生していたため、Boulder LPPLS FCO（公式ライブラリ）のフィルタリング実装を調査し、カスタムFCO実装との差異を明確化する。
+
+**調査結果サマリー**:
+1. ✅ **Boulder LPPLS v0.6.20のフィルタリング実装を特定**
+   - 実装箇所: `/home/no-rules/.local/lib/python3.10/site-packages/lppls/lppls.py`
+   - メソッド: `compute_indicators()` (lines 240-356)
+
+2. ✅ **5つのフィルタリング条件を確認**:
+   - **m (beta) 範囲**: 0.0 < m < 1.0
+   - **w (omega) 範囲**: 2.0 < w < 15.0
+   - **tc範囲**: max(t2 - 60, t2 - 0.5*(t2-t1)) < tc < min(t2 + 252, t2 + 0.5*(t2-t1))
+   - **Oscillations**: O > 2.5
+   - **Damping**: D > 0.5
+
+3. ✅ **カスタムFCO実装との比較**:
+
+| 項目 | Boulder LPPLS | カスタムFCO実装 | 差異 |
+|------|---------------|----------------|------|
+| **m (beta) 範囲** | 0.0 - 1.0 | 0.1 - 0.9 | カスタムは狭い |
+| **w (omega) 範囲** | 2.0 - 15.0 | 5.0 - 15.0 | カスタムは狭い |
+| **O_min** | 2.5 | ❌ 未実装 | **カスタムに欠落** |
+| **D_min** | 0.5 | ❌ 未実装 | **カスタムに欠落** |
+| **tc範囲** | 過去60日～未来252日 | 未来のみ（tc > 1.0） | **大きく異なる** |
+| **境界張り付きチェック** | ❌ なし | ✅ あり（2%マージン） | カスタム独自 |
+
+**重要な発見**:
+
+1. **Boulder LPPLSは境界張り付きをチェックしない**:
+   - パラメータが境界値（例: m=1.0, w=15.0）でも適格とみなす
+   - カスタムFCOの厳格な境界張り付きチェック（2%マージン）は独自実装
+
+2. **カスタムFCOにOscillations/Damping閾値が欠落**:
+   - Boulder LPPLSでは O > 2.5, D > 0.5 を要求
+   - カスタムFCOでは未実装（`custom_fco_engine.py` にコードなし）
+   - fco_engine.py（Boulder LPPLS FCO）には実装あり
+
+3. **tc範囲制約の哲学的違い**:
+   - Boulder LPPLS: 過去のtcも許容（t2 - 60日 ～ t2 + 252日）
+   - カスタムFCO: 未来予測のみ（tc > 1.0）
+   - → **科学的根拠の再確認が必要**
+
+**追加調査完了** (2025-10-13):
+
+1. ✅ **Oscillations/Damping閾値の詳細調査**:
+   - **O (Oscillations)**: データ期間内での振動回数、O > 2.5 で統計的有意性を保証
+   - **D (Damping)**: べき乗減衰と振動振幅の比率、D > 0.5 で真のLPPL挙動を保証
+   - **科学的意味**: Sornette理論の本質（べき乗減衰 + 対数周期振動の共存）を数値的に検証
+   - **カスタムFCOへの適用**: 実装推奨（Boulder LPPLS FCOとの整合性向上）
+   - 詳細: `workspace_for_claude/issue_i130_oscillations_damping_investigation.md`
+
+2. ✅ **境界張り付きチェック vs パラメータ範囲の関係調査**:
+   - **2つは異なる概念**:
+     - パラメータ範囲フィルタ: 範囲外を棄却（Boulder LPPLS: ✅あり、カスタムFCO: ✅あり）
+     - 境界張り付きチェック: 範囲内だが境界近傍を棄却（Boulder LPPLS: ❌なし、カスタムFCO: ✅あり）
+   - **Boulder LPPLSに境界張り付きチェックがない理由**:
+     - 無制約最適化の哲学（範囲内であれば真の最適解と見なす）
+     - 広い範囲設定（m=0.0-1.0, w=2.0-15.0）により境界張り付きが稀
+   - **カスタムFCOの厳格性は正当化可能**: 成功実績あり（43.14% Confidence達成）
+   - 詳細: `workspace_for_claude/issue_i130_boundary_vs_range_investigation.md`
+
+3. ✅ **パラメータ許容範囲と初期値範囲の混同問題調査**:
+   - **ユーザーの懸念は正しい**: グリッドサーチ範囲とbounds範囲が完全に一致
+   - **問題**: 境界値（1.01, 1.5, 0.1, 0.9, 5.0, 15.0）から開始する最適化が境界張り付きリスクを高める
+   - **推奨改善**: グリッドサーチ範囲をboundsの内側10%～90%に設定
+     - 例: beta_values = np.linspace(0.18, 0.82, n_tries)  # boundsは0.1-0.9のまま
+   - **効果**: 境界張り付きリスク低減、計算効率向上、科学的に正しい設計
+   - 詳細: `workspace_for_claude/issue_i130_parameter_range_confusion_investigation.md`
+
+**次のアクション**（ユーザー承認、2025-10-13）:
+
+1. 🔄 **Oscillations/Damping閾値の実装** （実装中）:
+   - カスタムFCO実装（`custom_fco_engine.py`）に O > 2.5, D > 0.5 を追加
+   - **重要**: Boulder LPPLS FCOとの整合性向上が目的
+   - 検証テスト実行（1987年ブラックマンデー）
+   - DS-LPPLS Confidence変化測定（43.14% → ?%）
+
+2. 🔄 **過剰フィルタリングの一時的不活性化** （実装中）:
+   - **背景**: カスタムFCOの厳格なフィルタリングが適格フィット数を減少させている可能性
+   - **対象**:
+     - ✅ tc範囲チェック: 未来のみ制約（tc > 1.0）を一時的に緩和
+     - ✅ 境界張り付きチェック: 2%マージンを一時的に無効化または緩和
+   - **維持すべき項目**:
+     - ✅ 初期パラメータ: tc > 0 で振る（既存の出発点を維持）
+     - ✅ 基本的なパラメータ範囲: beta=0.1-0.9, omega=5.0-15.0
+     - ✅ R² > 0.5 の品質閾値
+   - **目的**: Oscillations/Damping閾値のみで品質管理を行い、過剰フィルタリングを回避
+   - **実装方針**:
+     - フィルタリング条件をコメントアウトまたはフラグで制御可能にする
+     - 検証テスト実行後、効果を測定してから恒久化を判断
+
+3. 📋 **グリッドサーチ範囲の改善実装** （保留）:
+   - `lppl_optimizer.py`のグリッドサーチ範囲をbounds内側10%～90%に変更
+   - ⚠️ 注意: 過剰フィルタリング緩和の効果確認後に実施
+   - 検証テスト実行
+   - 適格フィット数・Confidence変化測定
+
+4. 📋 **Sornette論文での根拠確認** （補助タスク）:
+   - 境界張り付きに関する記述の調査
+   - tc範囲制約に関する記述の調査
+
+**詳細レポート**:
+- `workspace_for_claude/boulder_lppls_filtering_investigation.md` - 完全調査レポート
+- `workspace_for_claude/issue_i130_oscillations_damping_investigation.md` - O/D閾値詳細
+- `workspace_for_claude/issue_i130_boundary_vs_range_investigation.md` - 境界張り付きvs範囲
+- `workspace_for_claude/issue_i130_parameter_range_confusion_investigation.md` - 初期値範囲問題
+
+**関連Issue**:
+- Issue I129: カスタムFCO多重窓パラメータ整合性修正（✅ 解決済み）
+- Issue I128: tc→日付変換修正（✅ 解決済み）
+
+---
+
+### I132: 🔵 進捗管理方法の検討（進捗管理ファイル vs Issue+CLAUDE.md）
+**作成日**: 2025-10-13
+**優先度**: 🔵 Medium
+**担当**: プロジェクト管理
+**状態**: ✅ 承認済み（Option A採用、実装中）
+**承認日**: 2025-10-13
+
+**内容**:
+進捗管理ファイル（CURRENT_PROGRESS.md）が更新されないケースが発生しているため、Issue管理ベースへの移行または進捗管理ファイル強化を検討する。
+
+**現状の問題**:
+1. **進捗管理ファイル（CURRENT_PROGRESS.md）の更新漏れ**:
+   - 新セッション開始時に参照されない
+   - Issue管理（CURRENT_ISSUES.md）は機能している
+
+2. **二重管理の負担**:
+   - Issue + 進捗管理ファイルの両方を更新する必要
+   - 生成AIセッションの揮発性により管理負担が大きい
+
+**検討する選択肢**:
+
+**選択肢A: Issue管理ベース + CLAUDE.mdで現在作業を簡潔に記載**
+- ✅ Issue管理（CURRENT_ISSUES.md）を主軸とする
+- ✅ CLAUDE.mdに「現在進行中のタスク」セクションを簡潔に追加
+- ✅ 進捗管理ファイル（CURRENT_PROGRESS.md）は廃止またはアーカイブ参照のみ
+- メリット:
+  - 管理負担の軽減
+  - Issueで詳細追跡、CLAUDE.mdで概要把握
+  - 新セッション開始時の理解が容易
+- デメリット:
+  - 長期的な進捗履歴の可視性低下
+  - マイルストーン管理が弱くなる
+
+**選択肢B: 進捗管理ファイルの強化**
+- ✅ CLAUDE.mdに進捗管理ファイル参照を強化
+- ✅ 新セッション開始チェックリストに進捗更新を明記
+- ✅ Issue作成時に進捗管理ファイルへのリンク記載を義務化
+- メリット:
+  - 長期的な進捗履歴が維持される
+  - マイルストーン管理が明確
+- デメリット:
+  - 依然として二重管理の負担
+  - 生成AIセッションでの継続的更新が困難
+
+**推奨案: 選択肢A（Issue管理ベース）**
+
+理由:
+1. **生成AIの特性に適合**: セッションごとの揮発性に対応
+2. **実績あり**: Issue管理（CURRENT_ISSUES.md）は機能している
+3. **管理負担軽減**: 単一の情報源（Issue）で十分
+4. **CLAUDE.md簡潔化**: 現在作業のみ記載、詳細はIssue参照
+
+**承認された実装方針（Option A）**:
+
+**git commit中心の進捗管理**:
+- ✅ **git commitメッセージで進捗を記録**: 各作業完了時に詳細なcommitメッセージを残す
+- ✅ **進捗確認はgit log**: `git log --oneline -20` で最近の作業内容を確認
+- ✅ **Issue管理（CURRENT_ISSUES.md）**: 詳細なタスク追跡・調査結果の記録
+- ✅ **CLAUDE.md**: 現在進行中のタスク概要のみ記載（詳細はIssue参照）
+
+**ブランチ戦略**:
+- ✅ **基本ブランチ**: `main`（安定版）と`dev`（開発版）のみ
+- ✅ **Claude Codeの作業対象**: 原則として`dev`ブランチ
+- ✅ **本番反映**: `dev` → `main`へのマージは慎重に実施（検証完了後）
+- ⚠️ **理由**: feature/*ブランチ運用は管理負担が大きいため、シンプルなdev/main構成を採用
+
+```markdown
+# CLAUDE.md に追加するセクション
+
+## 📊 **進捗管理とブランチ戦略**
+
+### 進捗管理方針
+**git commit中心の進捗管理** (Issue I132承認、2025-10-13)
+
+進捗状況は以下で確認：
+1. **git log**: `git log --oneline -20` で最近の作業内容
+2. **Issue管理**: `docs/progress_management/CURRENT_ISSUES.md` で詳細追跡
+3. **CLAUDE.md**: 現在進行中のタスク概要（本セクション下部）
+
+**CURRENT_PROGRESS.md**: 廃止（アーカイブのみ）
+
+### ブランチ戦略
+- **main**: 安定版（本番相当）
+- **dev**: 開発版（Claude Codeの作業対象）
+- **運用**: feature/*ブランチは使用せず、シンプルなdev/main構成
+
+### 🔄 **現在進行中のタスク**
+
+**⚠️ 詳細はIssue管理システムを参照**: `docs/progress_management/CURRENT_ISSUES.md`
+
+- **Issue I130**: Boulder LPPLS FCOフィルタリング調査（🔍 調査完了、実装中）
+- **Issue I131**: CLAUDE.md整理タスク（🔄 進行中）
+- **Issue I132**: 進捗管理方法の検討（✅ 承認済み、実装中）
+- **Issue I133**: 再現性テストのCI/CD化（📋 計画中）
+
+**現在のフェーズ**: カスタムFCO Phase 3実装準備中
+```
+
+**CURRENT_PROGRESS.mdの扱い**:
+- ✅ **廃止決定**: 今後の更新は停止
+- ✅ **アーカイブ**: `archives/`に移動（参照用として保持）
+- ✅ **代替手段**: git log + Issue管理で長期的な進捗履歴を追跡
+
+**実装アクション**:
+1. ✅ ユーザー承認取得（2025-10-13）
+2. 🔄 CLAUDE.mdに進捗管理セクション追加（実装中）
+3. 📋 CLAUDE.mdに「コードを正とする原則」拡張追記（実装中）
+4. 📋 CURRENT_PROGRESS.mdをアーカイブ化
+5. 📋 新セッション開始チェックリストを更新
+
+**関連Issue**:
+- Issue I131: CLAUDE.md整理タスク（並行作業）
+
+---
+
+### I133: 🔵 再現性テストのCI/CD化（GitHub push前実施）
+**作成日**: 2025-10-13
+**優先度**: 🔵 Medium（カスタムFCO完了後は🟡 High）
+**担当**: テスト・品質管理
+**状態**: 📋 計画中（カスタムFCO Phase 3完了後に実施）
+
+**内容**:
+再現性テスト（歴史的クラッシュ検証）をGitHub pushまたはコミット前に自動実行し、科学的妥当性を常に保証する仕組みを構築する。
+
+**目標**:
+- **歴史的クラッシュの予測精度を常にクリア**: 1987年ブラックマンデー等
+- **関連指標の基準値クリア**: DS-LPPLS Confidence, R², 予測誤差等
+- **GitHub push前の必須チェック**: テスト失敗時はpush不可
+
+**現在のテスト体系**（カスタムFCO）:
+1. **Phase 1**: 単一窓LPPL検証
+   - テスト: `tests/custom_fco/test_phase1_single_window.py`
+   - 基準: R² > 0.9, tc > 1.0, 予測誤差 ≤ 35日, 境界張り付きなし
+
+2. **Phase 2**: 多重窓FCO検証
+   - テスト: `tests/custom_fco/test_phase2_multi_window.py`
+   - 基準: DS-LPPLS Confidence > 30%, positive_bubble, 予測誤差 ≤ 60日
+
+3. **統合検証**:
+   - エントリーポイント: `python entry_points/main.py validate --crash 1987 --fco`
+   - 基準: 全メトリクスクリア
+
+**実装案**:
+
+**1. GitHub Actions ワークフロー**:
+```yaml
+# .github/workflows/reproducibility_tests.yml
+name: Reproducibility Tests
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      - name: Run reproducibility tests
+        run: |
+          python entry_points/main.py validate --crash 1987 --fco
+          python tests/custom_fco/test_phase1_single_window.py
+          python tests/custom_fco/test_phase2_multi_window.py
+      - name: Check test results
+        run: |
+          # テスト結果の検証（exit code確認）
+          if [ $? -ne 0 ]; then
+            echo "❌ Reproducibility tests failed"
+            exit 1
+          fi
+```
+
+**2. Pre-commit Hook** （ローカル開発用）:
+```bash
+# .git/hooks/pre-commit
+#!/bin/bash
+echo "🔬 Running reproducibility tests..."
+
+python entry_points/main.py validate --crash 1987 --fco
+if [ $? -ne 0 ]; then
+    echo "❌ Reproducibility test failed. Commit aborted."
+    exit 1
+fi
+
+echo "✅ All reproducibility tests passed"
+```
+
+**3. テスト結果の可視化**:
+- GitHub Actions バッジをREADME.mdに追加
+- テスト履歴の自動記録（artifacts）
+- メトリクス推移のグラフ化
+
+**次のアクション**（カスタムFCO Phase 3完了後）:
+1. 📋 GitHub Actions ワークフローファイル作成
+2. 📋 Pre-commit Hook スクリプト作成
+3. 📋 テスト実行時間の最適化（現在約15分 → 目標5分以内）
+4. 📋 テスト結果レポート自動生成
+5. 📋 CLAUDE.mdに必須事項として追記
+
+**CLAUDE.mdへの追記内容**（Phase 3完了後）:
+```markdown
+## 🧪 **再現性テストの必須実施** ⚠️ CRITICAL
+
+**⚠️ GitHub push前に必ず実行**:
+```bash
+python entry_points/main.py validate --crash 1987 --fco
+```
+
+**基準値**:
+- DS-LPPLS Confidence > 30%
+- Positive bubble判定
+- 予測誤差 ≤ 60日
+- 全テストPASS
+```
+
+**関連Issue**:
+- Issue I129: カスタムFCO多重窓パラメータ整合性修正（再現性テスト実績）
+- Issue I131: CLAUDE.md整理タスク（追記対象）
+
+---
+
+### I131: 🔵 CLAUDE.md整理タスク（保護対象ファイル確認・古い情報削除）
+**作成日**: 2025-10-13
+**優先度**: 🔵 Medium
+**担当**: ドキュメント管理
+**状態**: 🔄 進行中
+
+**内容**:
+CLAUDE.mdが1085行と大きくなりすぎているため、必須事項を残して古い・冗長な情報を削除または別ファイルへ移動する。また、保護対象ファイルの情報が最新かを確認し、コードとの差異を修正する。
+
+**発見した問題**:
+1. ✅ **保護対象ファイルの情報が古い**:
+   - CLAUDE.md記載: omega範囲 [5.0, 10.0]
+   - 実際のコード: omega範囲 [5.0, 15.0]（Issue I129で拡大済み）
+   - 対応: **コードを正とする原則**に従いCLAUDE.mdを更新
+
+2. 📋 **冗長なセクション（削除/縮小候補）**:
+   - Phase 1/2の詳細な検証結果（約180行） → サマリーのみに縮小
+   - ダッシュボード詳細仕様（約100行、Streamlit版は古い） → React版の現状のみ記載
+   - 廃止済みスケジューリング機能（約50行） → 削除または大幅縮小
+   - 過度に詳細な実装前チェックリスト（約150行） → 簡潔な箇条書きに
+
+3. 📋 **別ファイルへ移動すべき内容**:
+   - FCO技術仕様の詳細 → `docs/fco_upgrade_v2/foundation/`（既存）
+   - データフロー検証の詳細手順 → `docs/fco_upgrade_v2/testing_guidelines.md`（新規）
+   - 実装ミス防止ガイドライン → `docs/development_guidelines.md`（新規）
+
+**整理方針**:
+
+✅ **必須として残すセクション**:
+1. 新セッション開始時の必須確認事項
+2. 最重要原則（論文再現保護・法的コンプライアンス）
+3. workspace_for_claude必須使用
+4. カスタムFCO移行状況（現在進行中）
+5. 保護対象ファイル（最新情報に更新）
+6. 分析基準日の定義
+7. プロジェクト構造（4層アーキテクチャ）
+8. 実行インターフェース
+
+**追加すべき原則**:
+- ✅ **「コードを正とする原則」**:
+  - ドキュメントとコードの実装に差異がある場合
+  - コードが正しく動作している限り、コードを正とする
+  - ドキュメントを実装に合わせて更新する
+
+**実施タスク**:
+1. ✅ 保護対象ファイルの存在確認（全て存在）
+2. ✅ コードとの差異確認（omega範囲の差異発見）
+3. 📋 「コードを正とする原則」をCLAUDE.mdに追記
+4. 📋 保護対象ファイル情報を最新に更新
+5. 📋 冗長なセクションを削除/縮小
+6. 📋 詳細情報を別ファイルへ移動
+7. 📋 整理後のCLAUDE.mdをコミット
+
+**目標**:
+- CLAUDE.mdを1085行 → 500-600行に削減
+- 必須情報のみを簡潔に記載
+- 詳細情報は適切なドキュメントに分散
+- 新セッション開始時にすぐ理解できる構成
+
+**関連Issue**:
+- Issue I129: カスタムFCO多重窓パラメータ整合性修正（omega範囲拡大）
+- Issue I132: 進捗管理方法の検討（並行作業）
+
+---
 
 ### I129: 🔴 検証テスト実装方針の改善とtc変換精度の検証
 **作成日**: 2025-10-12
