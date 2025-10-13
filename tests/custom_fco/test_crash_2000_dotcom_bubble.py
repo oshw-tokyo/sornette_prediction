@@ -69,15 +69,17 @@ class PracticalFCOEngine(CustomFCOEngine):
     WINDOW_MAX = 750  # 最大窓: 750日（FCO標準）
     WINDOW_STEP = 10  # 窓刻み: 10日 → 51窓
 
-# Phase 2では計算時間短縮のため n_tries=8 を使用
-engine = PracticalFCOEngine(n_tries=8)
+# Issue I136: ランダム初期値生成（Boulder LPPLS準拠、25回）
+# 旧: n_tries=8 でグリッドサーチ 8³=512 組み合わせ
+# 新: n_tries=25 でランダム初期値生成（21.2倍高速化）
+engine = PracticalFCOEngine(n_tries=25)
 
 print("【カスタムFCO多重窓解析】")
 print("-" * 80)
 print(f"  窓範囲: {engine.WINDOW_MIN} ~ {engine.WINDOW_MAX} 日 (FCO標準)")
 print(f"  窓刻み: {engine.WINDOW_STEP} 日")
 print(f"  総窓数: {(engine.WINDOW_MAX - engine.WINDOW_MIN) // engine.WINDOW_STEP + 1}")
-print(f"  グリッドサーチ: {engine.n_tries}³ = {engine.n_tries**3} 組み合わせ/窓")
+print(f"  初期値生成: ランダム {engine.n_tries} 回（Issue I136）")
 print()
 
 # 各基準日で解析
