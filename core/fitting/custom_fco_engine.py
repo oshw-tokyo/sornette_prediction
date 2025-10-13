@@ -56,7 +56,12 @@ from multiprocessing import Pool, cpu_count
 import time
 
 from .lppl_optimizer import fit_lppl_grid_search, validate_lppl_parameters, check_boundary_adhesion
-from .lppl_utils import prepare_normalized_data, prepare_normalized_data_from_log_prices
+from .lppl_utils import (
+    prepare_normalized_data,
+    prepare_normalized_data_from_log_prices,
+    calculate_oscillations,
+    calculate_damping
+)
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +334,19 @@ class CustomFCOEngine:
     FILTER_R2_MIN = 0.5  # 変更なし
     FILTER_TC_MIN = 1.0  # 正規化時間で未来予測、変更なし
 
+    # ⚠️⚠️⚠️ NEW: Oscillations/Damping閾値（Issue I130実装、2025-10-13） ⚠️⚠️⚠️
+    # Boulder LPPLS準拠のフィルタリング条件
+    # - 出典: Boulder LPPLS v0.6.20 (lppls.py:241-247)
+    # - 科学的根拠: workspace_for_claude/issue_i130_oscillations_damping_investigation.md
+    FILTER_OSCILLATIONS_MIN = 2.5  # O > 2.5: 統計的有意性を保証
+    FILTER_DAMPING_MIN = 0.5  # D > 0.5: 真のLPPL挙動を保証
+
+    # ⚠️⚠️⚠️ TEMPORARY: 過剰フィルタリング不活性化フラグ（Issue I130、2025-10-13） ⚠️⚠️⚠️
+    # ユーザー指示: "tc範囲チェックと境界張り付きチェックを一時的に不活性化"
+    # 実装方針: フラグ制御で将来の再有効化を容易にする
+    ENABLE_TC_RANGE_CHECK = False  # 一時的に無効化（tc > 1.0チェック）
+    ENABLE_BOUNDARY_ADHESION_CHECK = False  # 一時的に無効化（境界張り付きチェック）
+
     def __init__(self, n_tries: int = 10):
         """
         Args:
@@ -479,36 +497,41 @@ class CustomFCOEngine:
 
     def _apply_filtering_conditions(self, result: Dict[str, float]) -> bool:
         """
-        フィルタリング条件を適用（Issue I129多重窓FCO対応版）
+        フィルタリング条件を適用（Issue I130更新版: Oscillations/Damping追加）
 
-        【条件（2025-10-12更新）】
+        【条件（2025-10-13更新）】
         1. beta ∈ [0.1, 0.9] - べき乗指数の多重窓FCO対応範囲
         2. omega ∈ [5.0, 15.0] - 角周波数の多重窓FCO対応範囲
         3. R² > 0.5 - 最低フィット品質
-        4. tc > 1.0 - 未来予測（正規化時間）
-        5. 境界値張り付きなし - 真の最適解であること（過去実装準拠）
+        4. ⚠️ tc > 1.0 - 一時的に無効化（Issue I130）
+        5. ⚠️ 境界値張り付きなし - 一時的に無効化（Issue I130）
+        6. 🆕 Oscillations > 2.5 - 統計的有意性を保証（Boulder LPPLS準拠）
+        7. 🆕 Damping > 0.5 - 真のLPPL挙動を保証（Boulder LPPLS準拠）
 
-        【範囲拡大の理由（Issue I129）】
-        - 過去実装（単一窓LPPL）: beta=0.3-0.7, omega=5.0-8.0で100/100スコア達成
-        - 多重窓FCO（51窓）: 各窓（250-750日）で異なる最適パラメータが必要
-        - 観察結果: 短い窓では beta > 0.7, omega > 10.0 が最適になる傾向
-        - パラメータミスマッチ問題: optimizer範囲とfilter範囲の不整合で0% Confidence
-        - 修正: filter範囲をoptimizer範囲に一致（beta=0.1-0.9, omega=5.0-15.0）
+        【Issue I130実装（2025-10-13）】
+        ユーザー指示: "Oscillation / Dampling 閾値を追加しましょう。
+        これに際してカスタム FCO で過剰にフィルタリングについて、
+        一時的に不活性にしましょう（少なくとも tc は該当している認識です。
+        ただし、初期パラメータは tc > 0 で振るなど、既存の出発点を維持してください。"
 
-        【境界値張り付きチェックの重要性】
-        最適化アルゴリズムがパラメータの上限・下限に収束した場合、
-        それは真の最適解ではなく、探索範囲の制約による人工的な結果である可能性が高い。
+        【新規追加: Oscillations/Damping】
+        - Oscillations (O): (ω / 2π) * ln((tc - t1) / (tc - t2))
+          → データ期間内での完全な振動回数
+          → O > 2.5 で統計的有意性を保証
 
-        例:
-        - tc=1.0100 (下限1.01) に張り付き → 真の最適tcはもっと小さい可能性
-        - beta=0.9000 (上限0.9) に張り付き → 真の最適betaはもっと大きい可能性
+        - Damping (D): (m * |B|) / (ω * |C|)
+          → べき乗減衰の強さ vs 振動振幅の比率
+          → D > 0.5 で真のLPPL挙動を保証
 
-        このような結果は科学的に信頼性が低いため棄却する（過去実装での経験則）。
+        【一時的に無効化したフィルタ】
+        - tc > 1.0 チェック: ENABLE_TC_RANGE_CHECK = False
+        - 境界張り付きチェック: ENABLE_BOUNDARY_ADHESION_CHECK = False
+        理由: 過剰フィルタリングの影響を調査するため
 
         【科学的根拠】
         - 実装元: archive/src_pre_migration_backup/fitting/fitter.py:64-67
+        - Boulder LPPLS準拠: lppls.py:241-247
         - 実績: 1987年ブラックマンデー 100/100スコア達成（単一窓LPPL）
-        - 境界値張り付き棄却: 過去実装での経験則
         - 多重窓FCO適応: Issue I129調査結果に基づく範囲拡大
 
         Args:
@@ -517,13 +540,16 @@ class CustomFCOEngine:
         Returns:
             適格判定（True/False）
         """
-        # 基本的な範囲チェック
+        # 基本的な範囲チェック（beta, omega, R²）
         is_qualified = (
             self.FILTER_BETA_MIN <= result['beta'] <= self.FILTER_BETA_MAX and
             self.FILTER_OMEGA_MIN <= result['omega'] <= self.FILTER_OMEGA_MAX and
-            result['r2'] > self.FILTER_R2_MIN and
-            result['tc'] > self.FILTER_TC_MIN
+            result['r2'] > self.FILTER_R2_MIN
         )
+
+        # ⚠️ TEMPORARY DISABLED: tc範囲チェック（Issue I130）
+        if self.ENABLE_TC_RANGE_CHECK:
+            is_qualified = is_qualified and (result['tc'] > self.FILTER_TC_MIN)
 
         if not is_qualified:
             logger.debug(
@@ -531,17 +557,57 @@ class CustomFCOEngine:
                 f"beta={result['beta']:.4f} ({self.FILTER_BETA_MIN}-{self.FILTER_BETA_MAX}), "
                 f"omega={result['omega']:.4f} ({self.FILTER_OMEGA_MIN}-{self.FILTER_OMEGA_MAX}), "
                 f"R²={result['r2']:.4f} (>{self.FILTER_R2_MIN}), "
-                f"tc={result['tc']:.4f} (>{self.FILTER_TC_MIN})"
+                f"tc={result['tc']:.4f} (check={'enabled' if self.ENABLE_TC_RANGE_CHECK else 'disabled'})"
             )
             return False
 
-        # 境界値張り付きチェック（ユーザーフィードバックA0）
-        # 過去実装で境界張り付きが発生しないことを確認済み
-        # 60日前基準 + 1000日データで境界張り付きなしを達成
-        has_adhesion = check_boundary_adhesion(result, LPPL_BOUNDS)
-        if has_adhesion:
-            logger.debug("Filtering failed: boundary adhesion detected")
+        # 🆕 Oscillations/Damping チェック（Issue I130、2025-10-13実装）
+        try:
+            # 正規化時間での計算: t1=0, t2=1
+            oscillations = calculate_oscillations(
+                omega=result['omega'],
+                tc=result['tc'],
+                t1=0.0,  # データ期間開始（正規化時間）
+                t2=1.0   # データ期間終了（正規化時間）
+            )
+
+            damping = calculate_damping(
+                beta=result['beta'],
+                omega=result['omega'],
+                B=result['B'],
+                C=result['C']
+            )
+
+            # Oscillations/Damping閾値チェック
+            if oscillations <= self.FILTER_OSCILLATIONS_MIN:
+                logger.debug(
+                    f"Filtering failed: Oscillations={oscillations:.2f} "
+                    f"(required >{self.FILTER_OSCILLATIONS_MIN})"
+                )
+                return False
+
+            if damping <= self.FILTER_DAMPING_MIN:
+                logger.debug(
+                    f"Filtering failed: Damping={damping:.2f} "
+                    f"(required >{self.FILTER_DAMPING_MIN})"
+                )
+                return False
+
+            logger.debug(
+                f"O/D passed: O={oscillations:.2f} (>{self.FILTER_OSCILLATIONS_MIN}), "
+                f"D={damping:.2f} (>{self.FILTER_DAMPING_MIN})"
+            )
+
+        except Exception as e:
+            logger.warning(f"Oscillations/Damping calculation failed: {e}")
             return False
+
+        # ⚠️ TEMPORARY DISABLED: 境界値張り付きチェック（Issue I130）
+        if self.ENABLE_BOUNDARY_ADHESION_CHECK:
+            has_adhesion = check_boundary_adhesion(result, LPPL_BOUNDS)
+            if has_adhesion:
+                logger.debug("Filtering failed: boundary adhesion detected")
+                return False
 
         return True
 
@@ -798,12 +864,14 @@ def _apply_filtering_static(result: Dict[str, float]) -> bool:
     - LPPL_BOUNDS も同一のグローバル定数を使用
     - 既存実装と同一のロジック
 
-    【条件（Issue I129多重窓FCO対応版）】
+    【条件（Issue I130更新版: Oscillations/Damping追加、2025-10-13）】
     1. beta ∈ [0.1, 0.9]（拡大版、2025-10-12更新）
     2. omega ∈ [5.0, 15.0]（拡大版、2025-10-12更新）
     3. R² > 0.5
-    4. tc > 1.0
-    5. 境界値張り付きなし
+    4. ⚠️ tc > 1.0 - 一時的に無効化（Issue I130）
+    5. ⚠️ 境界値張り付きなし - 一時的に無効化（Issue I130）
+    6. 🆕 Oscillations > 2.5 - 統計的有意性を保証（Boulder LPPLS準拠）
+    7. 🆕 Damping > 0.5 - 真のLPPL挙動を保証（Boulder LPPLS準拠）
 
     Args:
         result: フィッティング結果
@@ -811,28 +879,67 @@ def _apply_filtering_static(result: Dict[str, float]) -> bool:
     Returns:
         適格判定（True/False）
     """
-    # CustomFCOEngine のクラス定数と完全一致（Issue I129多重窓FCO対応版）
-    FILTER_BETA_MIN = 0.1  # 拡大: 0.3 → 0.1（2025-10-12）
-    FILTER_BETA_MAX = 0.9  # 拡大: 0.7 → 0.9（2025-10-12）
+    # CustomFCOEngine のクラス定数と完全一致（Issue I130更新版）
+    FILTER_BETA_MIN = 0.1
+    FILTER_BETA_MAX = 0.9
     FILTER_OMEGA_MIN = 5.0
-    FILTER_OMEGA_MAX = 15.0  # 拡大: 10.0 → 15.0（2025-10-12）
+    FILTER_OMEGA_MAX = 15.0
     FILTER_R2_MIN = 0.5
     FILTER_TC_MIN = 1.0
 
-    # 基本的な範囲チェック
+    # 🆕 Oscillations/Damping閾値（Issue I130）
+    FILTER_OSCILLATIONS_MIN = 2.5
+    FILTER_DAMPING_MIN = 0.5
+
+    # ⚠️ TEMPORARY: 過剰フィルタリング不活性化フラグ（Issue I130）
+    ENABLE_TC_RANGE_CHECK = False
+    ENABLE_BOUNDARY_ADHESION_CHECK = False
+
+    # 基本的な範囲チェック（beta, omega, R²）
     is_qualified = (
         FILTER_BETA_MIN <= result['beta'] <= FILTER_BETA_MAX and
         FILTER_OMEGA_MIN <= result['omega'] <= FILTER_OMEGA_MAX and
-        result['r2'] > FILTER_R2_MIN and
-        result['tc'] > FILTER_TC_MIN
+        result['r2'] > FILTER_R2_MIN
     )
+
+    # ⚠️ TEMPORARY DISABLED: tc範囲チェック（Issue I130）
+    if ENABLE_TC_RANGE_CHECK:
+        is_qualified = is_qualified and (result['tc'] > FILTER_TC_MIN)
 
     if not is_qualified:
         return False
 
-    # 境界値張り付きチェック
-    has_adhesion = check_boundary_adhesion(result, LPPL_BOUNDS)
-    if has_adhesion:
+    # 🆕 Oscillations/Damping チェック（Issue I130、2025-10-13実装）
+    try:
+        # 正規化時間での計算: t1=0, t2=1
+        oscillations = calculate_oscillations(
+            omega=result['omega'],
+            tc=result['tc'],
+            t1=0.0,  # データ期間開始（正規化時間）
+            t2=1.0   # データ期間終了（正規化時間）
+        )
+
+        damping = calculate_damping(
+            beta=result['beta'],
+            omega=result['omega'],
+            B=result['B'],
+            C=result['C']
+        )
+
+        # Oscillations/Damping閾値チェック
+        if oscillations <= FILTER_OSCILLATIONS_MIN:
+            return False
+
+        if damping <= FILTER_DAMPING_MIN:
+            return False
+
+    except Exception:
         return False
+
+    # ⚠️ TEMPORARY DISABLED: 境界値張り付きチェック（Issue I130）
+    if ENABLE_BOUNDARY_ADHESION_CHECK:
+        has_adhesion = check_boundary_adhesion(result, LPPL_BOUNDS)
+        if has_adhesion:
+            return False
 
     return True

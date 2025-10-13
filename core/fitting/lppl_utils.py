@@ -11,7 +11,9 @@ LPPL (Log-Periodic Power Law) 数式・ユーティリティ関数
 """
 
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Optional, Union
+from datetime import datetime, timedelta
+import pandas as pd
 
 
 def logarithm_periodic_func(
@@ -235,3 +237,171 @@ def prepare_normalized_data_from_log_prices(
     log_prices_normalized = log_prices - log_prices[0]
 
     return t, log_prices_normalized
+
+
+def calculate_oscillations(
+    omega: float,
+    tc: float,
+    t1: float,
+    t2: float
+) -> float:
+    """
+    振動回数を計算 (Oscillations)
+
+    【科学的根拠】
+    - 出典: Boulder LPPLS v0.6.20 (lppls.py:241-244)
+    - 数式: O = (ω / 2π) * ln((tc - t1) / (tc - t2))
+    - 意味: データ期間内での完全な振動回数
+    - 閾値: O > 2.5 で統計的有意性を保証
+
+    【物理的解釈】
+    - ω: 角周波数（rad/正規化時間単位）
+    - (tc - t1) / (tc - t2): クラッシュまでの時間比率
+    - O: 観測された振動の完全サイクル数
+
+    Args:
+        omega (ω): 角周波数パラメータ (典型値: 5.0-15.0)
+        tc: 臨界時刻（正規化時間、tc > 1.0で未来予測）
+        t1: データ期間開始時刻（正規化時間 = 0）
+        t2: データ期間終了時刻（正規化時間 = 1）
+
+    Returns:
+        O: 振動回数（O > 2.5で適格）
+
+    【実装詳細】
+    - Issue I130実装: Boulder LPPLS準拠のOscillations閾値
+    - 実装日: 2025-10-13
+    - 根拠: O > 2.5で統計的に有意な振動パターンを保証
+
+    ⚠️ この関数はBoulder LPPLS公式実装と完全一致。むやみに変更しないこと。
+    """
+    return (omega / (2.0 * np.pi)) * np.log((tc - t1) / (tc - t2))
+
+
+def calculate_damping(
+    beta: float,
+    omega: float,
+    B: float,
+    C: float
+) -> float:
+    """
+    減衰係数を計算 (Damping)
+
+    【科学的根拠】
+    - 出典: Boulder LPPLS v0.6.20 (lppls.py:246-247)
+    - 数式: D = (m * |B|) / (ω * |C|)
+    - 意味: べき乗減衰の強さ vs 振動振幅の比率
+    - 閾値: D > 0.5 で真のLPPL挙動を保証
+
+    【物理的解釈】
+    - D > 1: べき乗減衰が支配的（過減衰系）
+    - D ≈ 1: べき乗減衰と振動が均衡
+    - D < 1: 振動が支配的（不十分な減衰）
+    - D > 0.5: LPPLとして適切なバランス
+
+    Args:
+        beta (β): べき乗指数 (典型値: 0.1-0.9)
+        omega (ω): 角周波数 (典型値: 5.0-15.0)
+        B: LPPLパラメータB（べき乗項の係数）
+        C: LPPLパラメータC（振動項の係数）
+
+    Returns:
+        D: 減衰係数（D > 0.5で適格）
+
+    【実装詳細】
+    - Issue I130実装: Boulder LPPLS準拠のDamping閾値
+    - 実装日: 2025-10-13
+    - 根拠: D > 0.5でべき乗減衰が適切に機能
+
+    ⚠️ この関数はBoulder LPPLS公式実装と完全一致。むやみに変更しないこと。
+    """
+    return (beta * np.abs(B)) / (omega * np.abs(C))
+
+
+def convert_tc_to_date(
+    tc: float,
+    first_date: Union[datetime, pd.Timestamp, str],
+    last_date: Union[datetime, pd.Timestamp, str],
+    include_time: bool = True
+) -> Optional[datetime]:
+    """
+    tc値（正規化時間）を実日付に変換
+
+    【科学的根拠】
+    - LPPL時間正規化: t ∈ [0, 1]
+    - t=0: フィッティング期間開始日（first_date）
+    - t=1: フィッティング期間終了日（last_date）
+    - tc > 1.0: 未来予測（lastdate_date以降）
+
+    【修正内容 (Issue I128)】
+    - フィッティング期間の実際の暦日数を反映
+    - 窓ごとに異なる変換比率を適用
+    - 時間精度オプション追加（include_time）
+
+    【計算式】
+    - total_calendar_days = (last_date - first_date).days
+    - days_beyond_last_date = (tc - 1.0) * total_calendar_days
+    - predicted_date = last_date + timedelta(days=days_beyond_last_date)
+
+    Args:
+        tc: tc値（正規化時間、tc > 1.0で未来予測）
+        first_date: フィッティング期間の開始日
+        last_date: フィッティング期間の終了日
+        include_time: 時間精度まで含むか（デフォルト: True）
+
+    Returns:
+        datetime: 予測日時
+            - include_time=True: 時刻まで含む（データベース保存用）
+            - include_time=False: 日付のみ（プロット用）
+            - Noneを返すことはない（エラー時は例外）
+
+    【使用例】
+    ```python
+    # データベース保存用（時間精度あり）
+    predicted_date = convert_tc_to_date(
+        tc=1.2128,
+        first_date='2024-01-01',
+        last_date='2024-10-01',
+        include_time=True
+    )
+
+    # プロット用（日付のみ）
+    predicted_date = convert_tc_to_date(
+        tc=1.2128,
+        first_date=df.index[0],
+        last_date=df.index[-1],
+        include_time=False
+    )
+    ```
+
+    【実装日】2025-10-12
+    【参照】Issue I128, integration_helpers.py:110-139
+    """
+    # 日付型への変換
+    if isinstance(first_date, str):
+        first_date = pd.to_datetime(first_date)
+    if isinstance(last_date, str):
+        last_date = pd.to_datetime(last_date)
+
+    # pd.Timestamp → datetime変換
+    if isinstance(first_date, pd.Timestamp):
+        first_date = first_date.to_pydatetime()
+    if isinstance(last_date, pd.Timestamp):
+        last_date = last_date.to_pydatetime()
+
+    # フィッティング期間の暦日数を計算
+    total_calendar_days = (last_date - first_date).days
+
+    # tc > 1.0の部分を実日付に変換
+    # tc=1.0がlast_date、tc=1.1なら0.1 × total_calendar_days日後
+    days_beyond_last_date = (tc - 1.0) * total_calendar_days
+
+    # 予測日時を計算
+    predicted_date = last_date + timedelta(days=days_beyond_last_date)
+
+    # 時間精度の処理
+    if not include_time:
+        # 日付のみ（時刻を00:00:00にリセット）
+        predicted_date = predicted_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    return predicted_date
