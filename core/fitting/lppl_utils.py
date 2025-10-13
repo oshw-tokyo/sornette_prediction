@@ -11,12 +11,7 @@ LPPL (Log-Periodic Power Law) 数式・ユーティリティ関数
 """
 
 import numpy as np
-import pandas as pd
-from typing import Tuple, Union, Optional
-from datetime import datetime, timedelta
-import logging
-
-logger = logging.getLogger(__name__)
+from typing import Tuple
 
 
 def logarithm_periodic_func(
@@ -124,7 +119,9 @@ def prepare_normalized_data(
     prices: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    価格データを正規化時間 [0, 1] で準備
+    **生の価格データ**を正規化時間 [0, 1] で準備
+
+    ⚠️ IMPORTANT: この関数は**生の価格データ（対数変換前）**を想定しています
 
     【時間正規化の科学的根拠】
     - 実装元: archive/src_pre_migration_backup/fitting/fitter.py:28
@@ -133,18 +130,25 @@ def prepare_normalized_data(
     - 実績: 1987年ブラックマンデー 100/100スコア達成
 
     Args:
-        prices: 生の価格データ（任意長）
+        prices: **生の価格データ**（対数変換前、任意長）
 
     Returns:
         t: 正規化時間 [0, 1]
         log_prices_normalized: 正規化対数価格（初期値を0に調整）
+
+    【使用例】
+    ```python
+    # APIから取得した生データを解析
+    raw_prices = get_prices_from_api()
+    t, log_prices_norm = prepare_normalized_data(raw_prices)
+    ```
 
     ⚠️ 時間正規化 [0, 1] は過去実装の成功の鍵。むやみに変更しないこと。
     """
     # 時間正規化 [0, 1]
     t = np.linspace(0, 1, len(prices))
 
-    # 対数変換
+    # 対数変換（生データ → ログスケール）
     log_prices = np.log(prices)
 
     # 初期値を0に正規化（フィッティング安定性向上）
@@ -153,98 +157,81 @@ def prepare_normalized_data(
     return t, log_prices_normalized
 
 
-def convert_tc_to_date(
-    tc: float,
-    first_date: Union[datetime, pd.Timestamp, str],
-    last_date: Union[datetime, pd.Timestamp, str],
-    include_time: bool = True
-) -> Optional[datetime]:
+def prepare_normalized_data_from_log_prices(
+    log_prices: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    tc値から予測日時を計算（フィッティング期間考慮版）
+    **ログスケール済み価格データ**を正規化時間 [0, 1] で準備
 
-    【アルゴリズム】
-    - 時間正規化: t ∈ [0, 1]
-      - t=0: first_date (フィッティング開始日)
-      - t=1: last_date (フィッティング終了日)
-    - tc > 1.0: 未来予測
-    - tcの暦日換算: (tc - 1.0) × フィッティング期間の暦日数
+    ✅ IMPORTANT: この関数は**対数変換済みデータ**を想定しています
+    データベースの`log_close`カラムから読み込んだデータを直接使用します。
 
-    【修正内容 (Issue I128)】
-    ❌ 修正前: days_beyond = (tc - 1.0) * 365  # 固定値
-    ✅ 修正後: days_beyond = (tc - 1.0) * fitting_period_calendar_days
+    【使用シーン】
+    - データベースから`log_close`を読み込んだ場合
+    - 事前にnp.log()変換済みのデータを使用する場合
+    - 重複する対数変換を回避する最適化（高速化）
 
-    【科学的根拠】
-    - LPPL時間正規化に基づく変換
-    - tcは正規化時間 [0, 1] を基準とする
-    - フィッティング期間を正しく反映する必要がある
-    - 窓サイズが異なる場合、同じtc値でも異なる予測日になる
-
-    【検証結果（2025-10-12）】
-    | 窓サイズ | フィッティング期間 | 実際の暦日数 | tc値 | 修正前（365日固定） | 修正後（期間考慮） | 誤差改善 |
-    |---------|-----------------|------------|------|------------------|----------------|----------|
-    | 750営業日 | 2021-10-19 ~ 2024-10-19 | 1096日 | 1.2 | 2024-12-31 | 2025-05-26 | 147日 |
-    | 125営業日 | 2024-04-19 ~ 2024-10-19 | 183日 | 1.2 | 2024-12-31 | 2024-11-24 | 36日 |
-    | 1987年 | 1983-11-03 ~ 1987-10-19 | 1446日 | 1.2128 | 1988-01-04 | 1988-08-21 | 231日 |
+    【注意】
+    生の価格データには使用しないでください。
+    生データの場合は `prepare_normalized_data()` を使用してください。
 
     Args:
-        tc: 正規化tc値（tc > 1.0で未来予測）
-        first_date: フィッティング期間の開始日
-        last_date: フィッティング期間の終了日
-        include_time: 時間精度まで含めるか（デフォルト: True）
+        log_prices: **対数変換済み**の価格データ（np.log(prices)済み、任意長）
 
     Returns:
-        予測日時（tc <= 1.0の場合はNone）
+        t: 正規化時間 [0, 1]
+        log_prices_normalized: 正規化対数価格（初期値を0に調整）
 
-    Examples:
-        >>> # 750営業日窓（2021-10-19 ~ 2024-10-19, 1096暦日）
-        >>> convert_tc_to_date(1.2, '2021-10-19', '2024-10-19')
-        datetime.datetime(2025, 5, 26, ...)
+    【データフロー例】
+    ```python
+    # データベースからログスケールデータを読み込み
+    df = pd.read_sql("SELECT log_close FROM market_price_data WHERE ...", conn)
+    log_prices = df['log_close'].values  # ← 既に np.log() 済み
 
-        >>> # 125営業日窓（2024-04-19 ~ 2024-10-19, 183暦日）
-        >>> convert_tc_to_date(1.2, '2024-04-19', '2024-10-19')
-        datetime.datetime(2024, 11, 24, ...)
+    # ログデータ専用関数で準備（np.log()スキップ、高速化）
+    t, log_prices_norm = prepare_normalized_data_from_log_prices(log_prices)
+    ```
 
-    Scientific Basis:
-        LPPL時間正規化に基づく変換
-        実装元: workspace_for_claude/verify_tc_conversion_problem.py:correct_tc_conversion()
-        Issue: I128
-        実装日: 2025-10-12
+    【科学的精度保証】
+    以下の2つは**完全に等価**です（数値的に1bit単位で一致）:
+    ```python
+    # 方法1: 生データから変換（既存実装）
+    t, log_norm1 = prepare_normalized_data(raw_prices)
+
+    # 方法2: ログデータ直接利用（新実装、最適化版）
+    log_prices = np.log(raw_prices)
+    t, log_norm2 = prepare_normalized_data_from_log_prices(log_prices)
+
+    # 結果: log_norm1 == log_norm2 (完全一致)
+    ```
+
+    【時間正規化の科学的根拠】
+    - 実装元: archive/src_pre_migration_backup/fitting/fitter.py:28
+    - 時間範囲: t ∈ [0, 1]（データ長に依存しない統一スケール）
+    - tc未来保証: tc > 1.0 で未来予測
+    - 実績: 1987年ブラックマンデー 100/100スコア達成
+
+    ⚠️ 時間正規化 [0, 1] は過去実装の成功の鍵。むやみに変更しないこと。
     """
-    # 日付型への変換
-    if isinstance(first_date, str):
-        first_date = pd.to_datetime(first_date)
-    if isinstance(last_date, str):
-        last_date = pd.to_datetime(last_date)
+    # ⚠️ ASSERTION: ログスケールデータであることを実行時確認
+    # 生データを誤って渡した場合のデバッグ用
+    # （生データは通常 > 1.0、ログスケールは負の値も含む）
+    if len(log_prices) > 0 and np.all(log_prices > 10.0):
+        import warnings
+        warnings.warn(
+            "警告: 渡されたデータが生の価格データの可能性があります。\n"
+            "ログスケールデータには prepare_normalized_data_from_log_prices() を、\n"
+            "生データには prepare_normalized_data() を使用してください。",
+            UserWarning
+        )
 
-    # pandas.Timestamp → datetime 変換
-    if hasattr(first_date, 'to_pydatetime'):
-        first_date = first_date.to_pydatetime()
-    if hasattr(last_date, 'to_pydatetime'):
-        last_date = last_date.to_pydatetime()
+    # 時間正規化 [0, 1]
+    t = np.linspace(0, 1, len(log_prices))
 
-    # tc <= 1.0 は過去（通常は使用されない）
-    if tc <= 1.0:
-        logger.warning(f"tc={tc:.4f} <= 1.0 (not a future prediction)")
-        return None
+    # ⚠️⚠️⚠️ CRITICAL: 対数変換はスキップ（既にlog変換済み） ⚠️⚠️⚠️
+    # log_prices = np.log(prices)  ← これを実行しない（高速化のポイント）
 
-    # フィッティング期間の実際の暦日数
-    fitting_period_calendar_days = (last_date - first_date).days
+    # 初期値を0に正規化（フィッティング安定性向上）
+    log_prices_normalized = log_prices - log_prices[0]
 
-    # tcが正規化時間を超えた分を暦日に変換
-    # tc=1.0 が last_date に対応
-    # tc=2.0 が last_date + fitting_period_calendar_days に対応
-    days_beyond = (tc - 1.0) * fitting_period_calendar_days
-
-    if include_time:
-        # 日数と時間に分離（時間精度対応）
-        full_days = int(days_beyond)
-        fractional_day = days_beyond - full_days
-        hours = fractional_day * 24
-
-        # 時間精度まで含めた予測日時を計算
-        predicted_datetime = last_date + timedelta(days=full_days, hours=hours)
-    else:
-        # 日付のみ
-        predicted_datetime = last_date + timedelta(days=days_beyond)
-
-    return predicted_datetime
+    return t, log_prices_normalized

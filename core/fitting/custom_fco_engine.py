@@ -56,7 +56,7 @@ from multiprocessing import Pool, cpu_count
 import time
 
 from .lppl_optimizer import fit_lppl_grid_search, validate_lppl_parameters, check_boundary_adhesion
-from .lppl_utils import prepare_normalized_data
+from .lppl_utils import prepare_normalized_data, prepare_normalized_data_from_log_prices
 
 logger = logging.getLogger(__name__)
 
